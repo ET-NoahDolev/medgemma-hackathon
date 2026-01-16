@@ -1,7 +1,11 @@
-"""Placeholder script for ClinicalTrials.gov protocol ingestion."""
+"""Download ClinicalTrials.gov protocols and emit normalized records."""
 
-from dataclasses import dataclass
-from typing import Iterable, List
+import json
+from dataclasses import asdict, dataclass
+from pathlib import Path
+from typing import List
+
+import httpx
 
 
 @dataclass
@@ -42,73 +46,92 @@ class ProtocolRecord:
     document_text: str
 
 
-def download_protocols(limit: int = 200) -> List[ProtocolRecord]:
-    """Download and normalize protocol records from ClinicalTrials.gov.
+CT_API_BASE = "https://clinicaltrials.gov/api/v2/studies"
+
+
+def fetch_from_clinicaltrials(query: str, limit: int = 50) -> List[ProtocolRecord]:
+    """Fetch protocols from ClinicalTrials.gov API v2.
 
     Args:
-        limit: Maximum number of protocols to retrieve.
+        query: Condition or keyword to search.
+        limit: Maximum records to fetch.
 
     Returns:
-        A list of normalized protocol records.
+        List of normalized protocol records.
 
     Raises:
         ValueError: If limit is not positive.
-
-    Examples:
-        >>> download_protocols(limit=1)
-        []
-
-    Notes:
-        This is a wireframe stub. The production implementation will call
-        ClinicalTrials.gov APIs and persist records to the database.
     """
     if limit <= 0:
         raise ValueError("limit must be positive")
 
-    count = 1
-    records = []
-    for index in range(count):
+    params = {
+        "query.cond": query,
+        "fields": "NCTId|BriefTitle|Condition|Phase|EligibilityModule",
+        "pageSize": min(limit, 100),
+        "format": "json",
+    }
+
+    resp = httpx.get(CT_API_BASE, params=params, timeout=30)
+    resp.raise_for_status()
+
+    records: List[ProtocolRecord] = []
+    for study in resp.json().get("studies", []):
+        proto = study.get("protocolSection", {})
+        ident = proto.get("identificationModule", {})
+        conds = proto.get("conditionsModule", {})
+        design = proto.get("designModule", {})
+        elig = proto.get("eligibilityModule", {})
+
         records.append(
             ProtocolRecord(
-                nct_id=f"NCT{index:08d}",
-                title="Example Trial",
-                condition="Melanoma",
-                phase="Phase 2",
-                document_text="Inclusion: Age >= 18.",
+                nct_id=ident.get("nctId", ""),
+                title=ident.get("briefTitle", ""),
+                condition=(conds.get("conditions") or [""])[0],
+                phase=(design.get("phases") or [""])[0],
+                document_text=elig.get("eligibilityCriteria", ""),
             )
         )
-    return records
+
+    return records[:limit]
 
 
-def emit_records(records: Iterable[ProtocolRecord]) -> None:
-    """Persist or stream protocol records for downstream services.
+def emit_records(
+    records: List[ProtocolRecord], output_path: Path | None = None
+) -> None:
+    """Write protocol records to JSONL file.
 
     Args:
-        records: Iterable of normalized protocol records.
+        records: Protocol records to emit.
+        output_path: Output file path. If None, prints to stdout.
 
     Returns:
         None.
-
-    Examples:
-        >>> emit_records([])
-        None
-
-    Notes:
-        This stub represents the integration point for database writes or
-        JSONL exports used by the extraction pipeline.
     """
-    return None
+    lines = [json.dumps(asdict(record)) for record in records]
+
+    if output_path:
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        output_path.write_text("\n".join(lines) + "\n")
+    else:
+        for line in lines:
+            print(line)
 
 def main() -> None:
-    """CLI entrypoint for protocol ingestion.
+    """CLI entrypoint."""
+    import argparse
 
-    Examples:
-        >>> main()
-        None
-    """
-    records = download_protocols(limit=1)
-    emit_records(records)
-    print("Download protocols placeholder")
+    parser = argparse.ArgumentParser(
+        description="Download protocols from ClinicalTrials.gov"
+    )
+    parser.add_argument("--query", default="oncology", help="Search condition")
+    parser.add_argument("--limit", type=int, default=50, help="Max records")
+    parser.add_argument("--output", type=Path, help="Output JSONL path")
+    args = parser.parse_args()
+
+    records = fetch_from_clinicaltrials(args.query, args.limit)
+    emit_records(records, args.output)
+    print(f"Downloaded {len(records)} protocols")
 
 
 if __name__ == "__main__":
