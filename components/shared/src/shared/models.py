@@ -1,6 +1,6 @@
 """Shared data models for API and UI."""
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import List, Optional
 
 
@@ -40,6 +40,22 @@ class Criterion:
     criterion_type: str
     confidence: float
     snomed_codes: List[str]
+    evidence_spans: List["EvidenceSpan"] = field(default_factory=list)
+
+
+@dataclass
+class EvidenceSpan:
+    """Evidence span linking criterion to source document.
+
+    Args:
+        start_char: Starting character offset in source.
+        end_char: Ending character offset in source.
+        source_doc_id: Document identifier for provenance.
+    """
+
+    start_char: int
+    end_char: int
+    source_doc_id: str
 
 
 @dataclass
@@ -71,6 +87,18 @@ class FieldMapping:
     relation: str
     value: str
     confidence: Optional[float] = None
+
+    def to_string(self) -> str:
+        """Serialize to pipe-delimited string."""
+        return f"{self.field}|{self.relation}|{self.value}"
+
+    @classmethod
+    def from_string(cls, value: str) -> "FieldMapping":
+        """Deserialize from pipe-delimited string."""
+        parts = value.split("|")
+        if len(parts) != 3:
+            raise ValueError(f"Invalid field mapping string: {value}")
+        return cls(field=parts[0], relation=parts[1], value=parts[2])
 
 
 @dataclass
@@ -195,6 +223,10 @@ class HitlEdit:
     criterion_id: str
     action: str
     note: Optional[str]
+    snomed_code_added: Optional[str] = None
+    snomed_code_removed: Optional[str] = None
+    field_mapping_added: Optional[str] = None
+    field_mapping_removed: Optional[str] = None
 
 
 def build_criterion(
@@ -204,6 +236,7 @@ def build_criterion(
     criterion_type: str = "inclusion",
     confidence: float = 0.92,
     snomed_codes: Optional[List[str]] = None,
+    evidence_spans: Optional[List[EvidenceSpan]] = None,
 ) -> Criterion:
     """Create a Criterion instance with defaults for tests and examples."""
     return Criterion(
@@ -212,6 +245,7 @@ def build_criterion(
         criterion_type=criterion_type,
         confidence=confidence,
         snomed_codes=snomed_codes or ["371273006"],
+        evidence_spans=evidence_spans or [],
     )
 
 
@@ -285,6 +319,10 @@ def build_hitl_edit(
     criterion_id: str = "crit-1",
     action: str = "accept",
     note: Optional[str] = "Matches protocol text",
+    snomed_code_added: Optional[str] = None,
+    snomed_code_removed: Optional[str] = None,
+    field_mapping_added: Optional[str] = None,
+    field_mapping_removed: Optional[str] = None,
 ) -> HitlEdit:
     """Create a HitlEdit instance with defaults for tests and examples."""
     return HitlEdit(
@@ -292,4 +330,8 @@ def build_hitl_edit(
         criterion_id=criterion_id,
         action=action,
         note=note,
+        snomed_code_added=snomed_code_added,
+        snomed_code_removed=snomed_code_removed,
+        field_mapping_added=field_mapping_added,
+        field_mapping_removed=field_mapping_removed,
     )

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+from datetime import datetime, timezone
 from functools import lru_cache
 from pathlib import Path
 from typing import Iterable
@@ -10,7 +11,7 @@ from typing import Protocol as TypingProtocol
 
 from sqlalchemy import JSON, Column, delete
 from sqlalchemy.engine import Engine
-from sqlmodel import Field, Session, SQLModel, create_engine, select
+from sqlmodel import Field, Session, SQLModel, col, create_engine, select
 
 
 class ExtractedCriterion(TypingProtocol):
@@ -21,15 +22,18 @@ class ExtractedCriterion(TypingProtocol):
     confidence: float
 
 
-class Protocol(SQLModel, table=True):  # type: ignore[call-arg]
+class Protocol(SQLModel, table=True):
     """Protocol record persisted for API requests."""
 
     id: str = Field(primary_key=True)
     title: str
     document_text: str
+    nct_id: str | None = None
+    condition: str | None = None
+    phase: str | None = None
 
 
-class Criterion(SQLModel, table=True):  # type: ignore[call-arg]
+class Criterion(SQLModel, table=True):
     """Criterion record persisted for API requests."""
 
     id: str = Field(primary_key=True)
@@ -42,7 +46,21 @@ class Criterion(SQLModel, table=True):  # type: ignore[call-arg]
     )
 
 
-class IdCounter(SQLModel, table=True):  # type: ignore[call-arg]
+class HitlEdit(SQLModel, table=True):
+    """HITL edit record for tracking reviewer changes."""
+
+    id: str = Field(primary_key=True)
+    criterion_id: str = Field(foreign_key="criterion.id")
+    action: str
+    snomed_code_added: str | None = None
+    snomed_code_removed: str | None = None
+    field_mapping_added: str | None = None
+    field_mapping_removed: str | None = None
+    note: str | None = None
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+
+class IdCounter(SQLModel, table=True):
     """Simple counter table for stable prefixed identifiers."""
 
     key: str = Field(primary_key=True)
@@ -77,12 +95,9 @@ def init_db() -> None:
 
 def reset_storage() -> None:
     """Clear all stored data (used for tests and demos)."""
-    init_db()
-    with Session(get_engine()) as session:
-        session.exec(delete(Criterion))
-        session.exec(delete(Protocol))
-        session.exec(delete(IdCounter))
-        session.commit()
+    engine = get_engine()
+    SQLModel.metadata.drop_all(engine)
+    SQLModel.metadata.create_all(engine)
 
 
 def _next_id(session: Session, key: str, prefix: str) -> str:
@@ -104,12 +119,25 @@ class Storage:
         """Initialize the storage with a database engine."""
         self._engine = engine
 
-    def create_protocol(self, *, title: str, document_text: str) -> Protocol:
+    def create_protocol(
+        self,
+        *,
+        title: str,
+        document_text: str,
+        nct_id: str | None = None,
+        condition: str | None = None,
+        phase: str | None = None,
+    ) -> Protocol:
         """Persist a protocol record and return it."""
         with Session(self._engine) as session:
             protocol_id = _next_id(session, "protocol", "proto")
             protocol = Protocol(
-                id=protocol_id, title=title, document_text=document_text
+                id=protocol_id,
+                title=title,
+                document_text=document_text,
+                nct_id=nct_id,
+                condition=condition,
+                phase=phase,
             )
             session.add(protocol)
             session.commit()
@@ -126,8 +154,8 @@ class Storage:
         with Session(self._engine) as session:
             statement = (
                 select(Criterion)
-                .where(Criterion.protocol_id == protocol_id)  # type: ignore[arg-type]
-                .order_by(Criterion.id)
+                .where(col(Criterion.protocol_id) == protocol_id)
+                .order_by(col(Criterion.id))
             )
             return list(session.exec(statement))
 
@@ -137,9 +165,7 @@ class Storage:
         """Replace criteria for a protocol with extracted entries."""
         with Session(self._engine) as session:
             session.exec(
-                delete(Criterion).where(
-                    Criterion.protocol_id == protocol_id  # type: ignore[arg-type]
-                )
+                delete(Criterion).where(col(Criterion.protocol_id) == protocol_id)
             )
             stored: list[Criterion] = []
             for item in extracted:
@@ -196,3 +222,42 @@ class Storage:
             session.commit()
             session.refresh(criterion)
             return criterion
+
+    def create_hitl_edit(
+        self,
+        *,
+        criterion_id: str,
+        action: str,
+        snomed_code_added: str | None = None,
+        snomed_code_removed: str | None = None,
+        field_mapping_added: str | None = None,
+        field_mapping_removed: str | None = None,
+        note: str | None = None,
+    ) -> HitlEdit:
+        """Persist a HITL edit record."""
+        with Session(self._engine) as session:
+            edit_id = _next_id(session, "hitl_edit", "edit")
+            edit = HitlEdit(
+                id=edit_id,
+                criterion_id=criterion_id,
+                action=action,
+                snomed_code_added=snomed_code_added,
+                snomed_code_removed=snomed_code_removed,
+                field_mapping_added=field_mapping_added,
+                field_mapping_removed=field_mapping_removed,
+                note=note,
+            )
+            session.add(edit)
+            session.commit()
+            session.refresh(edit)
+            return edit
+
+    def list_hitl_edits(self, criterion_id: str) -> list[HitlEdit]:
+        """List all HITL edits for a criterion."""
+        with Session(self._engine) as session:
+            statement = (
+                select(HitlEdit)
+                .where(col(HitlEdit.criterion_id) == criterion_id)
+                .order_by(col(HitlEdit.created_at))
+            )
+            return list(session.exec(statement))
