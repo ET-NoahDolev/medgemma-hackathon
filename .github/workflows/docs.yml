@@ -30,6 +30,26 @@ jobs:
           pip install mkdocs mkdocs-material mkdocs-monorepo-plugin mkdocstrings[python]
       - name: Build docs
         run: mkdocs build -f mkdocs.yml
+      - name: Add custom domain
+        run: |
+          mkdir -p site
+          echo "www.elixirtrials.com" > site/CNAME
+      - name: Add root redirect
+        run: |
+          cat <<'EOF' > site/index.html
+          <!doctype html>
+          <html lang="en">
+            <head>
+              <meta charset="utf-8" />
+              <meta http-equiv="refresh" content="0; url=/hackathon/docs/" />
+              <link rel="canonical" href="/hackathon/docs/" />
+              <title>Redirecting…</title>
+            </head>
+            <body>
+              <p>Redirecting to <a href="/hackathon/docs/">/hackathon/docs/</a></p>
+            </body>
+          </html>
+          EOF
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
