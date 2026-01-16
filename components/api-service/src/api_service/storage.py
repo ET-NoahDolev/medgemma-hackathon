@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import os
-from datetime import datetime
+from datetime import datetime, timezone
 from functools import lru_cache
 from pathlib import Path
 from typing import Iterable
@@ -57,7 +57,7 @@ class HitlEdit(SQLModel, table=True):  # type: ignore[call-arg]
     field_mapping_added: str | None = None
     field_mapping_removed: str | None = None
     note: str | None = None
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 
 class IdCounter(SQLModel, table=True):  # type: ignore[call-arg]
