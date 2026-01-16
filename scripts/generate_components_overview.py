@@ -20,9 +20,13 @@ except ModuleNotFoundError:
     try:
         tomllib = importlib.import_module("tomli")
     except ModuleNotFoundError:
-        print("Error: tomllib (Python 3.11+) or tomli is required.")
-        print("Install with: uv add tomli")
+        # tomllib (Python 3.11+) or tomli is required
         sys.exit(1)
+
+try:
+    import yaml
+except ModuleNotFoundError:
+    yaml = None  # type: ignore
 
 tomllib: ModuleType = tomllib
 
@@ -36,6 +40,64 @@ logger = logging.getLogger(__name__)
 
 COMPONENTS_DIR = "components"
 OUTPUT_MD = "docs/components-overview.md"
+
+
+def get_component_doc_link(component_name: str) -> str:
+    """Determine the correct documentation link for a component.
+
+    Reads the component's mkdocs.yml to find the docs_dir and nav home page,
+    then constructs the appropriate link path.
+
+    Args:
+        component_name: Name of the component directory.
+
+    Returns:
+        The correct relative link path for the component's documentation.
+
+    Example:
+        >>> get_component_doc_link("api-service")
+        "api-service/README.md"
+        >>> get_component_doc_link("hitl-ui")
+        "hitl-ui/index.md"
+    """
+    component_path = Path(COMPONENTS_DIR) / component_name
+    mkdocs_path = component_path / "mkdocs.yml"
+
+    if not mkdocs_path.exists():
+        # Fallback to README.md if no mkdocs.yml
+        return f"{component_name}/README.md"
+
+    if yaml is None:
+        logger.warning("PyYAML not installed, using default README.md link")
+        return f"{component_name}/README.md"
+
+    try:
+        with open(mkdocs_path, "r", encoding="utf-8") as f:
+            mkdocs_config = yaml.safe_load(f)
+
+        if not mkdocs_config:
+            return f"{component_name}/README.md"
+
+        # Get the nav configuration to find the home page
+        nav = mkdocs_config.get("nav", [])
+        if nav and isinstance(nav, list) and len(nav) > 0:
+            first_item = nav[0]
+            if isinstance(first_item, dict):
+                # Get the first nav item's value (the home page path)
+                home_page = list(first_item.values())[0]
+                if isinstance(home_page, str):
+                    return f"{component_name}/{home_page}"
+
+        # Fallback: check docs_dir to determine likely structure
+        docs_dir = mkdocs_config.get("docs_dir", "docs")
+        if docs_dir == ".":
+            return f"{component_name}/README.md"
+        else:
+            return f"{component_name}/index.md"
+
+    except Exception as e:
+        logger.warning(f"Error reading mkdocs.yml for {component_name}: {e}")
+        return f"{component_name}/README.md"
 
 
 def extract_description(readme_path: Path) -> str:
@@ -288,8 +350,8 @@ def generate_category_section(category_name: str, components: List[Dict]) -> str
     section += "|------|-------------|-------|\n"
 
     for info in components:
-        # Link directly to the component's README within the built docs tree
-        link = f"{info['name']}/README.md"
+        # Determine the correct link based on component's mkdocs.yml configuration
+        link = get_component_doc_link(info['name'])
         section += f"| [{info['display_name']}]({link}) | {info['description']} | {info['owner']} |\n"
 
     return section

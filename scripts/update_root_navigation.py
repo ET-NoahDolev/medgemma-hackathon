@@ -13,7 +13,6 @@ from typing import List, Optional, Tuple
 
 # Check Python version
 if sys.version_info < (3, 8):
-    print("Error: Python 3.8+ is required.")
     sys.exit(1)
 
 # Configure logging
@@ -54,7 +53,7 @@ def discover_components() -> List[str]:
 
     Example:
         >>> components = discover_components()
-        >>> print(components)
+        >>> components
         ["athena-mcp", "cell-ops", "omics-embark"]
     """
     components: List[str] = []
@@ -97,8 +96,8 @@ def find_components_section(lines: List[str]) -> Tuple[Optional[int], Optional[i
     Example:
         >>> lines = ["- Components:", "  - Overview: components-overview.md"]
         >>> start, end = find_components_section(lines)
-        >>> print(start, end)
-        0 2
+        >>> (start, end)
+        (0, 2)
     """
     components_start_idx = None
     components_end_idx = None
@@ -144,8 +143,8 @@ def generate_components_navigation(components: List[str]) -> List[str]:
 
     Example:
         >>> lines = generate_components_navigation(["athena-mcp", "cell-ops"])
-        >>> print(lines)
-        ["  - Components:\n", "    - Overview: components-overview.md\n", ...]
+        >>> lines[:2]
+        ["  - Components:\n", "    - Overview: components-overview.md\n"]
     """
     new_components_lines = []
     new_components_lines.append("  - Components:\n")

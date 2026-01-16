@@ -1,0 +1,9 @@
+PROTOCOL_TITLE = "Trial A"
+DOCUMENT_TEXT = "Inclusion: Age >= 18."
+EXTRACTED_TEXT = "Age >= 18"
+CRITERION_TYPE = "inclusion"
+CRITERION_CONFIDENCE = 0.9
+PROTOCOL_ID = "proto-1"
+CRITERION_ID = "crit-1"
+SNOMED_CODE = "371273006"
+FIELD_MAPPING_FIELD = "demographics.age"

@@ -24,6 +24,16 @@ This repository hosts the MedGemma hackathon demo for extracting atomic inclusio
 ```
 components/     Service components (API, extraction, grounding, UI, etc.)
 docs/           MkDocs documentation
-scripts/        Build and utility scripts
+scripts/        Utility scripts (protocol download, component creation, etc.)
 instructions/   Planning documents
 ```
+
+## Scripts
+
+The `scripts/` directory contains utility scripts for common tasks:
+
+- **Protocol Download**: `scripts/download_protocol_sources.py` - Downloads clinical trial protocol PDFs from multiple sources (DAC, ClinicalTrials.gov, BMJ Open, JMIR)
+- **Component Creation**: `scripts/create_component.sh` - Initializes new components with proper structure
+- **Documentation**: `scripts/generate_components_overview.py` and `scripts/update_root_navigation.py` - Auto-generate documentation
+
+See [Getting Started](overview/getting-started.md#scripts) for detailed usage instructions.

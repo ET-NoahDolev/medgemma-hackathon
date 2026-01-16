@@ -4,7 +4,7 @@
 # Ensure bash is used for shell commands (required for read -p)
 SHELL := /bin/bash
 
-.PHONY: help docs-build docs-serve clean create-component
+.PHONY: help docs-build docs-serve clean create-component docs-openapi
 
 # Component creation commands
 .PHONY: create-component
@@ -23,7 +23,7 @@ docs-nav-update:
 	uv run python scripts/update_root_navigation.py
 
 # Build the documentation site
-docs-build: docs-nav-update docs-components-gen
+docs-build: docs-nav-update docs-components-gen docs-openapi
 	@echo "Building documentation site..."
 	uv run mkdocs build -f mkdocs.yml
 
@@ -38,6 +38,11 @@ docs-serve:
 	@echo "Available at: http://localhost:8000"
 	@echo "Press Ctrl+C to stop"
 	@cd site && python3 -m http.server 8000
+
+# Export OpenAPI spec from the API service
+docs-openapi:
+	@echo "Exporting OpenAPI spec..."
+	uv run --project components/api-service python components/api-service/scripts/export_openapi.py
 
 # Clean build artifacts
 clean:
