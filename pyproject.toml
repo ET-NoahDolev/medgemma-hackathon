@@ -5,6 +5,7 @@ description = "MedGemma hackathon HITL demo for trial criteria extraction and gr
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
+    "aiohttp>=3.10.0",
     "kaggle>=1.7.4.5",
     "pdflatex>=0.1.3",
     "wkhtmltopdf>=0.2",
@@ -13,8 +14,11 @@ dependencies = [
     "mkdocs>=1.5.0",
     "mkdocs-material>=9.0.0",
     "mkdocs-monorepo-plugin>=1.0.0",
+    "mkdocs-mermaid2-plugin>=1.0.0",
     "mkdocstrings[python]>=0.24.0",
     "tomli>=2.0.0; python_version < '3.11'",
+    "requests>=2.32.5",
+    "tenacity>=8.2.0",
 ]
 
 [dependency-groups]
@@ -43,6 +47,10 @@ ignore_missing_imports = true
 
 [[tool.mypy.overrides]]
 module = "pydantic"
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = "yaml"
 ignore_missing_imports = true
 
 [tool.pytest.ini_options]

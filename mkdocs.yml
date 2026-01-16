@@ -42,6 +42,16 @@ theme:
 plugins:
   - search
   - monorepo
+  - mermaid2:
+      arguments:
+        theme: "base"
+        themeVariables:
+          primaryColor: "#6366f1"
+          primaryTextColor: "#fff"
+          primaryBorderColor: "#4f46e5"
+          lineColor: "#64748b"
+          secondaryColor: "#f1f5f9"
+          tertiaryColor: "#e2e8f0"
   - mkdocstrings:
       default_handler: python
       handlers:

@@ -25,7 +25,7 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install mkdocs mkdocs-material mkdocs-monorepo-plugin mkdocstrings[python]
+          pip install mkdocs mkdocs-material mkdocs-monorepo-plugin mkdocs-mermaid2-plugin mkdocstrings[python]
       - name: Build docs
         run: mkdocs build -f mkdocs.yml
       - name: Prepare static site root
