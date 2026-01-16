@@ -8,5 +8,5 @@ Endpoints (minimal):
 - `POST /v1/protocols/{protocolId}/extract`
 - `GET /v1/protocols/{protocolId}/criteria`
 - `PATCH /v1/criteria/{criterionId}`
-- `POST /v1/criteria/{criterionId}/ground`
+- `POST /v1/criteria/{criterionId}/ground` (SNOMED candidates + field/relation/value mapping)
 - `POST /v1/hitl/feedback`

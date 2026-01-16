@@ -6,4 +6,6 @@ flowchart LR
   ubkg --> candidates[SNOMEDCandidates]
   candidates --> rank[ModelRanking]
   rank --> review[HITLReview]
+  criterion --> fieldmap[FieldRelationValueMapping]
+  fieldmap --> review
 ```

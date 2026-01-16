@@ -1,6 +1,6 @@
 # MedGemma Hackathon – Concise Operational Plan
 
-**Goal:** Deliver a hackathon‑ready MedGemma HITL demo that extracts atomic inclusion/exclusion criteria from trial protocols and grounds them to SNOMED via UBKG, with a clear ElixirTrials integration story.
+**Goal:** Deliver a hackathon‑ready MedGemma HITL demo that extracts atomic inclusion/exclusion criteria from trial protocols, grounds them to SNOMED via UBKG, and maps criteria to field/relation/value (e.g., `demographics.age > 75`), with a clear ElixirTrials integration story.
 
 ## 1. Project Brief
 
@@ -9,6 +9,7 @@
 - We build an AI‑assisted system that:
   - Extracts **atomic inclusion/exclusion criteria** from protocols.
   - Maps them to **SNOMED** (via UBKG REST API).
+  - Maps criteria to **field + relation + value** for EMR screening (e.g., `demographics.age > 75`).
   - Lets a **nurse reviewer** correct mappings through a simple HITL UI.
 - Target **time savings:** ~65–70% nurse time per protocol vs. manual review.  
 
@@ -18,12 +19,12 @@
 1. **Human‑Centered AI**
    - Simple, transparent HITL UI.
    - Shows provenance (evidence snippets) + confidence scores.
-   - Nurse can accept/edit/add SNOMED codes inline.
+   - Nurse can accept/edit SNOMED codes and field/relation/value mappings inline.
 
 2. **Technical Rigor**
    - MedGemma 1.5–4B‑IT with LoRA adapters for:
      - Task A: Criteria extraction.
-     - Task B: SNOMED grounding.
+    - Task B: SNOMED grounding + field/relation/value mapping.
    - 8‑bit quantized inference on DGX Spark‑class hardware.
 
 3. **Impact & Feasibility**
@@ -46,6 +47,7 @@
 - Ingest **public ClinicalTrials.gov protocols** (200–300).
 - Extract **atomic inclusion/exclusion criteria**.
 - Ground criteria to **SNOMED** via UBKG REST API (no external dependencies beyond public APIs).
+- Map criteria to **field + relation + value** for EMR screening (field‑value mapping).
 - **HITL backend**:
   - Save criteria, suggested codes, and nurse edits.
   - Simple review UI (Gradio or minimal React view).
@@ -80,12 +82,13 @@
 
 3. **Grounding**
    - Endpoint: `POST /v1/criteria/{id}/ground`
-   - UBKG REST API (terminology lookup) + MedGemma (LoRA Task B) → ranked SNOMED codes.
+   - UBKG REST API (terminology lookup) + MedGemma (LoRA Task B) → ranked SNOMED codes + field/relation/value mapping.
 
 4. **HITL Review**
    - Nurse UI fetches:
      - Criteria list.
      - Suggested SNOMED codes + confidence + evidence snippets.
+     - Suggested field/relation/value mapping (e.g., `demographics.age > 75`).
    - Nurse edits logged in `hitl_edits`.
 
 5. **Retraining Loop (Single‑site)**
@@ -105,7 +108,7 @@ Base URL: `/v1`
 - `PATCH /v1/criteria/{criterionId}`
   - Edit criterion text/type/etc.
 - `POST /v1/criteria/{criterionId}/ground`
-  - Get SNOMED candidates via UBKG REST API.
+  - Get SNOMED candidates via UBKG REST API + field/relation/value mapping.
 - `POST /v1/hitl/feedback`
   - Log nurse actions (accept/remove/add code etc).
 
@@ -190,6 +193,7 @@ POST https://ubkg-api.xconsortia.org/search
   - Run base MedGemma (no LoRA) for:
     - Type classification (inclusion/exclusion).
     - Draft SNOMED suggestions via UBKG.
+    - Draft field/relation/value mapping suggestions.
 
 **Decision / Risk:**
 - By **end of Week 1**:
@@ -211,6 +215,7 @@ POST https://ubkg-api.xconsortia.org/search
     - Criterion card on right:
       - Type, text, confidence.
       - SNOMED candidates with checkboxes.
+      - Field/relation/value mapping preview + edits.
       - Add/remove code, rationale.
   - Wire to backend:
     - `GET /protocols/{id}/criteria`
@@ -220,7 +225,7 @@ POST https://ubkg-api.xconsortia.org/search
 - **Annotation Workflow**
   - Pre‑label criteria using base MedGemma + UBKG:
     - Save as `criteria_prelabeled.jsonl`.
-  - Define gold label schema (criterion text, type, SNOMED codes, evidence spans).
+  - Define gold label schema (criterion text, type, SNOMED codes, field/relation/value, evidence spans).
   - Target: **~1,000 validated criteria** (spanning ~120 protocols).
   - Coordinate nurse schedule (~200h total across hackathon).
 
@@ -269,6 +274,7 @@ POST https://ubkg-api.xconsortia.org/search
   - Run on test set:
     - Extraction F1.
     - SNOMED Top‑1 accuracy.
+    - Field/relation/value mapping quality.
     - Nurse acceptance rate on small test batch.
   - Measure:
     - Time per protocol (manual vs AI‑assisted with small pilot).
@@ -291,7 +297,7 @@ POST https://ubkg-api.xconsortia.org/search
   - End‑to‑end flow:
     1. Upload or select existing protocol.
     2. Run extraction.
-    3. Show criteria list with SNOMED codes & confidence.
+    3. Show criteria list with SNOMED codes + field/relation/value & confidence.
     4. Perform a couple of nurse edits.
     5. Show metrics/time‑saved panel.
   - Ensure no manual dev hacks (one‑command run via Docker Compose).
@@ -370,6 +376,8 @@ POST https://ubkg-api.xconsortia.org/search
   - F1 on test set.
 - **Grounding (Task B)**
   - SNOMED Top‑1 accuracy.
+- **Field Mapping**
+  - Field/relation/value mapping quality.
 - **HITL**
   - Nurse acceptance rate.
   - Time per protocol (manual vs AI‑assisted).

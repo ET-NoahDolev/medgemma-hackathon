@@ -1,10 +1,11 @@
 # grounding-service
 
-UBKG REST client and grounding helpers for Task B. Retrieves SNOMED candidates for each criterion.
+UBKG REST client and grounding helpers for Task B. Retrieves SNOMED candidates and field/relation/value mappings for each criterion.
 
 ## Responsibilities
 
 - Query UBKG for SNOMED candidates.
+- Propose field/relation/value mappings for screening.
 - Return ranked candidates with display names and confidence scores.
 
 ## Key Module

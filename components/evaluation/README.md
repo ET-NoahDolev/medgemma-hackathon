@@ -1,10 +1,10 @@
 # evaluation
 
-Metrics and reporting for extraction and grounding quality.
+Metrics and reporting for extraction, grounding, and field/relation/value mapping quality.
 
 ## Responsibilities
 
-- Compute extraction F1 and SNOMED Top-1 accuracy.
+- Compute extraction F1, SNOMED Top-1 accuracy, and field/relation/value mapping quality.
 - Aggregate HITL acceptance metrics.
 
 ## Key Module

@@ -1,10 +1,10 @@
 # api-service
 
-FastAPI service that orchestrates protocol ingestion, extraction, grounding, and HITL feedback. This is the entry point for the demo API.
+FastAPI service that orchestrates protocol ingestion, extraction, grounding (SNOMED + field/relation/value), and HITL feedback. This is the entry point for the demo API.
 
 ## Responsibilities
 
-- Expose REST endpoints for protocols, criteria, grounding, and HITL edits.
+- Expose REST endpoints for protocols, criteria, grounding (SNOMED + field mapping), and HITL edits.
 - Validate request payloads and manage response shapes.
 - Orchestrate calls to extraction and grounding components.
 

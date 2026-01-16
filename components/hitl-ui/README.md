@@ -6,6 +6,7 @@ React/Vite frontend for nurse review of extracted criteria and evidence.
 
 - Display protocols, criteria, and evidence snippets.
 - Provide SNOMED candidate review and edit workflows.
+- Provide field/relation/value mapping review and edits.
 - Capture nurse feedback for audit and retraining.
 
 ## Development

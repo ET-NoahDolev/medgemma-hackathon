@@ -1,11 +1,12 @@
 # Gemma Hackathon
 
-MedGemma hackathon demo for extracting atomic inclusion/exclusion criteria from trial protocols, grounding them to SNOMED via UBKG, and enabling nurse review in a HITL UI.
+MedGemma hackathon demo for extracting atomic inclusion/exclusion criteria from trial protocols, grounding them to SNOMED via UBKG, mapping field/relation/value for EMR screening, and enabling nurse review in a HITL UI.
 
 ## Goals
 
 - Extract atomic criteria with evidence snippets.
 - Ground criteria to SNOMED with ranked candidates and confidence.
+- Map criteria to field/relation/value (e.g., `demographics.age > 75`).
 - Capture nurse edits for HITL feedback and training data.
 - Provide a clear ElixirTrials integration story.
 

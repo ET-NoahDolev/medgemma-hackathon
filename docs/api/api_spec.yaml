@@ -29,7 +29,7 @@ paths:
           description: OK
   /v1/criteria/{criterionId}/ground:
     post:
-      summary: Ground criterion
+      summary: Ground criterion (SNOMED + field/relation/value mapping)
       responses:
         '200':
           description: OK

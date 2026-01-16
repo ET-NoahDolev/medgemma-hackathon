@@ -4,7 +4,7 @@ Shared data models and schemas used by API services and the UI.
 
 ## Responsibilities
 
-- Define canonical data structures for protocols, criteria, and groundings.
+- Define canonical data structures for protocols, criteria, groundings, and field/relation/value mappings.
 - Keep type definitions synchronized across services.
 
 ## Key Module

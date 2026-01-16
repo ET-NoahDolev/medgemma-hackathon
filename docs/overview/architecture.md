@@ -17,7 +17,7 @@ flowchart LR
 
 - `POST /v1/protocols` to register protocol metadata and text/PDF.
 - `POST /v1/protocols/{id}/extract` to trigger extraction.
-- `POST /v1/criteria/{id}/ground` to retrieve SNOMED candidates.
+- `POST /v1/criteria/{id}/ground` to retrieve SNOMED candidates and field/relation/value mapping suggestions.
 - `POST /v1/hitl/feedback` to log nurse actions.
 
 ## Component Responsibilities
@@ -26,9 +26,9 @@ flowchart LR
 | --- | --- |
 | `api-service` | Orchestration, persistence, request validation, HITL feedback. |
 | `extraction-service` | Extract atomic criteria and classify inclusion/exclusion. |
-| `grounding-service` | UBKG REST lookup for SNOMED candidates. |
+| `grounding-service` | UBKG REST lookup for SNOMED candidates + field/relation/value mapping suggestions. |
 | `data-pipeline` | Protocol ingestion and normalization. |
-| `evaluation` | Metrics (extraction F1, SNOMED Top-1, HITL stats). |
+| `evaluation` | Metrics (extraction F1, SNOMED Top-1, field mapping quality, HITL stats). |
 | `shared` | Shared schemas and types. |
 | `hitl-ui` | Nurse-facing review, edit, and evidence display. |
 
@@ -37,5 +37,5 @@ flowchart LR
 - `protocols`: protocol metadata and trial IDs.
 - `documents`: protocol text and provenance.
 - `criteria`: atomic criteria with type and evidence spans.
-- `groundings`: SNOMED candidates and confidence scores.
+- `groundings`: SNOMED candidates, confidence scores, and field/relation/value mappings.
 - `hitl_edits`: nurse actions for audit and retraining.
