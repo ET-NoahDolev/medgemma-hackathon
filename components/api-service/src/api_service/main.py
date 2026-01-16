@@ -9,8 +9,8 @@ from typing import List, Optional
 from extraction_service import (  # type: ignore[import-not-found]
     pipeline as extraction_pipeline,
 )
-from grounding_service import ubkg_client  # type: ignore[import-not-found]
 from fastapi import Body, Depends, FastAPI, HTTPException
+from grounding_service import ubkg_client  # type: ignore[import-not-found]
 from pydantic import BaseModel
 
 from api_service.dependencies import get_storage
