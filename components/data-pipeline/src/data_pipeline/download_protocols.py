@@ -56,7 +56,6 @@ def download_protocols(limit: int = 200) -> List[ProtocolRecord]:
         This is a wireframe stub. The production implementation will call
         ClinicalTrials.gov APIs and persist records to the database.
     """
-
     return []
 
 
@@ -77,7 +76,6 @@ def emit_records(records: Iterable[ProtocolRecord]) -> None:
         This stub represents the integration point for database writes or
         JSONL exports used by the extraction pipeline.
     """
-
     return None
 
 def main() -> None:
@@ -87,7 +85,6 @@ def main() -> None:
         >>> main()
         None
     """
-
     records = download_protocols(limit=1)
     emit_records(records)
     print("Download protocols placeholder")

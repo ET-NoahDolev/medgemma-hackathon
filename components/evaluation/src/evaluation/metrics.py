@@ -24,7 +24,6 @@ def extraction_f1(predicted: List[str], gold: List[str]) -> float:
         This is a wireframe stub. The production implementation will
         normalize text and compute precision/recall on span matches.
     """
-
     return 0.0
 
 
@@ -49,7 +48,6 @@ def snomed_top1_accuracy(predicted: List[str], gold: List[str]) -> float:
         This stub will be replaced by a metric implementation aligned with
         UBKG candidate ranking outputs.
     """
-
     return 0.0
 
 
@@ -72,5 +70,4 @@ def hitl_acceptance_rate(actions: Iterable[str]) -> float:
     Notes:
         This stub represents the acceptance metric tracked in the hackathon.
     """
-
     return 0.0

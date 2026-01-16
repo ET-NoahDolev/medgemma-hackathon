@@ -4,7 +4,7 @@ This page contains automatically generated API documentation for the extraction-
 
 ## API Documentation
 
-:::: extraction_service
+::: extraction_service
     handler: python
     selection:
       docstring_style: google

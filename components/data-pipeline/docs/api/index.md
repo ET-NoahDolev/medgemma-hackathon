@@ -4,7 +4,7 @@ This page contains automatically generated API documentation for the data-pipeli
 
 ## API Documentation
 
-:::: data_pipeline
+::: data_pipeline
     handler: python
     selection:
       docstring_style: google

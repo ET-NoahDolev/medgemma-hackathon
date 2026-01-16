@@ -66,5 +66,4 @@ class UbkgClient:
             The production version will call the UBKG search endpoint and map
             results into ``UbkgCandidate`` instances.
         """
-
         return []

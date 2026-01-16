@@ -4,7 +4,7 @@ This page contains automatically generated API documentation for the api-service
 
 ## API Documentation
 
-:::: api_service
+::: api_service
     handler: python
     selection:
       docstring_style: google

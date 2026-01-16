@@ -46,7 +46,6 @@ def extract_criteria(document_text: str) -> List[Criterion]:
         This is a wireframe stub. The production pipeline will use MedGemma
         for extraction and classification, with evidence spans attached.
     """
-
     return []
 
 
@@ -70,7 +69,6 @@ def split_into_candidate_sentences(document_text: str) -> List[str]:
         Intended to be replaced by a robust section parser and sentence
         splitter tuned for clinical trial formatting.
     """
-
     return []
 
 
@@ -93,5 +91,4 @@ def classify_criterion_type(candidate_text: str) -> str:
     Notes:
         This stub is a placeholder for MedGemma classification.
     """
-
     return "inclusion"

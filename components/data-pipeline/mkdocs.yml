@@ -3,4 +3,4 @@ site_name: data-pipeline
 nav:
   - Home: README.md
   - Code Documentation:
-      API Reference: data-pipeline/docs/api
+      API Reference: data-pipeline/docs/api/index.md

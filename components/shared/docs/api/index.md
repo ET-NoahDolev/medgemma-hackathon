@@ -4,7 +4,7 @@ This page contains automatically generated API documentation for the shared comp
 
 ## API Documentation
 
-:::: shared
+::: shared
     handler: python
     selection:
       docstring_style: google

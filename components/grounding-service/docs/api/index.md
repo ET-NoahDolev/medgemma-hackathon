@@ -4,7 +4,7 @@ This page contains automatically generated API documentation for the grounding-s
 
 ## API Documentation
 
-:::: grounding_service
+::: grounding_service
     handler: python
     selection:
       docstring_style: google

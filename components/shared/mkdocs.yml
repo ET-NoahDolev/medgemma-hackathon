@@ -3,4 +3,4 @@ site_name: shared
 nav:
   - Home: README.md
   - Code Documentation:
-      API Reference: shared/docs/api
+      API Reference: shared/docs/api/index.md

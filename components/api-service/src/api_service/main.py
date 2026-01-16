@@ -9,7 +9,7 @@ app = FastAPI(title="Gemma Hackathon API", version="0.1.0")
 class ProtocolCreateRequest(BaseModel):
     """Request payload for creating a protocol entry.
 
-    Args:
+    Attributes:
         title: Human-readable trial title.
         document_text: Raw protocol text or extracted PDF text.
 
@@ -47,7 +47,6 @@ def create_protocol(payload: ProtocolCreateRequest) -> dict:
         This is a stub implementation. Persistence and validation will be
         added as part of the API hardening phase.
     """
-
     return {"protocol_id": "proto-1", "title": payload.title}
 
 
@@ -72,7 +71,6 @@ def extract_criteria(protocol_id: str) -> dict:
         In production, this endpoint will call the extraction service and
         persist criteria rows in the database.
     """
-
     return {"protocol_id": protocol_id, "status": "queued"}
 
 
@@ -97,7 +95,6 @@ def list_criteria(protocol_id: str) -> dict:
         This is currently a wireframe response. It will be backed by
         database results in the API service implementation.
     """
-
     return {"protocol_id": protocol_id, "criteria": []}
 
 
@@ -122,7 +119,6 @@ def update_criterion(criterion_id: str) -> dict:
         The final implementation will accept a PATCH payload with fields
         like text, criterion type, and evidence spans.
     """
-
     return {"criterion_id": criterion_id, "status": "updated"}
 
 
@@ -147,7 +143,6 @@ def ground_criterion(criterion_id: str) -> dict:
         This endpoint will call the grounding service and cache candidate
         codes for HITL review.
     """
-
     return {"criterion_id": criterion_id, "candidates": []}
 
 
@@ -169,5 +164,4 @@ def hitl_feedback() -> dict:
         The final version will accept a payload describing the nurse action
         (accept/reject/add code) and evidence rationale.
     """
-
     return {"status": "recorded"}

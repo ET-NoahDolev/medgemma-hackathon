@@ -76,6 +76,13 @@ nav:
     - Hackathon Plan: overview/hackathon-plan.md
   - Components:
     - Overview: components-overview.md
+    - Api Service: '!include ./components/api-service/mkdocs.yml'
+    - Data Pipeline: '!include ./components/data-pipeline/mkdocs.yml'
+    - Evaluation: '!include ./components/evaluation/mkdocs.yml'
+    - Extraction Service: '!include ./components/extraction-service/mkdocs.yml'
+    - Grounding Service: '!include ./components/grounding-service/mkdocs.yml'
+    - Hitl Ui: '!include ./components/hitl-ui/mkdocs.yml'
+    - Shared: '!include ./components/shared/mkdocs.yml'
   - Diagrams:
     - HITL Flow: diagrams/hitl-flow.md
     - Grounding Flow: diagrams/grounding-flow.md

@@ -3,4 +3,4 @@ site_name: grounding-service
 nav:
   - Home: README.md
   - Code Documentation:
-      API Reference: grounding-service/docs/api
+      API Reference: grounding-service/docs/api/index.md

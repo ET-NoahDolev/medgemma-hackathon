@@ -3,4 +3,4 @@ site_name: evaluation
 nav:
   - Home: README.md
   - Code Documentation:
-      API Reference: evaluation/docs/api
+      API Reference: evaluation/docs/api/index.md
