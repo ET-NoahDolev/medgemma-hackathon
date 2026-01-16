@@ -57,7 +57,7 @@ def discover_components() -> List[str]:
         >>> print(components)
         ["athena-mcp", "cell-ops", "omics-embark"]
     """
-    components = []
+    components: List[str] = []
 
     try:
         components_path = Path(COMPONENTS_DIR)

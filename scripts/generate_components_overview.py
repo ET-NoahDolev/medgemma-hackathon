@@ -6,21 +6,25 @@ extracts information from their pyproject.toml and README.md files, and generate
 a comprehensive overview page grouped by category.
 """
 
+import importlib
 import logging
 import sys
 from pathlib import Path
+from types import ModuleType
 from typing import Dict, List, Optional
 
 try:
-    import tomllib
-except ImportError:
+    tomllib = importlib.import_module("tomllib")
+except ModuleNotFoundError:
     # Python < 3.11 compatibility
     try:
-        import tomli as tomllib
-    except ImportError:
+        tomllib = importlib.import_module("tomli")
+    except ModuleNotFoundError:
         print("Error: tomllib (Python 3.11+) or tomli is required.")
         print("Install with: uv add tomli")
         sys.exit(1)
+
+tomllib: ModuleType = tomllib
 
 # Configure logging
 logging.basicConfig(
@@ -161,6 +165,19 @@ def get_component_info(component_name: str) -> Dict:
 
     # Try to read pyproject.toml data
     pyproject_data = read_pyproject_data(component_path)
+    has_required_files = readme_path.exists() and mkdocs_path.exists()
+    basic_info = {
+        "name": component_name,
+        "display_name": component_name.replace("-", " ").title(),
+        "description": extract_description(readme_path)
+        if has_required_files
+        else "Missing documentation",
+        "category": infer_category(component_name),
+        "status": "active",
+        "owner": "Unknown",
+        "has_required_files": has_required_files,
+        "pyproject_data": None,
+    }
 
     if pyproject_data:
         try:
@@ -192,27 +209,13 @@ def get_component_info(component_name: str) -> Dict:
                 "category": category,
                 "status": "active",  # Default status
                 "owner": owner,
-                "has_required_files": readme_path.exists() and mkdocs_path.exists(),
+                "has_required_files": has_required_files,
                 "pyproject_data": pyproject_data,
             }
         except Exception as e:
             logger.error(f"Error processing pyproject.toml for {component_name}: {e}")
-            # Fall through to basic info
-    else:
-        # Fallback to basic info
-        has_required_files = readme_path.exists() and mkdocs_path.exists()
-        return {
-            "name": component_name,
-            "display_name": component_name.replace("-", " ").title(),
-            "description": extract_description(readme_path)
-            if has_required_files
-            else "Missing documentation",
-            "category": infer_category(component_name),
-            "status": "active",
-            "owner": "Unknown",
-            "has_required_files": has_required_files,
-            "pyproject_data": None,
-        }
+
+    return basic_info
 
 
 def discover_components_by_category() -> Dict[str, List[Dict]]:
@@ -226,7 +229,7 @@ def discover_components_by_category() -> Dict[str, List[Dict]]:
         >>> print(categories["mcp"])
         [{"name": "athena-mcp", "category": "mcp", ...}]
     """
-    categories = {}
+    categories: Dict[str, List[Dict]] = {}
 
     try:
         components_path = Path(COMPONENTS_DIR)

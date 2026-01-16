@@ -23,7 +23,13 @@ class Criterion:
         ...     confidence=0.92,
         ...     snomed_codes=["371273006"],
         ... )
-        Criterion(id='crit-1', text='Age >= 18 years', criterion_type='inclusion', confidence=0.92, snomed_codes=['371273006'])
+        Criterion(
+        ...     id='crit-1',
+        ...     text='Age >= 18 years',
+        ...     criterion_type='inclusion',
+        ...     confidence=0.92,
+        ...     snomed_codes=['371273006'],
+        ... )
 
     Notes:
         Evidence spans and grounding candidates are stored separately.
@@ -55,7 +61,13 @@ class Protocol:
         ...     condition="Melanoma",
         ...     phase="Phase 2",
         ... )
-        Protocol(id='proto-1', title='Example Trial', nct_id='NCT00000000', condition='Melanoma', phase='Phase 2')
+        Protocol(
+        ...     id='proto-1',
+        ...     title='Example Trial',
+        ...     nct_id='NCT00000000',
+        ...     condition='Melanoma',
+        ...     phase='Phase 2',
+        ... )
     """
 
     id: str
@@ -76,8 +88,18 @@ class Document:
         source_url: Optional source URL for provenance.
 
     Examples:
-        >>> Document(id="doc-1", protocol_id="proto-1", text="Inclusion: ...", source_url=None)
-        Document(id='doc-1', protocol_id='proto-1', text='Inclusion: ...', source_url=None)
+        >>> Document(
+        ...     id="doc-1",
+        ...     protocol_id="proto-1",
+        ...     text="Inclusion: ...",
+        ...     source_url=None,
+        ... )
+        Document(
+        ...     id='doc-1',
+        ...     protocol_id='proto-1',
+        ...     text='Inclusion: ...',
+        ...     source_url=None,
+        ... )
     """
 
     id: str
@@ -96,8 +118,16 @@ class GroundingCandidate:
         confidence: Model or retrieval confidence score.
 
     Examples:
-        >>> GroundingCandidate(code="372244006", display="Malignant melanoma, stage III", confidence=0.92)
-        GroundingCandidate(code='372244006', display='Malignant melanoma, stage III', confidence=0.92)
+        >>> GroundingCandidate(
+        ...     code="372244006",
+        ...     display="Malignant melanoma, stage III",
+        ...     confidence=0.92,
+        ... )
+        GroundingCandidate(
+        ...     code='372244006',
+        ...     display='Malignant melanoma, stage III',
+        ...     confidence=0.92,
+        ... )
     """
 
     code: str
@@ -116,8 +146,18 @@ class HitlEdit:
         note: Optional rationale or comment.
 
     Examples:
-        >>> HitlEdit(id="edit-1", criterion_id="crit-1", action="accept", note="Matches protocol text")
-        HitlEdit(id='edit-1', criterion_id='crit-1', action='accept', note='Matches protocol text')
+        >>> HitlEdit(
+        ...     id="edit-1",
+        ...     criterion_id="crit-1",
+        ...     action="accept",
+        ...     note="Matches protocol text",
+        ... )
+        HitlEdit(
+        ...     id='edit-1',
+        ...     criterion_id='crit-1',
+        ...     action='accept',
+        ...     note='Matches protocol text',
+        ... )
     """
 
     id: str

@@ -33,3 +33,14 @@ members = [
     "components/evaluation",
     "components/shared",
 ]
+
+[tool.mypy]
+exclude = "^(site)/"
+
+[[tool.mypy.overrides]]
+module = "fastapi"
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = "pydantic"
+ignore_missing_imports = true

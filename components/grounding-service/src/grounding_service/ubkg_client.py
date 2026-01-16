@@ -15,8 +15,18 @@ class UbkgCandidate:
         confidence: Confidence or relevance score.
 
     Examples:
-        >>> UbkgCandidate(code="372244006", display="Malignant melanoma, stage III", ontology="SNOMED CT", confidence=0.92)
-        UbkgCandidate(code='372244006', display='Malignant melanoma, stage III', ontology='SNOMED CT', confidence=0.92)
+        >>> UbkgCandidate(
+        ...     code="372244006",
+        ...     display="Malignant melanoma, stage III",
+        ...     ontology="SNOMED CT",
+        ...     confidence=0.92,
+        ... )
+        UbkgCandidate(
+        ...     code='372244006',
+        ...     display='Malignant melanoma, stage III',
+        ...     ontology='SNOMED CT',
+        ...     confidence=0.92,
+        ... )
 
     Notes:
         UBKG returns richer fields; this wireframe focuses on what the HITL UI needs.
@@ -43,6 +53,7 @@ class UbkgClient:
     """
 
     def __init__(self, base_url: str = "https://ubkg-api.xconsortia.org") -> None:
+        """Initialize the client with a base URL."""
         self.base_url = base_url
 
     def search_snomed(self, query: str, limit: int = 5) -> List[UbkgCandidate]:

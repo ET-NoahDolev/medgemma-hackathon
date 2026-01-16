@@ -14,7 +14,11 @@ class Criterion:
         confidence: Model confidence score from 0.0 to 1.0.
 
     Examples:
-        >>> Criterion(text="Age >= 18 years", criterion_type="inclusion", confidence=0.92)
+        >>> Criterion(
+        ...     text="Age >= 18 years",
+        ...     criterion_type="inclusion",
+        ...     confidence=0.92,
+        ... )
         Criterion(text='Age >= 18 years', criterion_type='inclusion', confidence=0.92)
 
     Notes:

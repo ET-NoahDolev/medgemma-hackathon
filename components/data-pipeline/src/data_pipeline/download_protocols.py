@@ -23,7 +23,13 @@ class ProtocolRecord:
         ...     phase="Phase 2",
         ...     document_text="Inclusion: Age >= 18.",
         ... )
-        ProtocolRecord(nct_id='NCT00000000', title='Example Trial', condition='Melanoma', phase='Phase 2', document_text='Inclusion: Age >= 18.')
+        ProtocolRecord(
+        ...     nct_id='NCT00000000',
+        ...     title='Example Trial',
+        ...     condition='Melanoma',
+        ...     phase='Phase 2',
+        ...     document_text='Inclusion: Age >= 18.',
+        ... )
 
     Notes:
         This model represents the canonical ingestion output for the API service.

@@ -1,7 +1,7 @@
 """API service wireframe for the MedGemma hackathon demo."""
 
-from fastapi import FastAPI
-from pydantic import BaseModel
+from fastapi import FastAPI  # type: ignore[import-not-found]
+from pydantic import BaseModel  # type: ignore[import-not-found]
 
 app = FastAPI(title="Gemma Hackathon API", version="0.1.0")
 
@@ -40,7 +40,12 @@ def create_protocol(payload: ProtocolCreateRequest) -> dict:
         ValueError: If required fields are missing or invalid.
 
     Examples:
-        >>> create_protocol(ProtocolCreateRequest(title="Trial A", document_text="Inclusion: ..."))
+        >>> create_protocol(
+        ...     ProtocolCreateRequest(
+        ...         title="Trial A",
+        ...         document_text="Inclusion: ...",
+        ...     )
+        ... )
         {'protocol_id': 'proto-1', 'title': 'Trial A'}
 
     Notes:
