@@ -95,13 +95,9 @@ def init_db() -> None:
 
 def reset_storage() -> None:
     """Clear all stored data (used for tests and demos)."""
-    init_db()
-    with Session(get_engine()) as session:
-        session.exec(delete(HitlEdit))
-        session.exec(delete(Criterion))
-        session.exec(delete(Protocol))
-        session.exec(delete(IdCounter))
-        session.commit()
+    engine = get_engine()
+    SQLModel.metadata.drop_all(engine)
+    SQLModel.metadata.create_all(engine)
 
 
 def _next_id(session: Session, key: str, prefix: str) -> str:
