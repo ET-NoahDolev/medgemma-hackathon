@@ -1,6 +1,7 @@
-import pytest
 from pathlib import Path
 from unittest.mock import MagicMock, patch
+
+import pytest
 
 from data_pipeline.download_protocols import (
     ProtocolRecord,
