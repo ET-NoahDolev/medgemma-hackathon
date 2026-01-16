@@ -1,0 +1,6 @@
+docs_dir: .
+site_name: extraction-service
+nav:
+  - Home: README.md
+  - Code Documentation:
+      API Reference: extraction-service/docs/api

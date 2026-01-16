@@ -1,0 +1,4 @@
+docs_dir: .
+site_name: hitl-ui
+nav:
+  - Home: README.md

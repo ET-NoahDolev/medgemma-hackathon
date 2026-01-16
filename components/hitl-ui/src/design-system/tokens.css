@@ -1,0 +1,261 @@
+/*
+  Cauldron Design System — Tokens
+  --------------------------------
+  Source of truth for all design tokens (colors, type, spacing, radii, shadows)
+  and theme overrides. Do NOT define token values elsewhere.
+
+  Rule: components should use semantic tokens (e.g. --color-bg-panel), not primitives.
+*/
+
+/* ========== Brand primitives (do not reference in components directly) ========== */
+:root {
+  /* Teal brand */
+  --brand-teal-300: #14c9b3;
+  --brand-teal-500: #0fa897;
+  --brand-teal-600: #0d8a7a;
+  --brand-teal-700: #0b7366;
+
+  /* Orange brand */
+  --brand-orange-400: #f6b26b;
+  --brand-orange-500: #f97316;
+
+  /* Status palette */
+  --brand-green-500: #10b981; /* success */
+  --brand-blue-500: #3b82f6; /* info */
+  --brand-yellow-500: #f59e0b; /* warning */
+  --brand-red-500: #ef4444; /* danger */
+
+  /* Neutrals */
+  --neutral-0: #ffffff;
+  --neutral-50: #f9fafb;
+  --neutral-100: #f3f4f6;
+  --neutral-200: #e5e7eb;
+  --neutral-300: #d1d5db;
+  --neutral-600: #4b5563;
+  --neutral-800: #1f2937;
+  --neutral-900: #111827;
+
+  /* Dark surfaces */
+  --dark-surface: #1a1a1a;
+  --dark-elevated: #1f2937;
+  --dark-text: #ededed;
+
+  /* Focus & outlines */
+  --focus-ring: #14c9b3;
+
+  /* Typography */
+  --font-sans:
+    ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial,
+    'Noto Sans', 'Apple Color Emoji', 'Segoe UI Emoji';
+  --fs-caption: 12px;
+  --fs-body: 14px;
+  --fs-body-lg: 16px;
+  --fs-h6: 18px;
+  --fs-h5: 20px;
+  --fs-h4: 24px;
+  --lh-tight: 1.2;
+  --lh-normal: 1.5;
+
+  /* Spacing — 8pt grid (+ 4pt half-step) */
+  --space-0: 0px;
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-10: 40px;
+  --space-12: 48px;
+
+  /* Radius & elevation */
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --shadow-sm: 0 1px 2px rgba(17, 24, 39, 0.08);
+  --shadow-md: 0 4px 12px rgba(17, 24, 39, 0.1);
+
+  /* ========== Semantic tokens (reference these in components) ========== */
+  /* Backgrounds & text */
+  --color-bg-app: var(--neutral-100);
+  --color-bg-panel: var(--neutral-50);
+  --color-text-primary: var(--neutral-900);
+  --color-text-secondary: var(--neutral-600);
+  --color-border: var(--neutral-200);
+
+  /* Actions */
+  --color-action-primary: var(--brand-teal-500);
+  --color-action-primary-hover: var(--brand-teal-300);
+  --color-action-primary-pressed: var(--brand-teal-600);
+  --color-action-secondary: var(--brand-orange-500);
+  --color-action-secondary-hover: var(--brand-orange-400);
+
+  /* Status */
+  --color-status-success: var(--brand-green-500);
+  --color-status-info: var(--brand-blue-500);
+  --color-status-warning: var(--brand-yellow-500);
+  --color-status-danger: var(--brand-red-500);
+  --color-status-ai: var(--brand-orange-500);
+
+  /* Focus */
+  --color-focus-ring: var(--focus-ring);
+
+  /* ========== Component tokens (alias to semantic) ========== */
+  /* Button */
+  --btn-primary-bg: var(--color-action-primary);
+  --btn-primary-bg-hover: var(--color-action-primary-hover);
+  --btn-primary-text: #ffffff;
+  --btn-secondary-bg: var(--color-action-secondary);
+  --btn-secondary-bg-hover: var(--color-action-secondary-hover);
+  --btn-secondary-text: #ffffff;
+
+  /* Tag/Chip */
+  --tag-success-bg: rgba(16, 185, 129, 0.12);
+  --tag-success-text: var(--color-status-success);
+  --tag-info-bg: rgba(59, 130, 246, 0.12);
+  --tag-info-text: var(--color-status-info);
+  --tag-warn-bg: rgba(245, 158, 11, 0.12);
+  --tag-warn-text: var(--color-status-warning);
+  --tag-danger-bg: rgba(239, 68, 68, 0.12);
+  --tag-danger-text: var(--color-status-danger);
+  --tag-ai-bg: rgba(249, 115, 22, 0.12);
+  --tag-ai-text: var(--color-status-ai);
+
+  /* Inputs */
+  --input-bg: var(--neutral-0);
+  --input-text: var(--color-text-primary);
+  --input-border: var(--color-border);
+  --input-border-focus: var(--color-focus-ring);
+
+  /* ========== Cockpit tokens ========== */
+  --neon-cyan: #00f0ff;
+  --neon-crimson: #ff2a6d;
+  --neon-green: #05ffa1;
+
+  /* Overall cockpit surface */
+  --cockpit-bg:
+    radial-gradient(70% 70% at 50% 15%, rgba(0, 240, 255, 0.08), transparent 55%),
+    radial-gradient(60% 55% at 18% 70%, rgba(255, 42, 109, 0.06), transparent 55%),
+    radial-gradient(55% 55% at 84% 75%, rgba(5, 255, 161, 0.05), transparent 55%),
+    /* Bottom glow so the background never feels like it "ends" */
+    radial-gradient(90% 70% at 50% 115%, rgba(0, 240, 255, 0.06), transparent 60%),
+    linear-gradient(to bottom, rgba(255, 255, 255, 0.75), rgba(255, 255, 255, 0.65));
+
+  /* Glass surface */
+  --glass-bg: rgba(255, 255, 255, 0.46);
+  --glass-border: rgba(17, 24, 39, 0.1);
+  --glass-highlight: rgba(255, 255, 255, 0.38);
+
+  /* Modal glass - iOS 16 / macOS style - Strong blur effect */
+  --modal-glass-bg: rgba(255, 255, 255, 0.6);
+  --modal-glass-border: rgba(255, 255, 255, 0.9);
+  --modal-overlay-bg: rgba(0, 0, 0, 0.4);
+  --modal-blur-amount: 80px;
+  --modal-saturate-amount: 180%;
+
+  /* HUD text */
+  --hud-fg: rgba(17, 24, 39, 0.92);
+  --hud-muted: rgba(75, 85, 99, 0.88);
+
+  /* Base app surface (uniform glass layer across the whole app) */
+  --app-surface-bg: rgba(255, 255, 255, 0.08);
+
+  /* Dock strokes */
+  --dock-divider: rgba(17, 24, 39, 0.1);
+  --dock-stroke: rgba(17, 24, 39, 0.1);
+  --dock-item-stroke: rgba(17, 24, 39, 0.08);
+  --dock-item-stroke-hover: rgba(17, 24, 39, 0.14);
+
+  /* Cockpit “legacy screen” skinning (maps Tailwind whites/grays to glass) */
+  --cockpit-legacy-white: rgba(255, 255, 255, 0.1);
+  --cockpit-legacy-gray-50: rgba(255, 255, 255, 0.06);
+  --cockpit-legacy-border: rgba(17, 24, 39, 0.1);
+
+  /* shadcn semantic HSL tokens */
+  --background: 0 0% 100%;
+  --foreground: 222 47% 11%;
+  --muted-foreground: 215 16% 47%;
+  --card: 0 0% 100%;
+  --card-foreground: 222 47% 11%;
+  --popover: 0 0% 100%;
+  --popover-foreground: 222 47% 11%;
+  --border: 214 32% 91%;
+  --input: 214 32% 91%;
+  --ring: 180 100% 47%;
+  --primary: 174 77% 36%; /* teal-ish */
+  --primary-foreground: 0 0% 100%;
+  --accent: 210 40% 96%;
+  --accent-foreground: 222 47% 11%;
+
+  /* Cockpit tints */
+  --cockpit-tint-green: rgba(16, 185, 129, 0.1);
+  --cockpit-tint-amber: rgba(245, 158, 11, 0.1);
+  --cockpit-tint-red: rgba(239, 68, 68, 0.1);
+}
+
+/* Dark mode overrides */
+:root[data-theme='dark'] {
+  --color-bg-app: var(--dark-surface);
+  --color-bg-panel: var(--dark-elevated);
+  --color-text-primary: var(--dark-text);
+  --color-text-secondary: #b4b8bf;
+  --color-border: #2a2f3a;
+
+  --btn-primary-text: #ededed;
+  --btn-secondary-text: #ededed;
+
+  --input-bg: #22252c;
+  --input-text: var(--dark-text);
+  --input-border: #333846;
+
+  /* Glass cockpit (dark) */
+  --cockpit-bg:
+    radial-gradient(70% 70% at 50% 15%, rgba(0, 240, 255, 0.1), transparent 55%),
+    radial-gradient(60% 55% at 18% 70%, rgba(255, 42, 109, 0.08), transparent 55%),
+    radial-gradient(55% 55% at 84% 75%, rgba(5, 255, 161, 0.07), transparent 55%),
+    /* Bottom glow so the background never feels like it "ends" */
+    radial-gradient(90% 70% at 50% 115%, rgba(0, 240, 255, 0.08), transparent 60%),
+    linear-gradient(to bottom, rgba(10, 12, 16, 0.86), rgba(10, 12, 16, 0.78));
+
+  --glass-bg: rgba(18, 22, 30, 0.44);
+  --glass-border: rgba(255, 255, 255, 0.1);
+  --glass-highlight: rgba(255, 255, 255, 0.12);
+
+  /* Modal glass - Dark mode - Strong blur effect */
+  --modal-glass-bg: rgba(30, 30, 30, 0.5);
+  --modal-glass-border: rgba(255, 255, 255, 0.15);
+  --modal-overlay-bg: rgba(0, 0, 0, 0.6);
+
+  --hud-fg: rgba(237, 237, 237, 0.92);
+  --hud-muted: rgba(180, 184, 191, 0.88);
+
+  --app-surface-bg: rgba(10, 12, 16, 0.18);
+
+  --dock-divider: rgba(255, 255, 255, 0.14);
+  --dock-stroke: rgba(255, 255, 255, 0.14);
+  --dock-item-stroke: rgba(255, 255, 255, 0.12);
+  --dock-item-stroke-hover: rgba(255, 255, 255, 0.18);
+
+  --cockpit-legacy-white: rgba(18, 22, 30, 0.32);
+  --cockpit-legacy-gray-50: rgba(18, 22, 30, 0.22);
+  --cockpit-legacy-border: rgba(255, 255, 255, 0.12);
+
+  --background: 222 84% 5%;
+  --foreground: 210 40% 98%;
+  --muted-foreground: 215 16% 72%;
+  --card: 222 84% 6%;
+  --card-foreground: 210 40% 98%;
+  --popover: 222 84% 6%;
+  --popover-foreground: 210 40% 98%;
+  --border: 217 19% 27%;
+  --input: 217 19% 27%;
+  --ring: 180 100% 55%;
+  --primary: 174 77% 42%;
+  --primary-foreground: 0 0% 10%;
+  --accent: 217 19% 16%;
+  --accent-foreground: 210 40% 98%;
+
+  --cockpit-tint-green: rgba(16, 185, 129, 0.16);
+  --cockpit-tint-amber: rgba(245, 158, 11, 0.16);
+  --cockpit-tint-red: rgba(239, 68, 68, 0.16);
+}

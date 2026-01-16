@@ -1,0 +1,41 @@
+openapi: 3.0.3
+info:
+  title: Gemma Hackathon API
+  version: 0.1.0
+paths:
+  /v1/protocols:
+    post:
+      summary: Create protocol
+      responses:
+        '200':
+          description: OK
+  /v1/protocols/{protocolId}/extract:
+    post:
+      summary: Extract criteria
+      responses:
+        '200':
+          description: OK
+  /v1/protocols/{protocolId}/criteria:
+    get:
+      summary: List criteria
+      responses:
+        '200':
+          description: OK
+  /v1/criteria/{criterionId}:
+    patch:
+      summary: Update criterion
+      responses:
+        '200':
+          description: OK
+  /v1/criteria/{criterionId}/ground:
+    post:
+      summary: Ground criterion
+      responses:
+        '200':
+          description: OK
+  /v1/hitl/feedback:
+    post:
+      summary: Record HITL feedback
+      responses:
+        '200':
+          description: OK

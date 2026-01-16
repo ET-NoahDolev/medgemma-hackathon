@@ -1,0 +1,6 @@
+docs_dir: .
+site_name: api-service
+nav:
+  - Home: README.md
+  - Code Documentation:
+      API Reference: api-service/docs/api

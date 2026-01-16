@@ -1,0 +1,29 @@
+[project]
+name = "api-service"
+version = "0.1.0"
+description = "api-service component"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi>=0.110.0",
+    "uvicorn>=0.27.0",
+]
+
+[tool.ruff]
+lint.select = ["E", "F", "W", "C", "N", "I", "D"]
+lint.ignore = ["E203", "D203", "D213", "D100", "D413", "D104"]
+target-version = "py312"
+line-length = 88
+exclude = ["venv", ".venv", "tests", "docs"]
+lint.pydocstyle.convention = "google"
+
+[tool.mypy]
+strict = true
+exclude = ["venv", ".venv", "tests", "docs"]
+plugins = []
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+
+[tool.uv]
+cache-dir = "./.uv_cache"

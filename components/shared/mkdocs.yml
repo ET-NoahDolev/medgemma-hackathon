@@ -1,0 +1,6 @@
+docs_dir: .
+site_name: shared
+nav:
+  - Home: README.md
+  - Code Documentation:
+      API Reference: shared/docs/api
