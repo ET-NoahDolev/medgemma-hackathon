@@ -11,7 +11,7 @@ from typing import Protocol as TypingProtocol
 
 from sqlalchemy import JSON, Column, delete
 from sqlalchemy.engine import Engine
-from sqlmodel import Field, Session, SQLModel, create_engine, select
+from sqlmodel import Field, Session, SQLModel, col, create_engine, select
 
 
 class ExtractedCriterion(TypingProtocol):
@@ -22,7 +22,7 @@ class ExtractedCriterion(TypingProtocol):
     confidence: float
 
 
-class Protocol(SQLModel, table=True):  # type: ignore[call-arg]
+class Protocol(SQLModel, table=True):
     """Protocol record persisted for API requests."""
 
     id: str = Field(primary_key=True)
@@ -33,7 +33,7 @@ class Protocol(SQLModel, table=True):  # type: ignore[call-arg]
     phase: str | None = None
 
 
-class Criterion(SQLModel, table=True):  # type: ignore[call-arg]
+class Criterion(SQLModel, table=True):
     """Criterion record persisted for API requests."""
 
     id: str = Field(primary_key=True)
@@ -46,7 +46,7 @@ class Criterion(SQLModel, table=True):  # type: ignore[call-arg]
     )
 
 
-class HitlEdit(SQLModel, table=True):  # type: ignore[call-arg]
+class HitlEdit(SQLModel, table=True):
     """HITL edit record for tracking reviewer changes."""
 
     id: str = Field(primary_key=True)
@@ -60,7 +60,7 @@ class HitlEdit(SQLModel, table=True):  # type: ignore[call-arg]
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 
-class IdCounter(SQLModel, table=True):  # type: ignore[call-arg]
+class IdCounter(SQLModel, table=True):
     """Simple counter table for stable prefixed identifiers."""
 
     key: str = Field(primary_key=True)
@@ -154,8 +154,8 @@ class Storage:
         with Session(self._engine) as session:
             statement = (
                 select(Criterion)
-                .where(Criterion.protocol_id == protocol_id)  # type: ignore[arg-type]
-                .order_by(Criterion.id)
+                .where(col(Criterion.protocol_id) == protocol_id)
+                .order_by(col(Criterion.id))
             )
             return list(session.exec(statement))
 
@@ -165,9 +165,7 @@ class Storage:
         """Replace criteria for a protocol with extracted entries."""
         with Session(self._engine) as session:
             session.exec(
-                delete(Criterion).where(
-                    Criterion.protocol_id == protocol_id  # type: ignore[arg-type]
-                )
+                delete(Criterion).where(col(Criterion.protocol_id) == protocol_id)
             )
             stored: list[Criterion] = []
             for item in extracted:
@@ -259,7 +257,7 @@ class Storage:
         with Session(self._engine) as session:
             statement = (
                 select(HitlEdit)
-                .where(HitlEdit.criterion_id == criterion_id)  # type: ignore[arg-type]
-                .order_by(HitlEdit.created_at)
+                .where(col(HitlEdit.criterion_id) == criterion_id)
+                .order_by(col(HitlEdit.created_at))
             )
             return list(session.exec(statement))
