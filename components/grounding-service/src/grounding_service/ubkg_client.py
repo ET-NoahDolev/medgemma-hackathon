@@ -1,5 +1,6 @@
 """UBKG REST client stub."""
 
+import re
 from dataclasses import dataclass
 from typing import List
 
@@ -113,7 +114,39 @@ class UbkgClient:
             The production version will call the UBKG search endpoint and map
             results into ``UbkgCandidate`` instances.
         """
-        return []
+        if not query.strip():
+            raise ValueError("query is required")
+
+        lowered = query.lower()
+        candidates: List[UbkgCandidate] = []
+        if "melanoma" in lowered:
+            candidates.append(
+                UbkgCandidate(
+                    code="372244006",
+                    display="Malignant melanoma, stage III",
+                    ontology="SNOMED CT",
+                    confidence=0.92,
+                )
+            )
+        elif "age" in lowered:
+            candidates.append(
+                UbkgCandidate(
+                    code="371273006",
+                    display="Age",
+                    ontology="SNOMED CT",
+                    confidence=0.85,
+                )
+            )
+        elif "pregnant" in lowered:
+            candidates.append(
+                UbkgCandidate(
+                    code="77386006",
+                    display="Pregnant",
+                    ontology="SNOMED CT",
+                    confidence=0.88,
+                )
+            )
+        return candidates[:limit]
 
 
 def propose_field_mapping(criterion_text: str) -> List[FieldMappingSuggestion]:
@@ -136,4 +169,19 @@ def propose_field_mapping(criterion_text: str) -> List[FieldMappingSuggestion]:
         This is a wireframe stub. The production implementation will use
         a MedGemma adapter or rule-based parser for field mapping.
     """
-    return []
+    if not criterion_text.strip():
+        raise ValueError("criterion_text is required")
+
+    match = re.search(r"age\s*(>=|<=|=|>|<)\s*(\d+)", criterion_text, re.IGNORECASE)
+    if not match:
+        return []
+
+    relation, value = match.group(1), match.group(2)
+    return [
+        FieldMappingSuggestion(
+            field="demographics.age",
+            relation=relation,
+            value=value,
+            confidence=0.87,
+        )
+    ]

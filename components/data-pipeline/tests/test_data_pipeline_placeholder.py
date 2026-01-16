@@ -23,7 +23,13 @@ def test_download_protocols_returns_list() -> None:
     records = download_protocols.download_protocols(limit=1)
 
     assert isinstance(records, list)
-    assert records == []
+    assert len(records) == 1
+    assert records[0].nct_id == "NCT00000000"
+
+
+def test_download_protocols_raises_on_invalid_limit() -> None:
+    with pytest.raises(ValueError):
+        download_protocols.download_protocols(limit=0)
 
 
 def test_emit_records_returns_none() -> None:

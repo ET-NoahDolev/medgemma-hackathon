@@ -17,7 +17,8 @@ def test_extract_criteria_returns_list() -> None:
     criteria = pipeline.extract_criteria("Inclusion: Age >= 18 years.")
 
     assert isinstance(criteria, list)
-    assert criteria == []
+    assert len(criteria) == 1
+    assert criteria[0].text == "Age >= 18 years"
 
 
 def test_split_into_candidate_sentences_returns_list() -> None:
@@ -26,10 +27,16 @@ def test_split_into_candidate_sentences_returns_list() -> None:
     )
 
     assert isinstance(sentences, list)
-    assert sentences == []
+    assert sentences == ["Age >= 18", "Pregnant"]
 
 
 def test_classify_criterion_type_returns_inclusion() -> None:
     label = pipeline.classify_criterion_type("Age >= 18 years")
 
     assert label == "inclusion"
+
+
+def test_classify_criterion_type_returns_exclusion() -> None:
+    label = pipeline.classify_criterion_type("Exclusion: Pregnant")
+
+    assert label == "exclusion"

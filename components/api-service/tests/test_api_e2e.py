@@ -13,19 +13,19 @@ def test_end_to_end_workflow(client: TestClient) -> None:
 
     extract_response = client.post("/v1/protocols/proto-1/extract")
     assert extract_response.status_code == 200
-    assert extract_response.json()["status"] == "queued"
+    assert extract_response.json()["status"] == "completed"
 
     list_response = client.get("/v1/protocols/proto-1/criteria")
     assert list_response.status_code == 200
-    assert list_response.json()["criteria"] == []
+    assert list_response.json()["criteria"][0]["text"] == "Age >= 18"
 
     update_response = client.patch("/v1/criteria/crit-1")
     assert update_response.status_code == 200
-    assert update_response.json()["status"] == "updated"
+    assert update_response.json()["criterion"]["id"] == "crit-1"
 
     ground_response = client.post("/v1/criteria/crit-1/ground")
     assert ground_response.status_code == 200
-    assert ground_response.json()["candidates"] == []
+    assert ground_response.json()["candidates"][0]["code"] == "371273006"
 
     feedback_response = client.post("/v1/hitl/feedback")
     assert feedback_response.status_code == 200

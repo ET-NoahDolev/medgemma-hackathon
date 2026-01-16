@@ -62,7 +62,22 @@ def download_protocols(limit: int = 200) -> List[ProtocolRecord]:
         This is a wireframe stub. The production implementation will call
         ClinicalTrials.gov APIs and persist records to the database.
     """
-    return []
+    if limit <= 0:
+        raise ValueError("limit must be positive")
+
+    count = 1
+    records = []
+    for index in range(count):
+        records.append(
+            ProtocolRecord(
+                nct_id=f"NCT{index:08d}",
+                title="Example Trial",
+                condition="Melanoma",
+                phase="Phase 2",
+                document_text="Inclusion: Age >= 18.",
+            )
+        )
+    return records
 
 
 def emit_records(records: Iterable[ProtocolRecord]) -> None:

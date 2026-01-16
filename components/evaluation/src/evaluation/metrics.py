@@ -24,7 +24,17 @@ def extraction_f1(predicted: List[str], gold: List[str]) -> float:
         This is a wireframe stub. The production implementation will
         normalize text and compute precision/recall on span matches.
     """
-    return 0.0
+    if not predicted or not gold:
+        raise ValueError("predicted and gold must be non-empty")
+
+    predicted_set = set(predicted)
+    gold_set = set(gold)
+    true_positives = len(predicted_set & gold_set)
+    precision = true_positives / len(predicted_set)
+    recall = true_positives / len(gold_set)
+    if precision + recall == 0:
+        return 0.0
+    return 2 * precision * recall / (precision + recall)
 
 
 def snomed_top1_accuracy(predicted: List[str], gold: List[str]) -> float:
@@ -48,7 +58,16 @@ def snomed_top1_accuracy(predicted: List[str], gold: List[str]) -> float:
         This stub will be replaced by a metric implementation aligned with
         UBKG candidate ranking outputs.
     """
-    return 0.0
+    if not predicted or not gold:
+        raise ValueError("predicted and gold must be non-empty")
+
+    comparisons = zip(predicted, gold)
+    matches = sum(
+        1
+        for predicted_code, gold_code in comparisons
+        if predicted_code == gold_code
+    )
+    return matches / len(gold)
 
 
 def field_mapping_accuracy(predicted: List[str], gold: List[str]) -> float:
@@ -72,7 +91,16 @@ def field_mapping_accuracy(predicted: List[str], gold: List[str]) -> float:
         This stub will be replaced by a metric implementation aligned with
         normalized field/value parsing in the grounding service.
     """
-    return 0.0
+    if not predicted or not gold:
+        raise ValueError("predicted and gold must be non-empty")
+
+    comparisons = zip(predicted, gold)
+    matches = sum(
+        1
+        for predicted_value, gold_value in comparisons
+        if predicted_value == gold_value
+    )
+    return matches / len(gold)
 
 
 def hitl_acceptance_rate(actions: Iterable[str]) -> float:
@@ -94,4 +122,9 @@ def hitl_acceptance_rate(actions: Iterable[str]) -> float:
     Notes:
         This stub represents the acceptance metric tracked in the hackathon.
     """
-    return 0.0
+    action_list = list(actions)
+    if not action_list:
+        raise ValueError("actions must be non-empty")
+
+    accepted = sum(1 for action in action_list if action == "accept")
+    return accepted / len(action_list)

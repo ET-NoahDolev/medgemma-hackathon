@@ -51,7 +51,19 @@ def extract_criteria(document_text: str) -> List[Criterion]:
         This is a wireframe stub. The production pipeline will use MedGemma
         for extraction and classification, with evidence spans attached.
     """
-    return []
+    if not document_text.strip():
+        raise ValueError("document_text is required")
+
+    criteria: List[Criterion] = []
+    for sentence in split_into_candidate_sentences(document_text):
+        criteria.append(
+            Criterion(
+                text=sentence,
+                criterion_type=classify_criterion_type(sentence),
+                confidence=0.9,
+            )
+        )
+    return criteria
 
 
 def split_into_candidate_sentences(document_text: str) -> List[str]:
@@ -74,7 +86,23 @@ def split_into_candidate_sentences(document_text: str) -> List[str]:
         Intended to be replaced by a robust section parser and sentence
         splitter tuned for clinical trial formatting.
     """
-    return []
+    if not document_text.strip():
+        raise ValueError("document_text is required")
+
+    normalized = document_text.replace("\n", " ").strip()
+    raw_sentences = [segment.strip() for segment in normalized.split(".")]
+    candidates: List[str] = []
+    for sentence in raw_sentences:
+        if not sentence:
+            continue
+        lowered = sentence.lower()
+        if lowered.startswith("inclusion:"):
+            sentence = sentence[len("inclusion:") :].strip()
+        elif lowered.startswith("exclusion:"):
+            sentence = sentence[len("exclusion:") :].strip()
+        if sentence:
+            candidates.append(sentence)
+    return candidates
 
 
 def classify_criterion_type(candidate_text: str) -> str:
@@ -96,4 +124,10 @@ def classify_criterion_type(candidate_text: str) -> str:
     Notes:
         This stub is a placeholder for MedGemma classification.
     """
+    if not candidate_text.strip():
+        raise ValueError("candidate_text is required")
+
+    lowered = candidate_text.lower()
+    if "exclusion" in lowered or "exclude" in lowered or "pregnant" in lowered:
+        return "exclusion"
     return "inclusion"

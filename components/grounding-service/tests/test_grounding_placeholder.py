@@ -1,3 +1,5 @@
+import pytest
+
 from grounding_service import ubkg_client
 
 
@@ -41,11 +43,20 @@ def test_search_snomed_returns_list() -> None:
     results = client.search_snomed("stage III melanoma")
 
     assert isinstance(results, list)
-    assert results == []
+    assert results[0].code == "372244006"
 
 
 def test_propose_field_mapping_returns_list() -> None:
     suggestions = ubkg_client.propose_field_mapping("Age >= 75 years")
 
     assert isinstance(suggestions, list)
-    assert suggestions == []
+    assert suggestions[0].field == "demographics.age"
+    assert suggestions[0].relation == ">="
+    assert suggestions[0].value == "75"
+
+
+def test_search_snomed_raises_on_empty_query() -> None:
+    client = ubkg_client.UbkgClient()
+
+    with pytest.raises(ValueError):
+        client.search_snomed("")

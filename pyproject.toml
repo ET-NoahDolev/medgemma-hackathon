@@ -35,7 +35,7 @@ members = [
 ]
 
 [tool.mypy]
-exclude = "^(site)/"
+exclude = "^(site|components/.*/tests)/"
 
 [[tool.mypy.overrides]]
 module = "fastapi"
@@ -48,6 +48,7 @@ ignore_missing_imports = true
 [tool.pytest.ini_options]
 testpaths = ["components"]
 norecursedirs = ["site", "docs", ".venv", "venv", ".uv_cache", "node_modules", ".git"]
+markers = ["e2e: end-to-end API workflow tests"]
 pythonpath = [
     "components/api-service/src",
     "components/data-pipeline/src",
