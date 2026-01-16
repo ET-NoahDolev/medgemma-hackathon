@@ -1,7 +1,7 @@
 site_name: Gemma Hackathon Documentation
 site_description: MedGemma HITL demo for trial criteria extraction and grounding
 site_author: Noah Dolev
-site_url: ""
+site_url: "https://et-noahdolev.github.io/medgemma-hackathon/hackathon/docs/"
 site_dir: site/hackathon/docs
 docs_dir: docs
 
