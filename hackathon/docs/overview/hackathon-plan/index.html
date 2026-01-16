@@ -1,0 +1,3541 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="MedGemma HITL demo for trial criteria extraction and grounding">
+      
+      
+        <meta name="author" content="Noah Dolev">
+      
+      
+      
+        <link rel="prev" href="../getting-started/">
+      
+      
+        <link rel="next" href="../../components-overview/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.1">
+    
+    
+      
+        <title>Hackathon Plan - Gemma Hackathon Documentation</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/stylesheets/main.484c7ddc.min.css">
+      
+        
+        <link rel="stylesheet" href="../../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/_mkdocstrings.css">
+    
+    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#medgemma-hackathon-concise-operational-plan" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+<header class="md-header" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../.." title="Gemma Hackathon Documentation" class="md-header__button md-logo" aria-label="Gemma Hackathon Documentation" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            Gemma Hackathon Documentation
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Hackathon Plan
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme)" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="m14.3 16-.7-2h-3.2l-.7 2H7.8L11 7h2l3.2 9zM20 8.69V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12zm-9.15 3.96h2.3L12 9z"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: dark)" data-md-color-scheme="slate" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a4 4 0 0 0-4 4 4 4 0 0 0 4 4 4 4 0 0 0 4-4 4 4 0 0 0-4-4m0 10a6 6 0 0 1-6-6 6 6 0 0 1 6-6 6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/elixirtrials/gemma-hackathon" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    elixirtrials/gemma-hackathon
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+            
+<nav class="md-tabs" aria-label="Tabs" data-md-component="tabs">
+  <div class="md-grid">
+    <ul class="md-tabs__list">
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../.." class="md-tabs__link">
+        
+  
+  
+    
+  
+  Home
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+    
+  
+  
+    
+    
+      <li class="md-tabs__item md-tabs__item--active">
+        <a href="../project/" class="md-tabs__link">
+          
+  
+  
+  Overview
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../components-overview/" class="md-tabs__link">
+          
+  
+  
+  Components
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../diagrams/hitl-flow/" class="md-tabs__link">
+          
+  
+  
+  Diagrams
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../phases/week-1/" class="md-tabs__link">
+          
+  
+  
+  Phases
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../api/api_spec/" class="md-tabs__link">
+          
+  
+  
+  Plans
+
+        </a>
+      </li>
+    
+  
+
+      
+    </ul>
+  </div>
+</nav>
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+  
+
+
+<nav class="md-nav md-nav--primary md-nav--lifted" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../.." title="Gemma Hackathon Documentation" class="md-nav__button md-logo" aria-label="Gemma Hackathon Documentation" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    Gemma Hackathon Documentation
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/elixirtrials/gemma-hackathon" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    elixirtrials/gemma-hackathon
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../.." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Overview
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../project/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Project Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../architecture/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Architecture
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../getting-started/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Getting Started
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Hackathon Plan
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Hackathon Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#1-project-brief" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1. Project Brief
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="1. Project Brief">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#11-problem-impact" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1.1 Problem &amp; Impact
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#12-success-criteria-hackathon" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1.2 Success Criteria (Hackathon)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#2-scope" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2. Scope
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="2. Scope">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#21-in-scope-hackathon" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2.1 In Scope (Hackathon)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#22-out-of-scope-posthackathon-only" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2.2 Out of Scope (Post‑Hackathon Only)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#3-architecture-highlevel" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3. Architecture (High‑Level)
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="3. Architecture (High‑Level)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#31-data-flow" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3.1 Data Flow
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#32-minimal-api-contract-hackathon" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3.2 Minimal API Contract (Hackathon)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#33-core-components" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3.3 Core Components
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#34-ubkg-integration" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3.4 UBKG Integration
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#4-sprints-daily-execution" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4. Sprints &amp; Daily Execution
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="4. Sprints &amp; Daily Execution">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#41-week-1-data-ubkg-integration-jan-1521" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4.1 Week 1 – Data &amp; UBKG Integration (Jan 15–21)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#42-week-2-hitl-labeling-jan-2228" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4.2 Week 2 – HITL &amp; Labeling (Jan 22–28)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#43-week-3-training-backend-jan-29feb-4" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4.3 Week 3 – Training &amp; Backend (Jan 29–Feb 4)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#44-week-4-demo-writeup-polish-feb-512" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4.4 Week 4 – Demo, Writeup &amp; Polish (Feb 5–12)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#5-key-implementation-notes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5. Key Implementation Notes
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="5. Key Implementation Notes">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#51-umls-approval-already-secured" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5.1 UMLS Approval Already Secured
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#52-ubkg-as-single-source-of-truth" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5.2 UBKG as Single Source of Truth
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#53-data-privacy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5.3 Data Privacy
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#6-metrics-decision-gates" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6. Metrics &amp; Decision Gates
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="6. Metrics &amp; Decision Gates">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#61-core-metrics" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6.1 Core Metrics
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#62-go-nogo-for-stretch-work-federated-prototype" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6.2 Go / No‑Go for Stretch Work (Federated Prototype)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#7-submission-checklist" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        7. Submission Checklist
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="7. Submission Checklist">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#t72-hours" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        T‑72 Hours
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#t24-hours" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        T‑24 Hours
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#t0" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        T‑0
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Components
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Components
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../components-overview/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_3_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_3_2" id="__nav_3_2_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Api Service
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_3_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Api Service
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api-service/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_3_2_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_3_2_2" id="__nav_3_2_2_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Code Documentation
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="3" aria-labelledby="__nav_3_2_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3_2_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Code Documentation
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api-service/docs/api/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    API Reference
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_3_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_3_3" id="__nav_3_3_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Data Pipeline
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_3_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Data Pipeline
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../data-pipeline/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_3_3_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_3_3_2" id="__nav_3_3_2_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Code Documentation
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="3" aria-labelledby="__nav_3_3_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3_3_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Code Documentation
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../data-pipeline/docs/api/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    API Reference
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_3_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_3_4" id="__nav_3_4_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Evaluation
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_3_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Evaluation
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../evaluation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_3_4_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_3_4_2" id="__nav_3_4_2_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Code Documentation
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="3" aria-labelledby="__nav_3_4_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3_4_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Code Documentation
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../evaluation/docs/api/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    API Reference
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_3_5" >
+        
+          
+          <label class="md-nav__link" for="__nav_3_5" id="__nav_3_5_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Extraction Service
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_3_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Extraction Service
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../extraction-service/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_3_5_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_3_5_2" id="__nav_3_5_2_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Code Documentation
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="3" aria-labelledby="__nav_3_5_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3_5_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Code Documentation
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../extraction-service/docs/api/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    API Reference
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_3_6" >
+        
+          
+          <label class="md-nav__link" for="__nav_3_6" id="__nav_3_6_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Grounding Service
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_3_6_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3_6">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Grounding Service
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../grounding-service/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_3_6_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_3_6_2" id="__nav_3_6_2_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Code Documentation
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="3" aria-labelledby="__nav_3_6_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3_6_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Code Documentation
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../grounding-service/docs/api/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    API Reference
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_3_7" >
+        
+          
+          <label class="md-nav__link" for="__nav_3_7" id="__nav_3_7_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Hitl Ui
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_3_7_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3_7">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Hitl Ui
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../hitl-ui/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_3_8" >
+        
+          
+          <label class="md-nav__link" for="__nav_3_8" id="__nav_3_8_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Shared
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_3_8_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3_8">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Shared
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../shared/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_3_8_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_3_8_2" id="__nav_3_8_2_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Code Documentation
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="3" aria-labelledby="__nav_3_8_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3_8_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Code Documentation
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../shared/docs/api/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    API Reference
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Diagrams
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Diagrams
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../diagrams/hitl-flow/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    HITL Flow
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../diagrams/grounding-flow/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Grounding Flow
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_5" >
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Phases
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Phases
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../phases/week-1/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Week 1
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../phases/week-2/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Week 2
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../phases/week-3/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Week 3
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../phases/week-4/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Week 4
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_6" >
+        
+          
+          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Plans
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_6">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Plans
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api/api_spec/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    API Spec
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#1-project-brief" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1. Project Brief
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="1. Project Brief">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#11-problem-impact" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1.1 Problem &amp; Impact
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#12-success-criteria-hackathon" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1.2 Success Criteria (Hackathon)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#2-scope" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2. Scope
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="2. Scope">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#21-in-scope-hackathon" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2.1 In Scope (Hackathon)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#22-out-of-scope-posthackathon-only" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2.2 Out of Scope (Post‑Hackathon Only)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#3-architecture-highlevel" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3. Architecture (High‑Level)
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="3. Architecture (High‑Level)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#31-data-flow" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3.1 Data Flow
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#32-minimal-api-contract-hackathon" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3.2 Minimal API Contract (Hackathon)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#33-core-components" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3.3 Core Components
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#34-ubkg-integration" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3.4 UBKG Integration
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#4-sprints-daily-execution" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4. Sprints &amp; Daily Execution
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="4. Sprints &amp; Daily Execution">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#41-week-1-data-ubkg-integration-jan-1521" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4.1 Week 1 – Data &amp; UBKG Integration (Jan 15–21)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#42-week-2-hitl-labeling-jan-2228" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4.2 Week 2 – HITL &amp; Labeling (Jan 22–28)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#43-week-3-training-backend-jan-29feb-4" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4.3 Week 3 – Training &amp; Backend (Jan 29–Feb 4)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#44-week-4-demo-writeup-polish-feb-512" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4.4 Week 4 – Demo, Writeup &amp; Polish (Feb 5–12)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#5-key-implementation-notes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5. Key Implementation Notes
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="5. Key Implementation Notes">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#51-umls-approval-already-secured" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5.1 UMLS Approval Already Secured
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#52-ubkg-as-single-source-of-truth" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5.2 UBKG as Single Source of Truth
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#53-data-privacy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5.3 Data Privacy
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#6-metrics-decision-gates" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6. Metrics &amp; Decision Gates
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="6. Metrics &amp; Decision Gates">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#61-core-metrics" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6.1 Core Metrics
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#62-go-nogo-for-stretch-work-federated-prototype" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6.2 Go / No‑Go for Stretch Work (Federated Prototype)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#7-submission-checklist" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        7. Submission Checklist
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="7. Submission Checklist">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#t72-hours" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        T‑72 Hours
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#t24-hours" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        T‑24 Hours
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#t0" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        T‑0
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="medgemma-hackathon-concise-operational-plan">MedGemma Hackathon – Concise Operational Plan</h1>
+<p><strong>Goal:</strong> Deliver a hackathon‑ready MedGemma HITL demo that extracts atomic inclusion/exclusion criteria from trial protocols and grounds them to SNOMED via UBKG, with a clear ElixirTrials integration story.</p>
+<h2 id="1-project-brief">1. Project Brief</h2>
+<h3 id="11-problem-impact">1.1 Problem &amp; Impact</h3>
+<ul>
+<li>Clinical trial protocols are unstructured; screening is slow and error‑prone.</li>
+<li>We build an AI‑assisted system that:</li>
+<li>Extracts <strong>atomic inclusion/exclusion criteria</strong> from protocols.</li>
+<li>Maps them to <strong>SNOMED</strong> (via UBKG REST API).</li>
+<li>Lets a <strong>nurse reviewer</strong> correct mappings through a simple HITL UI.</li>
+<li>Target <strong>time savings:</strong> ~65–70% nurse time per protocol vs. manual review.  </li>
+</ul>
+<h3 id="12-success-criteria-hackathon">1.2 Success Criteria (Hackathon)</h3>
+<p><strong>Judging‑aligned:</strong>
+1. <strong>Human‑Centered AI</strong>
+   - Simple, transparent HITL UI.
+   - Shows provenance (evidence snippets) + confidence scores.
+   - Nurse can accept/edit/add SNOMED codes inline.</p>
+<ol>
+<li><strong>Technical Rigor</strong></li>
+<li>MedGemma 1.5–4B‑IT with LoRA adapters for:<ul>
+<li>Task A: Criteria extraction.</li>
+<li>Task B: SNOMED grounding.</li>
+</ul>
+</li>
+<li>
+<p>8‑bit quantized inference on DGX Spark‑class hardware.</p>
+</li>
+<li>
+<p><strong>Impact &amp; Feasibility</strong></p>
+</li>
+<li>Measured <strong>extraction F1</strong> and <strong>SNOMED Top‑1 accuracy</strong>.</li>
+<li>Measured <strong>time per protocol</strong>: baseline vs AI‑assisted.</li>
+<li>Clear story to plug into ElixirTrials/Cauldron.</li>
+</ol>
+<p><strong>Quantitative Targets (Hackathon):</strong>
+- Extraction F1: <strong>≥ 0.85</strong>
+- SNOMED Top‑1 accuracy: <strong>≥ 0.80</strong>
+- Nurse acceptance rate: <strong>≥ 70%</strong>
+- Time per protocol: <strong>≥ 60% reduction</strong> vs manual.</p>
+<hr />
+<h2 id="2-scope">2. Scope</h2>
+<h3 id="21-in-scope-hackathon">2.1 In Scope (Hackathon)</h3>
+<ul>
+<li>Ingest <strong>public ClinicalTrials.gov protocols</strong> (200–300).</li>
+<li>Extract <strong>atomic inclusion/exclusion criteria</strong>.</li>
+<li>Ground criteria to <strong>SNOMED</strong> via UBKG REST API (no external dependencies beyond public APIs).</li>
+<li><strong>HITL backend</strong>:</li>
+<li>Save criteria, suggested codes, and nurse edits.</li>
+<li>Simple review UI (Gradio or minimal React view).</li>
+<li>LoRA fine‑tuning of MedGemma on nurse‑validated labels.</li>
+<li>8‑bit quantized inference on DGX Spark‑class workstation.</li>
+<li>Kaggle deliverables:</li>
+<li>Writeup.</li>
+<li>Training/eval notebook.</li>
+<li>GitHub repo.</li>
+<li>3–5 min video demo.</li>
+</ul>
+<h3 id="22-out-of-scope-posthackathon-only">2.2 Out of Scope (Post‑Hackathon Only)</h3>
+<ul>
+<li>Federated learning / multi‑site aggregation.</li>
+<li>EMR / FHIR / Redox integration.</li>
+<li>Patient‑level screening &amp; matching.</li>
+<li>Full Triplane/Screening integration.</li>
+</ul>
+<hr />
+<h2 id="3-architecture-highlevel">3. Architecture (High‑Level)</h2>
+<h3 id="31-data-flow">3.1 Data Flow</h3>
+<ol>
+<li><strong>Protocol Upload</strong></li>
+<li>Input: PDF/text from ClinicalTrials.gov.</li>
+<li>
+<p>Stored as <code>protocol</code> and <code>document</code> rows.</p>
+</li>
+<li>
+<p><strong>Extraction</strong></p>
+</li>
+<li>Endpoint: <code>POST /v1/protocols/{id}/extract</code></li>
+<li>
+<p>Uses MedGemma (LoRA Task A) → atomic criteria + type.</p>
+</li>
+<li>
+<p><strong>Grounding</strong></p>
+</li>
+<li>Endpoint: <code>POST /v1/criteria/{id}/ground</code></li>
+<li>
+<p>UBKG REST API (terminology lookup) + MedGemma (LoRA Task B) → ranked SNOMED codes.</p>
+</li>
+<li>
+<p><strong>HITL Review</strong></p>
+</li>
+<li>Nurse UI fetches:<ul>
+<li>Criteria list.</li>
+<li>Suggested SNOMED codes + confidence + evidence snippets.</li>
+</ul>
+</li>
+<li>
+<p>Nurse edits logged in <code>hitl_edits</code>.</p>
+</li>
+<li>
+<p><strong>Retraining Loop (Single‑site)</strong></p>
+</li>
+<li>Export edits as new training data.</li>
+<li>Periodic LoRA re‑training of MedGemma adapters.</li>
+</ol>
+<h3 id="32-minimal-api-contract-hackathon">3.2 Minimal API Contract (Hackathon)</h3>
+<p>Base URL: <code>/v1</code></p>
+<ul>
+<li><code>POST /v1/protocols</code></li>
+<li>Create protocol metadata + initial document (text or PDF).</li>
+<li><code>POST /v1/protocols/{protocolId}/extract</code></li>
+<li>Trigger criteria extraction (sync is enough).</li>
+<li><code>GET /v1/protocols/{protocolId}/criteria</code></li>
+<li>List criteria for review.</li>
+<li><code>PATCH /v1/criteria/{criterionId}</code></li>
+<li>Edit criterion text/type/etc.</li>
+<li><code>POST /v1/criteria/{criterionId}/ground</code></li>
+<li>Get SNOMED candidates via UBKG REST API.</li>
+<li><code>POST /v1/hitl/feedback</code></li>
+<li>Log nurse actions (accept/remove/add code etc).</li>
+</ul>
+<p>(Full OpenAPI spec lives in <code>docs/api_spec.yaml</code>.)</p>
+<h3 id="33-core-components">3.3 Core Components</h3>
+<table>
+<thead>
+<tr>
+<th>Component</th>
+<th>Tech / Notes</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Backend API</td>
+<td>FastAPI (Python)</td>
+</tr>
+<tr>
+<td>Model Inference</td>
+<td>MedGemma 1.5–4B‑IT + LoRA (8‑bit)</td>
+</tr>
+<tr>
+<td>Terminology</td>
+<td>UBKG REST API (no custom wrapper)</td>
+</tr>
+<tr>
+<td>DB</td>
+<td>PostgreSQL (protocols, criteria, edits)</td>
+</tr>
+<tr>
+<td>HITL UI</td>
+<td>Gradio or minimal Cauldron‑style view</td>
+</tr>
+<tr>
+<td>Hardware</td>
+<td>DGX Spark‑class GPU workstation</td>
+</tr>
+</tbody>
+</table>
+<h3 id="34-ubkg-integration">3.4 UBKG Integration</h3>
+<p><strong>Why UBKG:</strong>
+- Pre‑built, production‑grade knowledge graph combining UMLS + external ontologies.
+- REST API + Neo4j options.
+- Zero licensing overhead for hackathon (public/research access).
+- Multi‑terminology support (SNOMED, LOINC, RxNorm, ICD‑10) built‑in.</p>
+<p><strong>Usage Pattern:</strong></p>
+<pre><code class="language-python"># Lookup term in UBKG
+POST https://ubkg-api.xconsortia.org/search
+{
+  &quot;query&quot;: &quot;stage III melanoma&quot;,
+  &quot;ontology&quot;: &quot;SNOMED&quot;,
+  &quot;limit&quot;: 5
+}
+
+# Response includes SNOMED codes + definitions + related terms
+{
+  &quot;results&quot;: [
+    {
+      &quot;code&quot;: &quot;372244006&quot;,
+      &quot;display&quot;: &quot;Malignant melanoma, stage III&quot;,
+      &quot;ontology&quot;: &quot;SNOMED CT&quot;,
+      &quot;confidence&quot;: 0.92
+    }
+  ]
+}
+</code></pre>
+<p><strong>Implementation:</strong>
+- Simple HTTP client in <code>backend/ubkg_client.py</code>.
+- Optional local caching (Redis or in‑memory) for frequent lookups.
+- Fallback to pre‑cached SNOMED subset if API unavailable.</p>
+<hr />
+<h2 id="4-sprints-daily-execution">4. Sprints &amp; Daily Execution</h2>
+<h3 id="41-week-1-data-ubkg-integration-jan-1521">4.1 Week 1 – Data &amp; UBKG Integration (Jan 15–21)</h3>
+<p><strong>Goals:</strong>
+- Have protocols in DB.
+- UBKG API client working + cached.
+- Minimal extraction pipeline running (base model).</p>
+<p><strong>Tasks:</strong></p>
+<ul>
+<li><strong>Data &amp; DB</strong></li>
+<li>Implement <code>scripts/download_protocols.py</code> to fetch 200–300 oncology/cardio trials from ClinicalTrials.gov.</li>
+<li>Store <code>{nct_id, title, i/e text, condition, phase}</code> in PostgreSQL.</li>
+<li>
+<p>Define DB schema:</p>
+<ul>
+<li><code>protocols</code>, <code>documents</code>, <code>criteria</code>, <code>groundings</code>, <code>hitl_edits</code>.</li>
+</ul>
+</li>
+<li>
+<p><strong>UBKG Integration</strong></p>
+</li>
+<li>Implement <code>backend/ubkg_client.py</code>:<ul>
+<li>HTTP client to UBKG REST API.</li>
+<li>Query term → get SNOMED candidates.</li>
+<li>Simple in‑memory cache (TTL configurable).</li>
+<li>Fallback: load local SNOMED subset (CSV from UBKG downloads).</li>
+</ul>
+</li>
+<li>
+<p>CLI smoke test: terms like "stage III melanoma", "ECOG PS 0–1".</p>
+</li>
+<li>
+<p><strong>Baseline Extraction</strong></p>
+</li>
+<li>Implement rough parsing of I/E sections into candidate criteria (regex/sentence splitting).</li>
+<li>Run base MedGemma (no LoRA) for:<ul>
+<li>Type classification (inclusion/exclusion).</li>
+<li>Draft SNOMED suggestions via UBKG.</li>
+</ul>
+</li>
+</ul>
+<p><strong>Decision / Risk:</strong>
+- By <strong>end of Week 1</strong>:
+  - If UBKG API rate limits hit → use local SNOMED subset file only.</p>
+<hr />
+<h3 id="42-week-2-hitl-labeling-jan-2228">4.2 Week 2 – HITL &amp; Labeling (Jan 22–28)</h3>
+<p><strong>Goals:</strong>
+- Usable HITL UI for nurse.
+- ~1,000 labeled examples for training.</p>
+<p><strong>Tasks:</strong></p>
+<ul>
+<li><strong>HITL UI (MVP)</strong></li>
+<li>Build simple UI (Gradio or minimal React) with:<ul>
+<li>Protocol text on left, highlighted criterion.</li>
+<li>Criterion card on right:</li>
+<li>Type, text, confidence.</li>
+<li>SNOMED candidates with checkboxes.</li>
+<li>Add/remove code, rationale.</li>
+</ul>
+</li>
+<li>
+<p>Wire to backend:</p>
+<ul>
+<li><code>GET /protocols/{id}/criteria</code></li>
+<li><code>POST /criteria/{id}/ground</code></li>
+<li><code>POST /hitl/feedback</code>.</li>
+</ul>
+</li>
+<li>
+<p><strong>Annotation Workflow</strong></p>
+</li>
+<li>Pre‑label criteria using base MedGemma + UBKG:<ul>
+<li>Save as <code>criteria_prelabeled.jsonl</code>.</li>
+</ul>
+</li>
+<li>Define gold label schema (criterion text, type, SNOMED codes, evidence spans).</li>
+<li>Target: <strong>~1,000 validated criteria</strong> (spanning ~120 protocols).</li>
+<li>
+<p>Coordinate nurse schedule (~200h total across hackathon).</p>
+</li>
+<li>
+<p><strong>Dataset Preparation</strong></p>
+</li>
+<li>Create train/val/test splits:<ul>
+<li>Train: 1,000 examples (~120 protocols).</li>
+<li>Val: 100 examples (~15 protocols).</li>
+<li>Test: 100 examples (held‑out conditions).</li>
+</ul>
+</li>
+</ul>
+<p><strong>Decision / Risk:</strong>
+- If by end of Week 2:
+  - &lt;700 labeled examples → reduce model ambition (e.g., only Task B LoRA) and focus on demo quality.</p>
+<hr />
+<h3 id="43-week-3-training-backend-jan-29feb-4">4.3 Week 3 – Training &amp; Backend (Jan 29–Feb 4)</h3>
+<p><strong>Goals:</strong>
+- LoRA adapters trained and deployed.
+- Backend API stable.
+- Basic metrics computed.</p>
+<p><strong>Tasks:</strong></p>
+<ul>
+<li><strong>Model Training</strong></li>
+<li>Task A (Extraction):<ul>
+<li>LoRA config: <code>r=16</code>, <code>alpha=32</code>, target <code>q_proj/v_proj/o_proj</code>.</li>
+<li>3 epochs, batch size 4 (grad accum 4), lr <code>2e‑4</code>.</li>
+</ul>
+</li>
+<li>Task B (Grounding):<ul>
+<li>Separate LoRA adapter, same config.</li>
+<li>Training data from nurse‑validated mapping + UBKG candidates.</li>
+</ul>
+</li>
+<li>
+<p>Use 8‑bit QLoRA on DGX Spark; save adapters in <code>models/</code>.</p>
+</li>
+<li>
+<p><strong>Backend Hardening</strong></p>
+</li>
+<li>Implement final versions of:<ul>
+<li><code>POST /protocols</code></li>
+<li><code>POST /protocols/{id}/extract</code></li>
+<li><code>GET /protocols/{id}/criteria</code></li>
+<li><code>PATCH /criteria/{id}</code></li>
+<li><code>POST /criteria/{id}/ground</code></li>
+<li><code>POST /hitl/feedback</code></li>
+</ul>
+</li>
+<li>Add logging &amp; basic error handling.</li>
+<li>
+<p>Add minimal tests (Pytest) for core API paths.</p>
+</li>
+<li>
+<p><strong>Evaluation</strong></p>
+</li>
+<li>Run on test set:<ul>
+<li>Extraction F1.</li>
+<li>SNOMED Top‑1 accuracy.</li>
+<li>Nurse acceptance rate on small test batch.</li>
+</ul>
+</li>
+<li>Measure:<ul>
+<li>Time per protocol (manual vs AI‑assisted with small pilot).</li>
+<li>Inference latency per protocol (&lt;15s target).</li>
+</ul>
+</li>
+</ul>
+<p><strong>Stretch (Only if above done early):</strong>
+- Toy federated simulation with 2–3 synthetic "sites" using site splits.</p>
+<hr />
+<h3 id="44-week-4-demo-writeup-polish-feb-512">4.4 Week 4 – Demo, Writeup &amp; Polish (Feb 5–12)</h3>
+<p><strong>Goals:</strong>
+- Kaggle submission ready.
+- Demo smooth and reproducible.</p>
+<p><strong>Tasks:</strong></p>
+<ul>
+<li><strong>Demo Experience</strong></li>
+<li>End‑to‑end flow:<ol>
+<li>Upload or select existing protocol.</li>
+<li>Run extraction.</li>
+<li>Show criteria list with SNOMED codes &amp; confidence.</li>
+<li>Perform a couple of nurse edits.</li>
+<li>Show metrics/time‑saved panel.</li>
+</ol>
+</li>
+<li>
+<p>Ensure no manual dev hacks (one‑command run via Docker Compose).</p>
+</li>
+<li>
+<p><strong>Kaggle Writeup</strong></p>
+</li>
+<li>
+<p>Sections (with word limits):</p>
+<ol>
+<li>Problem &amp; Impact (~300 words).</li>
+<li>Architecture (~400–500 words + 1 diagram).</li>
+<li>Human‑in‑the‑loop workflow (~300 words).</li>
+<li>Model &amp; Training (~400–500 words).</li>
+<li>Results &amp; Error Analysis (~400–500 words).</li>
+<li>ElixirTrials Integration Roadmap (~300–400 words).</li>
+<li>Reproducibility &amp; Open Source (~200 words).</li>
+</ol>
+</li>
+<li>
+<p><strong>Notebook</strong></p>
+</li>
+<li>
+<p><code>notebooks/training_pipeline.ipynb</code>:</p>
+<ul>
+<li>Load sample data.</li>
+<li>Show preprocessing.</li>
+<li>Demo LoRA training steps (small subset for Kaggle runtime).</li>
+<li>Show metrics + inference example.</li>
+</ul>
+</li>
+<li>
+<p><strong>GitHub Repo</strong></p>
+</li>
+<li>Structure:
+    <code>text
+    gemma-hackathon/
+      backend/
+        main.py
+        models/
+        ubkg_client.py
+        tests/
+      notebooks/
+      data/ (small sample only)
+      docs/
+        api_spec.yaml
+        architecture.md
+        ubkg_notes.md
+      docker-compose.yml
+      README.md</code></li>
+<li>
+<p>README:</p>
+<ul>
+<li>One‑command run.</li>
+<li>Hardware assumptions.</li>
+<li>UBKG API &amp; UMLS licensing notes.</li>
+<li>"Demo only – not for clinical use" disclaimer.</li>
+</ul>
+</li>
+<li>
+<p><strong>Video (3–5 min)</strong></p>
+</li>
+<li>Script:<ul>
+<li>30s: Problem framing.</li>
+<li>60–90s: Live demo of upload → extraction → review.</li>
+<li>60s: Metrics summary.</li>
+<li>30–60s: ElixirTrials integration story.</li>
+</ul>
+</li>
+</ul>
+<hr />
+<h2 id="5-key-implementation-notes">5. Key Implementation Notes</h2>
+<h3 id="51-umls-approval-already-secured">5.1 UMLS Approval Already Secured</h3>
+<p>✅ No NLM license delay; proceed directly with full deployment.</p>
+<h3 id="52-ubkg-as-single-source-of-truth">5.2 UBKG as Single Source of Truth</h3>
+<ul>
+<li>Use UBKG REST API for all terminology lookups (SNOMED, LOINC, RxNorm, ICD‑10).</li>
+<li>No custom wrapper needed; simple HTTP client + optional caching.</li>
+<li>Fallback: pre‑download SNOMED subset as CSV from UBKG downloads.</li>
+</ul>
+<h3 id="53-data-privacy">5.3 Data Privacy</h3>
+<ul>
+<li>All protocols and edits stay in‑prem during hackathon.</li>
+<li>Only LoRA adapter weights and anonymized metrics shared post‑hackathon.</li>
+</ul>
+<hr />
+<h2 id="6-metrics-decision-gates">6. Metrics &amp; Decision Gates</h2>
+<h3 id="61-core-metrics">6.1 Core Metrics</h3>
+<ul>
+<li><strong>Extraction (Task A)</strong></li>
+<li>F1 on test set.</li>
+<li><strong>Grounding (Task B)</strong></li>
+<li>SNOMED Top‑1 accuracy.</li>
+<li><strong>HITL</strong></li>
+<li>Nurse acceptance rate.</li>
+<li>Time per protocol (manual vs AI‑assisted).</li>
+</ul>
+<h3 id="62-go-nogo-for-stretch-work-federated-prototype">6.2 Go / No‑Go for Stretch Work (Federated Prototype)</h3>
+<ul>
+<li><strong>Only attempt if by end of Week 3:</strong></li>
+<li>Extraction F1 ≥ 0.85.</li>
+<li>SNOMED Top‑1 ≥ 0.80.</li>
+<li>End‑to‑end demo stable.</li>
+<li>At least 120 protocols annotated.</li>
+</ul>
+<p>Otherwise, invest Week 4 fully in polish, metrics clarity, and submission quality.</p>
+<hr />
+<h2 id="7-submission-checklist">7. Submission Checklist</h2>
+<h3 id="t72-hours">T‑72 Hours</h3>
+<ul>
+<li>[ ] Run Docker Compose from clean environment.</li>
+<li>[ ] Run Kaggle notebook from top to bottom on Kaggle GPU.</li>
+<li>[ ] Freeze model artifacts (tagged release in GitHub).</li>
+</ul>
+<h3 id="t24-hours">T‑24 Hours</h3>
+<ul>
+<li>[ ] Finalize Kaggle writeup text.</li>
+<li>[ ] Upload demo video (YouTube unlisted).</li>
+<li>[ ] Verify all GitHub + notebook links.</li>
+</ul>
+<h3 id="t0">T‑0</h3>
+<ul>
+<li>[ ] Submit Kaggle entry and confirm appearance in challenge.</li>
+<li>[ ] Backup repo + models to long‑term storage.</li>
+<li>[ ] Note learnings + next‑steps for ElixirTrials production track.</li>
+</ul>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["navigation.tabs", "navigation.sections", "navigation.expand", "navigation.top", "search.suggest", "search.highlight", "content.code.copy", "content.code.annotate"], "search": "../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../../assets/javascripts/bundle.79ae519e.min.js"></script>
+      
+    
+  </body>
+</html>

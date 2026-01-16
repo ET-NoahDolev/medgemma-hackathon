@@ -1,4 +1,0 @@
-docs_dir: docs
-site_name: hitl-ui
-nav:
-  - Home: index.md
