@@ -618,6 +618,45 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#scripts" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Scripts
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Scripts">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#protocol-download-tool" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Protocol Download Tool
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#development-scripts" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Development Scripts
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#testing" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2359,6 +2398,45 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#scripts" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Scripts
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Scripts">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#protocol-download-tool" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Protocol Download Tool
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#development-scripts" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Development Scripts
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#testing" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2417,6 +2495,45 @@ uv run python -m data_pipeline.download_protocols
 npm install
 npm run dev
 </code></pre>
+<h2 id="scripts">Scripts</h2>
+<p>The repository includes utility scripts in the <code>scripts/</code> directory for common tasks.</p>
+<h3 id="protocol-download-tool">Protocol Download Tool</h3>
+<p>The protocol download tool (<code>scripts/download_protocol_sources.py</code>) downloads clinical trial protocol PDFs from multiple sources for use in the data pipeline.</p>
+<p><strong>Basic Usage:</strong></p>
+<pre><code class="language-bash"># Download protocols from all sources (default settings)
+python scripts/download_protocol_sources.py
+</code></pre>
+<p><strong>Advanced Usage:</strong></p>
+<pre><code class="language-bash"># Download from specific sources only
+python scripts/download_protocol_sources.py --sources dac jmir
+
+# Limit the number of downloads
+python scripts/download_protocol_sources.py --max-per-source 10 --max-total 30
+
+# Use a custom output directory
+python scripts/download_protocol_sources.py --output-dir data/my-protocols
+</code></pre>
+<p><strong>Available Sources:</strong>
+- <code>dac</code>: Data Access Committee protocol registry
+- <code>clinicaltrials</code>: ClinicalTrials.gov study protocols
+- <code>bmjopen</code>: BMJ Open protocol articles
+- <code>jmir</code>: JMIR Research Protocols</p>
+<p><strong>Output:</strong>
+- PDFs are saved to <code>data/protocols/</code> (or specified directory) organized by source
+- A <code>manifest.jsonl</code> file tracks all download attempts with metadata</p>
+<p><strong>Command-Line Options:</strong>
+- <code>--output-dir PATH</code>: Directory for downloaded PDFs (default: <code>data/protocols</code>)
+- <code>--sources SOURCE [SOURCE ...]</code>: Sources to download from (default: all)
+- <code>--max-per-source N</code>: Maximum PDFs per source (default: 50)
+- <code>--max-total N</code>: Maximum PDFs overall (default: 200)
+- <code>--timeout SECONDS</code>: Network timeout (default: 30)
+- <code>--sitemap-limit N</code>: Sitemap files to scan per source (default: 2)</p>
+<h3 id="development-scripts">Development Scripts</h3>
+<ul>
+<li><strong><code>scripts/create_component.sh</code></strong>: Creates a new component with proper structure, dependencies, and documentation setup</li>
+<li><strong><code>scripts/generate_components_overview.py</code></strong>: Auto-generates the components overview page from component metadata</li>
+<li><strong><code>scripts/update_root_navigation.py</code></strong>: Updates the root mkdocs.yml navigation with all discovered components</li>
+</ul>
 <h2 id="testing">Testing</h2>
 <p>Each Python component includes a Makefile with linting, type-checking, and test targets:</p>
 <pre><code class="language-bash">cd components/api-service

@@ -486,6 +486,17 @@
   
 </li>
       
+        <li class="md-nav__item">
+  <a href="#scripts" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Scripts
+      
+    </span>
+  </a>
+  
+</li>
+      
     </ul>
   
 </nav>
@@ -2364,6 +2375,17 @@
   
 </li>
       
+        <li class="md-nav__item">
+  <a href="#scripts" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Scripts
+      
+    </span>
+  </a>
+  
+</li>
+      
     </ul>
   
 </nav>
@@ -2406,9 +2428,17 @@
 <h2 id="repo-layout">Repo Layout</h2>
 <pre><code>components/     Service components (API, extraction, grounding, UI, etc.)
 docs/           MkDocs documentation
-scripts/        Build and utility scripts
+scripts/        Utility scripts (protocol download, component creation, etc.)
 instructions/   Planning documents
 </code></pre>
+<h2 id="scripts">Scripts</h2>
+<p>The <code>scripts/</code> directory contains utility scripts for common tasks:</p>
+<ul>
+<li><strong>Protocol Download</strong>: <code>scripts/download_protocol_sources.py</code> - Downloads clinical trial protocol PDFs from multiple sources (DAC, ClinicalTrials.gov, BMJ Open, JMIR)</li>
+<li><strong>Component Creation</strong>: <code>scripts/create_component.sh</code> - Initializes new components with proper structure</li>
+<li><strong>Documentation</strong>: <code>scripts/generate_components_overview.py</code> and <code>scripts/update_root_navigation.py</code> - Auto-generate documentation</li>
+</ul>
+<p>See <a href="overview/getting-started/#scripts">Getting Started</a> for detailed usage instructions.</p>
 
 
 

@@ -992,6 +992,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#protocol-download" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Protocol Download
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#entry-point" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2380,6 +2391,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#protocol-download" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Protocol Download
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#entry-point" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2440,6 +2462,15 @@
 <li>Normalize and store protocol metadata.</li>
 <li>Emit data for extraction and grounding.</li>
 </ul>
+<h2 id="protocol-download">Protocol Download</h2>
+<p>To download protocol PDFs from multiple sources (DAC, ClinicalTrials.gov, BMJ Open, JMIR), use the protocol download script in the root <code>scripts/</code> directory:</p>
+<pre><code class="language-bash"># From repository root
+python scripts/download_protocol_sources.py
+
+# With options
+python scripts/download_protocol_sources.py --sources dac jmir --max-per-source 20
+</code></pre>
+<p>See the main <a href="../overview/getting-started/#scripts">Getting Started</a> documentation for full usage details.</p>
 <h2 id="entry-point">Entry Point</h2>
 <ul>
 <li><code>data_pipeline/download_protocols.py</code></li>

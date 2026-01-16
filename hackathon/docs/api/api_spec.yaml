@@ -1,41 +1,401 @@
-openapi: 3.0.3
+openapi: 3.1.0
 info:
   title: Gemma Hackathon API
   version: 0.1.0
 paths:
   /v1/protocols:
     post:
-      summary: Create protocol
+      summary: Create Protocol
+      description: Create a protocol record and initial document entry.
+      operationId: create_protocol_v1_protocols_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProtocolCreateRequest'
+        required: true
       responses:
         '200':
-          description: OK
-  /v1/protocols/{protocolId}/extract:
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProtocolResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /v1/protocols/{protocol_id}/extract:
     post:
-      summary: Extract criteria
+      summary: Extract Criteria
+      description: Trigger extraction of atomic criteria for a protocol.
+      operationId: extract_criteria_v1_protocols__protocol_id__extract_post
+      parameters:
+      - name: protocol_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Protocol Id
       responses:
         '200':
-          description: OK
-  /v1/protocols/{protocolId}/criteria:
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExtractionResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /v1/protocols/{protocol_id}/criteria:
     get:
-      summary: List criteria
+      summary: List Criteria
+      description: List criteria generated for a protocol.
+      operationId: list_criteria_v1_protocols__protocol_id__criteria_get
+      parameters:
+      - name: protocol_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Protocol Id
       responses:
         '200':
-          description: OK
-  /v1/criteria/{criterionId}:
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CriteriaListResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /v1/criteria/{criterion_id}:
     patch:
-      summary: Update criterion
+      summary: Update Criterion
+      description: Update a single criterion or its metadata.
+      operationId: update_criterion_v1_criteria__criterion_id__patch
+      parameters:
+      - name: criterion_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Criterion Id
+      requestBody:
+        content:
+          application/json:
+            schema:
+              anyOf:
+              - $ref: '#/components/schemas/CriterionUpdateRequest'
+              - type: 'null'
+              title: Payload
       responses:
         '200':
-          description: OK
-  /v1/criteria/{criterionId}/ground:
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CriterionUpdateResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /v1/criteria/{criterion_id}/ground:
     post:
-      summary: Ground criterion (SNOMED + field/relation/value mapping)
+      summary: Ground Criterion
+      description: Retrieve SNOMED candidates and field mappings for a criterion.
+      operationId: ground_criterion_v1_criteria__criterion_id__ground_post
+      parameters:
+      - name: criterion_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Criterion Id
       responses:
         '200':
-          description: OK
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GroundingResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
   /v1/hitl/feedback:
     post:
-      summary: Record HITL feedback
+      summary: Hitl Feedback
+      description: Record HITL feedback for criteria, SNOMED candidates, and field
+        mappings.
+      operationId: hitl_feedback_v1_hitl_feedback_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              anyOf:
+              - $ref: '#/components/schemas/HitlFeedbackRequest'
+              - type: 'null'
+              title: Payload
       responses:
         '200':
-          description: OK
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                additionalProperties:
+                  type: string
+                type: object
+                title: Response Hitl Feedback V1 Hitl Feedback Post
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+components:
+  schemas:
+    CriteriaListResponse:
+      properties:
+        protocol_id:
+          type: string
+          title: Protocol Id
+        criteria:
+          items:
+            $ref: '#/components/schemas/CriterionResponse'
+          type: array
+          title: Criteria
+      type: object
+      required:
+      - protocol_id
+      - criteria
+      title: CriteriaListResponse
+      description: Response payload for listing criteria.
+    CriterionResponse:
+      properties:
+        id:
+          type: string
+          title: Id
+        text:
+          type: string
+          title: Text
+        criterion_type:
+          type: string
+          title: Criterion Type
+        confidence:
+          type: number
+          title: Confidence
+        snomed_codes:
+          items:
+            type: string
+          type: array
+          title: Snomed Codes
+      type: object
+      required:
+      - id
+      - text
+      - criterion_type
+      - confidence
+      - snomed_codes
+      title: CriterionResponse
+      description: Response payload for an extracted criterion.
+    CriterionUpdateRequest:
+      properties:
+        text:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Text
+        criterion_type:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Criterion Type
+      type: object
+      title: CriterionUpdateRequest
+      description: Payload for updating a criterion.
+    CriterionUpdateResponse:
+      properties:
+        criterion_id:
+          type: string
+          title: Criterion Id
+        status:
+          type: string
+          title: Status
+        criterion:
+          $ref: '#/components/schemas/CriterionResponse'
+      type: object
+      required:
+      - criterion_id
+      - status
+      - criterion
+      title: CriterionUpdateResponse
+      description: Response payload after updating a criterion.
+    ExtractionResponse:
+      properties:
+        protocol_id:
+          type: string
+          title: Protocol Id
+        status:
+          type: string
+          title: Status
+        criteria_count:
+          type: integer
+          title: Criteria Count
+      type: object
+      required:
+      - protocol_id
+      - status
+      - criteria_count
+      title: ExtractionResponse
+      description: Response payload for extraction trigger.
+    FieldMappingResponse:
+      properties:
+        field:
+          type: string
+          title: Field
+        relation:
+          type: string
+          title: Relation
+        value:
+          type: string
+          title: Value
+        confidence:
+          type: number
+          title: Confidence
+      type: object
+      required:
+      - field
+      - relation
+      - value
+      - confidence
+      title: FieldMappingResponse
+      description: Response payload for a field mapping suggestion.
+    GroundingCandidateResponse:
+      properties:
+        code:
+          type: string
+          title: Code
+        display:
+          type: string
+          title: Display
+        confidence:
+          type: number
+          title: Confidence
+      type: object
+      required:
+      - code
+      - display
+      - confidence
+      title: GroundingCandidateResponse
+      description: Response payload for grounding candidates.
+    GroundingResponse:
+      properties:
+        criterion_id:
+          type: string
+          title: Criterion Id
+        candidates:
+          items:
+            $ref: '#/components/schemas/GroundingCandidateResponse'
+          type: array
+          title: Candidates
+        field_mapping:
+          anyOf:
+          - $ref: '#/components/schemas/FieldMappingResponse'
+          - type: 'null'
+      type: object
+      required:
+      - criterion_id
+      - candidates
+      - field_mapping
+      title: GroundingResponse
+      description: Response payload for grounding a criterion.
+    HTTPValidationError:
+      properties:
+        detail:
+          items:
+            $ref: '#/components/schemas/ValidationError'
+          type: array
+          title: Detail
+      type: object
+      title: HTTPValidationError
+    HitlFeedbackRequest:
+      properties:
+        criterion_id:
+          type: string
+          title: Criterion Id
+        action:
+          type: string
+          title: Action
+        note:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Note
+      type: object
+      required:
+      - criterion_id
+      - action
+      title: HitlFeedbackRequest
+      description: Payload for HITL feedback actions.
+    ProtocolCreateRequest:
+      properties:
+        title:
+          type: string
+          title: Title
+        document_text:
+          type: string
+          title: Document Text
+      type: object
+      required:
+      - title
+      - document_text
+      title: ProtocolCreateRequest
+      description: Request payload for creating a protocol entry.
+    ProtocolResponse:
+      properties:
+        protocol_id:
+          type: string
+          title: Protocol Id
+        title:
+          type: string
+          title: Title
+      type: object
+      required:
+      - protocol_id
+      - title
+      title: ProtocolResponse
+      description: Response payload for a created protocol.
+    ValidationError:
+      properties:
+        loc:
+          items:
+            anyOf:
+            - type: string
+            - type: integer
+          type: array
+          title: Location
+        msg:
+          type: string
+          title: Message
+        type:
+          type: string
+          title: Error Type
+      type: object
+      required:
+      - loc
+      - msg
+      - type
+      title: ValidationError

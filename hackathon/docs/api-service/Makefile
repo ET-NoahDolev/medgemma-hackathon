@@ -39,6 +39,11 @@ run-tests:
 	@echo "Running Pytest with coverage..."
 	uv run pytest --cov=./src/api_service .
 
+.PHONY: export-openapi
+export-openapi:
+	@echo "Exporting OpenAPI spec..."
+	uv run python scripts/export_openapi.py
+
 
 # Cleaning up build artifacts
 .PHONY: clean

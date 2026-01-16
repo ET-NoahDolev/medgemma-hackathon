@@ -3,21 +3,24 @@
 from __future__ import annotations
 
 from contextlib import asynccontextmanager
-from typing import Dict, List, Optional, cast
+from typing import List, Optional
 
 from extraction_service import (
     pipeline as extraction_pipeline,  # type: ignore[import-not-found]
 )
-from fastapi import Body, FastAPI, HTTPException
+from fastapi import Body, Depends, FastAPI, HTTPException
 from grounding_service import ubkg_client  # type: ignore[import-not-found]
 from pydantic import BaseModel
-from shared import models as shared_models  # type: ignore[import-not-found]
+
+from api_service.dependencies import get_storage
+from api_service.storage import Criterion as StorageCriterion
+from api_service.storage import Storage, init_db, reset_storage
 
 
 @asynccontextmanager
 async def lifespan(app_instance: FastAPI):
     """Initialize and teardown app state for the lifespan scope."""
-    _reset_state()
+    init_db()
     yield
 
 
@@ -112,109 +115,73 @@ class HitlFeedbackRequest(BaseModel):
 
 
 def _reset_state() -> None:
-    _ensure_state()
-    app.state.protocol_counter = 0
-    app.state.criterion_counter = 0
-    app.state.protocols.clear()
-    app.state.criteria.clear()
-    app.state.protocol_criteria.clear()
-
-
-def _ensure_state() -> None:
-    if not hasattr(app.state, "protocol_counter"):
-        app.state.protocol_counter = 0
-        app.state.criterion_counter = 0
-        app.state.protocols = cast(Dict[str, ProtocolCreateRequest], {})
-        app.state.criteria = cast(Dict[str, shared_models.Criterion], {})
-        app.state.protocol_criteria = cast(Dict[str, List[str]], {})
-
-
-def _next_protocol_id() -> str:
-    _ensure_state()
-    app.state.protocol_counter += 1
-    return f"proto-{app.state.protocol_counter}"
-
-
-def _next_criterion_id() -> str:
-    _ensure_state()
-    app.state.criterion_counter += 1
-    return f"crit-{app.state.criterion_counter}"
+    reset_storage()
 
 
 @app.post("/v1/protocols")
-def create_protocol(payload: ProtocolCreateRequest) -> ProtocolResponse:
+def create_protocol(
+    payload: ProtocolCreateRequest,
+    storage: Storage = Depends(get_storage),
+) -> ProtocolResponse:
     """Create a protocol record and initial document entry."""
-    _ensure_state()
-    protocol_id = _next_protocol_id()
-    app.state.protocols[protocol_id] = payload
-    app.state.protocol_criteria[protocol_id] = []
-    return ProtocolResponse(protocol_id=protocol_id, title=payload.title)
+    protocol = storage.create_protocol(
+        title=payload.title, document_text=payload.document_text
+    )
+    return ProtocolResponse(protocol_id=protocol.id, title=protocol.title)
 
 
 @app.post("/v1/protocols/{protocol_id}/extract")
-def extract_criteria(protocol_id: str) -> ExtractionResponse:
+def extract_criteria(
+    protocol_id: str,
+    storage: Storage = Depends(get_storage),
+) -> ExtractionResponse:
     """Trigger extraction of atomic criteria for a protocol."""
-    _ensure_state()
-    if protocol_id not in app.state.protocols:
+    protocol = storage.get_protocol(protocol_id)
+    if protocol is None:
         raise HTTPException(status_code=404, detail="Protocol not found")
 
-    protocol = app.state.protocols[protocol_id]
     extracted = extraction_pipeline.extract_criteria(protocol.document_text)
-
-    for existing_id in app.state.protocol_criteria.get(protocol_id, []):
-        app.state.criteria.pop(existing_id, None)
-
-    stored_ids: List[str] = []
-    for item in extracted:
-        criterion_id = _next_criterion_id()
-        criterion = shared_models.Criterion(
-            id=criterion_id,
-            text=item.text,
-            criterion_type=item.criterion_type,
-            confidence=item.confidence,
-            snomed_codes=[],
-        )
-        app.state.criteria[criterion_id] = criterion
-        stored_ids.append(criterion_id)
-
-    app.state.protocol_criteria[protocol_id] = stored_ids
+    stored = storage.replace_criteria(
+        protocol_id=protocol_id,
+        extracted=extracted,
+    )
     return ExtractionResponse(
-        protocol_id=protocol_id, status="completed", criteria_count=len(stored_ids)
+        protocol_id=protocol_id, status="completed", criteria_count=len(stored)
     )
 
 
 @app.get("/v1/protocols/{protocol_id}/criteria")
-def list_criteria(protocol_id: str) -> CriteriaListResponse:
+def list_criteria(
+    protocol_id: str,
+    storage: Storage = Depends(get_storage),
+) -> CriteriaListResponse:
     """List criteria generated for a protocol."""
-    _ensure_state()
-    if protocol_id not in app.state.protocols:
+    protocol = storage.get_protocol(protocol_id)
+    if protocol is None:
         raise HTTPException(status_code=404, detail="Protocol not found")
 
-    criteria_ids = app.state.protocol_criteria.get(protocol_id, [])
     criteria = [
-        _criterion_to_response(app.state.criteria[criterion_id])
-        for criterion_id in criteria_ids
+        _criterion_to_response(criterion)
+        for criterion in storage.list_criteria(protocol_id)
     ]
     return CriteriaListResponse(protocol_id=protocol_id, criteria=criteria)
 
 
 @app.patch("/v1/criteria/{criterion_id}")
 def update_criterion(
-    criterion_id: str, payload: Optional[CriterionUpdateRequest] = Body(default=None)
+    criterion_id: str,
+    payload: Optional[CriterionUpdateRequest] = Body(default=None),
+    storage: Storage = Depends(get_storage),
 ) -> CriterionUpdateResponse:
     """Update a single criterion or its metadata."""
-    _ensure_state()
-    if criterion_id not in app.state.criteria:
+    updates = payload.model_dump(exclude_unset=True) if payload else {}
+    criterion = storage.update_criterion(
+        criterion_id=criterion_id,
+        text=updates.get("text"),
+        criterion_type=updates.get("criterion_type"),
+    )
+    if criterion is None:
         raise HTTPException(status_code=404, detail="Criterion not found")
-
-    criterion = app.state.criteria[criterion_id]
-    if payload:
-        updates = payload.model_dump(exclude_unset=True)
-        if updates.get("text") is not None:
-            criterion.text = updates["text"]
-        if updates.get("criterion_type") is not None:
-            criterion.criterion_type = updates["criterion_type"]
-    app.state.criteria[criterion_id] = criterion
     return CriterionUpdateResponse(
         criterion_id=criterion_id,
         status="updated",
@@ -223,19 +190,24 @@ def update_criterion(
 
 
 @app.post("/v1/criteria/{criterion_id}/ground")
-def ground_criterion(criterion_id: str) -> GroundingResponse:
+def ground_criterion(
+    criterion_id: str,
+    storage: Storage = Depends(get_storage),
+) -> GroundingResponse:
     """Retrieve SNOMED candidates and field mappings for a criterion."""
-    _ensure_state()
-    if criterion_id not in app.state.criteria:
+    criterion = storage.get_criterion(criterion_id)
+    if criterion is None:
         raise HTTPException(status_code=404, detail="Criterion not found")
 
-    criterion = app.state.criteria[criterion_id]
     client = ubkg_client.UbkgClient()
     candidates = client.search_snomed(criterion.text)
     field_mappings = ubkg_client.propose_field_mapping(criterion.text)
 
-    criterion.snomed_codes = [candidate.code for candidate in candidates]
-    app.state.criteria[criterion_id] = criterion
+    snomed_codes = [candidate.code for candidate in candidates]
+    storage.set_snomed_codes(
+        criterion_id=criterion_id,
+        snomed_codes=snomed_codes,
+    )
 
     response_candidates = [
         GroundingCandidateResponse(
@@ -263,7 +235,7 @@ def ground_criterion(criterion_id: str) -> GroundingResponse:
     )
 
 
-def _criterion_to_response(criterion: shared_models.Criterion) -> CriterionResponse:
+def _criterion_to_response(criterion: StorageCriterion) -> CriterionResponse:
     return CriterionResponse(
         id=criterion.id,
         text=criterion.text,
@@ -274,8 +246,11 @@ def _criterion_to_response(criterion: shared_models.Criterion) -> CriterionRespo
 
 
 @app.post("/v1/hitl/feedback")
-def hitl_feedback(payload: HitlFeedbackRequest | None = None) -> dict[str, str]:
+def hitl_feedback(
+    payload: HitlFeedbackRequest | None = None,
+    storage: Storage = Depends(get_storage),
+) -> dict[str, str]:
     """Record HITL feedback for criteria, SNOMED candidates, and field mappings."""
-    _ensure_state()
+    _ = storage
     _ = payload
     return {"status": "recorded"}
