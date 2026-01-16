@@ -1,64 +1,136 @@
-# Gemma Hackathon
+# 🧬 MedGemma Hackathon
 
-MedGemma hackathon demo for extracting atomic inclusion/exclusion criteria from trial protocols, grounding them to SNOMED via UBKG, mapping field/relation/value for EMR screening, and enabling nurse review in a HITL UI.
+> **AI-powered clinical trial protocol analysis** — Extract, ground, and map inclusion/exclusion criteria with human-in-the-loop review
 
-## Goals
+[![Documentation](https://img.shields.io/badge/docs-GitHub%20Pages-blue?style=flat-square)](https://et-noahdolev.github.io/medgemma-hackathon/hackathon/docs/)
+[![Python](https://img.shields.io/badge/python-3.12-blue?style=flat-square)](https://www.python.org/)
+[![License](https://img.shields.io/badge/license-Proprietary-red?style=flat-square)](LICENSE)
 
-- Extract atomic criteria with evidence snippets.
-- Ground criteria to SNOMED with ranked candidates and confidence.
-- Map criteria to field/relation/value (e.g., `demographics.age > 75`).
-- Capture nurse edits for HITL feedback and training data.
-- Provide a clear ElixirTrials integration story.
+A comprehensive demo system for extracting atomic inclusion/exclusion criteria from clinical trial protocols, grounding them to SNOMED CT via UBKG, mapping to field/relation/value structures for EMR screening, and enabling nurse review through an intuitive HITL (Human-In-The-Loop) interface.
 
-## Architecture Summary
+---
 
-The repository is a component-based monorepo. The API orchestrates data ingestion, extraction, grounding, and HITL feedback while persisting artifacts to the database.
+## 📚 Documentation
+
+**📖 [View Full Documentation →](https://et-noahdolev.github.io/medgemma-hackathon/hackathon/docs/)**
+
+The documentation includes:
+- 📋 [Project Overview](https://et-noahdolev.github.io/medgemma-hackathon/hackathon/docs/overview/project/)
+- 🏗️ [Architecture](https://et-noahdolev.github.io/medgemma-hackathon/hackathon/docs/overview/architecture/)
+- 🚀 [Getting Started Guide](https://et-noahdolev.github.io/medgemma-hackathon/hackathon/docs/overview/getting-started/)
+- 📡 [API Specification](https://et-noahdolev.github.io/medgemma-hackathon/hackathon/docs/api/api_spec/)
+- 🧩 [Components Overview](https://et-noahdolev.github.io/medgemma-hackathon/hackathon/docs/components-overview/)
+
+---
+
+## 🎯 Project Goals
+
+- ✅ **Extract** atomic criteria with evidence snippets from protocol documents
+- 🔗 **Ground** criteria to SNOMED CT with ranked candidates and confidence scores
+- 🗺️ **Map** criteria to field/relation/value structures (e.g., `demographics.age > 75`)
+- 👩‍⚕️ **Enable** nurse review and corrections through HITL UI
+- 📊 **Capture** edits for feedback loops and training data generation
+- 🔌 **Integrate** with ElixirTrials platform workflows
+
+---
+
+## 🏗️ Architecture
+
+This repository is organized as a **component-based monorepo**, where each service component operates independently while sharing common models and utilities.
+
+### System Flow
 
 ```
-protocol text/PDF -> data-pipeline -> API -> extraction-service
-                                   -> grounding-service -> UBKG
-HITL UI <------------------------------ API <-> database
+┌─────────────────┐
+│ Protocol PDF    │
+│ / Text          │
+└────────┬────────┘
+         │
+         ▼
+┌─────────────────┐
+│ Data Pipeline   │ ──► Protocol ingestion & parsing
+└────────┬────────┘
+         │
+         ▼
+┌─────────────────┐
+│   API Service   │ ──► Orchestration & persistence
+└────────┬────────┘
+         │
+    ┌────┴────┐
+    ▼         ▼
+┌─────────┐ ┌──────────────┐
+│Extraction│ │  Grounding   │ ──► UBKG integration
+│ Service  │ │   Service    │
+└─────────┘ └──────────────┘
+    │         │
+    └────┬────┘
+         │
+         ▼
+┌─────────────────┐
+│   HITL UI       │ ◄──► Nurse review & corrections
+└─────────────────┘
+         │
+         ▼
+┌─────────────────┐
+│   Database      │ ──► Artifacts & training data
+└─────────────────┘
 ```
 
-## Quick Start
+---
+
+## 🚀 Quick Start
 
 ### Prerequisites
 
-- Python 3.12
-- UV package manager
-- Node.js 18+ (for HITL UI)
-- Docker (optional, for local DB)
+- **Python** 3.12+
+- **UV** package manager ([installation guide](https://github.com/astral-sh/uv))
+- **Node.js** 18+ (for HITL UI)
+- **Docker** (optional, for local database)
 
-### Install
+### Installation
 
 ```bash
+# Clone the repository
+git clone https://github.com/elixirtrials/gemma-hackathon.git
+cd gemma-hackathon
+
+# Install dependencies
 uv sync
 ```
 
-### Docs
+### Running Services
+
+#### 📖 Documentation
+
+Build and serve the documentation locally:
 
 ```bash
+# Build documentation
 make docs-build
+
+# Serve documentation (after building)
 make docs-serve
 ```
 
-Visit `http://localhost:8000`.
+Visit `http://localhost:8000` to view the docs.
 
-### API Service (wireframe)
+#### 🔌 API Service
 
 ```bash
 cd components/api-service
 uv run uvicorn api_service.main:app --reload
 ```
 
-### Data Pipeline (wireframe)
+API will be available at `http://localhost:8000` (FastAPI default).
+
+#### 📥 Data Pipeline
 
 ```bash
 cd components/data-pipeline
 uv run python -m data_pipeline.download_protocols
 ```
 
-### HITL UI
+#### 🖥️ HITL UI
 
 ```bash
 cd components/hitl-ui
@@ -66,24 +138,129 @@ npm install
 npm run dev
 ```
 
-## Components
+UI will be available at `http://localhost:5173` (Vite default).
 
-- `components/api-service` — FastAPI endpoints and orchestration.
-- `components/extraction-service` — MedGemma extraction pipeline.
-- `components/grounding-service` — UBKG client and grounding logic.
-- `components/hitl-ui` — React/Vite HITL UI.
-- `components/data-pipeline` — protocol ingestion.
-- `components/evaluation` — metrics and reporting.
-- `components/shared` — shared models and utilities.
+---
 
-## Documentation
+## 🧩 Components
 
-See `docs/` for architecture, API spec, and phase plans. The hackathon plan is mirrored in `docs/overview/hackathon-plan.md`.
+| Component | Description | Tech Stack |
+|-----------|-------------|------------|
+| **`api-service`** | FastAPI endpoints and orchestration | FastAPI, Python |
+| **`extraction-service`** | MedGemma-based extraction pipeline | Python, MedGemma |
+| **`grounding-service`** | UBKG client and SNOMED grounding logic | Python, UBKG API |
+| **`hitl-ui`** | React/Vite frontend for nurse review | React, TypeScript, Vite |
+| **`data-pipeline`** | Protocol ingestion and parsing | Python |
+| **`evaluation`** | Metrics calculation and reporting | Python |
+| **`shared`** | Shared models and utilities | Python |
 
-## Disclaimer
+For detailed component documentation, see the [Components Overview](https://et-noahdolev.github.io/medgemma-hackathon/hackathon/docs/components-overview/) in the docs.
 
-Demo only. Not for clinical use.
+---
 
-## License
+## 🛠️ Scripts
 
-Proprietary - ElixirTrials, Inc.
+### Protocol Download Tool
+
+The `scripts/download_protocol_sources.py` script downloads clinical trial protocol PDFs from multiple sources:
+
+- **DAC (Data Access Committee)**: Protocol registry library
+- **ClinicalTrials.gov**: Study protocols and documents
+- **BMJ Open**: Protocol articles
+- **JMIR Research Protocols**: Protocol publications
+
+#### Usage Examples
+
+```bash
+# Download from all sources (default: 50 per source, 200 total)
+python scripts/download_protocol_sources.py
+
+# Download from specific sources
+python scripts/download_protocol_sources.py --sources dac jmir
+
+# Limit downloads per source
+python scripts/download_protocol_sources.py --max-per-source 10 --max-total 30
+
+# Custom output directory
+python scripts/download_protocol_sources.py --output-dir data/my-protocols
+```
+
+#### Options
+
+| Option | Description | Default |
+|--------|-------------|---------|
+| `--output-dir` | Directory to store downloaded PDFs | `data/protocols` |
+| `--sources` | Sources to download from (`dac`, `clinicaltrials`, `bmjopen`, `jmir`) | All sources |
+| `--max-per-source` | Maximum PDFs per source | `50` |
+| `--max-total` | Maximum PDFs overall | `200` |
+| `--timeout` | Network timeout in seconds | `30` |
+| `--sitemap-limit` | Number of sitemap files to scan per source | `2` |
+
+The script creates a `manifest.jsonl` file tracking all download attempts with timestamps, URLs, file paths, and status (downloaded/failed).
+
+### Other Utility Scripts
+
+- **`scripts/create_component.sh`**: Initialize a new component with proper structure
+- **`scripts/generate_components_overview.py`**: Generate the components overview documentation
+- **`scripts/update_root_navigation.py`**: Update root mkdocs.yml navigation with discovered components
+
+---
+
+## 📊 Success Criteria
+
+- **Extraction F1** ≥ 0.85
+- **SNOMED Top-1 Accuracy** ≥ 0.80
+- **Field/Relation/Value Mapping Quality** tracked (target TBD)
+- **Nurse Acceptance Rate** ≥ 70%
+- **Time per Protocol Reduction** ≥ 60% vs manual
+
+---
+
+## 📁 Repository Structure
+
+```
+gemma-hackathon/
+├── components/          # Service components (API, extraction, grounding, UI, etc.)
+│   ├── api-service/
+│   ├── data-pipeline/
+│   ├── extraction-service/
+│   ├── grounding-service/
+│   ├── hitl-ui/
+│   ├── evaluation/
+│   └── shared/
+├── docs/                # MkDocs documentation
+│   ├── overview/        # Project overview, architecture, getting started
+│   ├── api/             # API specifications
+│   ├── diagrams/        # Flow diagrams
+│   └── phases/          # Hackathon phase plans
+├── scripts/             # Utility scripts
+├── data/                # Protocol data and manifests
+├── instructions/        # Planning documents and references
+└── site/                # Built documentation (generated)
+```
+
+---
+
+## ⚠️ Disclaimer
+
+**This is a demonstration project only. Not intended for clinical use.**
+
+---
+
+## 📄 License
+
+**Proprietary** — ElixirTrials, Inc.
+
+---
+
+## 🤝 Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines on contributing to this project.
+
+---
+
+## 🔗 Links
+
+- 📖 [Full Documentation](https://et-noahdolev.github.io/medgemma-hackathon/hackathon/docs/)
+- 🐛 [Report Issues](https://github.com/elixirtrials/gemma-hackathon/issues)
+- 💬 [Discussions](https://github.com/elixirtrials/gemma-hackathon/discussions)
