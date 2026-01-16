@@ -65,7 +65,7 @@ def fetch_from_clinicaltrials(query: str, limit: int = 50) -> List[ProtocolRecor
     if limit <= 0:
         raise ValueError("limit must be positive")
 
-    params = {
+    params: dict[str, str | int] = {
         "query.cond": query,
         "fields": "NCTId|BriefTitle|Condition|Phase|EligibilityModule",
         "pageSize": min(limit, 100),
