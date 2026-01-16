@@ -2404,7 +2404,7 @@
 <ul>
 <li><code>POST /v1/protocols</code> to register protocol metadata and text/PDF.</li>
 <li><code>POST /v1/protocols/{id}/extract</code> to trigger extraction.</li>
-<li><code>POST /v1/criteria/{id}/ground</code> to retrieve SNOMED candidates.</li>
+<li><code>POST /v1/criteria/{id}/ground</code> to retrieve SNOMED candidates and field/relation/value mapping suggestions.</li>
 <li><code>POST /v1/hitl/feedback</code> to log nurse actions.</li>
 </ul>
 <h2 id="component-responsibilities">Component Responsibilities</h2>
@@ -2426,7 +2426,7 @@
 </tr>
 <tr>
 <td><code>grounding-service</code></td>
-<td>UBKG REST lookup for SNOMED candidates.</td>
+<td>UBKG REST lookup for SNOMED candidates + field/relation/value mapping suggestions.</td>
 </tr>
 <tr>
 <td><code>data-pipeline</code></td>
@@ -2434,7 +2434,7 @@
 </tr>
 <tr>
 <td><code>evaluation</code></td>
-<td>Metrics (extraction F1, SNOMED Top-1, HITL stats).</td>
+<td>Metrics (extraction F1, SNOMED Top-1, field mapping quality, HITL stats).</td>
 </tr>
 <tr>
 <td><code>shared</code></td>
@@ -2451,7 +2451,7 @@
 <li><code>protocols</code>: protocol metadata and trial IDs.</li>
 <li><code>documents</code>: protocol text and provenance.</li>
 <li><code>criteria</code>: atomic criteria with type and evidence spans.</li>
-<li><code>groundings</code>: SNOMED candidates and confidence scores.</li>
+<li><code>groundings</code>: SNOMED candidates, confidence scores, and field/relation/value mappings.</li>
 <li><code>hitl_edits</code>: nurse actions for audit and retraining.</li>
 </ul>
 

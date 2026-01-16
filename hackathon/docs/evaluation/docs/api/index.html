@@ -1327,6 +1327,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#evaluation.metrics.field_mapping_accuracy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        field_mapping_accuracy
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#evaluation.metrics.hitl_acceptance_rate" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2518,6 +2529,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#evaluation.metrics.field_mapping_accuracy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        field_mapping_accuracy
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#evaluation.metrics.hitl_acceptance_rate" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2786,7 +2808,17 @@ normalize text and compute precision/recall on span matches.</p>
 <span class="normal">24</span>
 <span class="normal">25</span>
 <span class="normal">26</span>
-<span class="normal">27</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">extraction_f1</span><span class="p">(</span><span class="n">predicted</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">],</span> <span class="n">gold</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="nb">float</span><span class="p">:</span>
+<span class="normal">27</span>
+<span class="normal">28</span>
+<span class="normal">29</span>
+<span class="normal">30</span>
+<span class="normal">31</span>
+<span class="normal">32</span>
+<span class="normal">33</span>
+<span class="normal">34</span>
+<span class="normal">35</span>
+<span class="normal">36</span>
+<span class="normal">37</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">extraction_f1</span><span class="p">(</span><span class="n">predicted</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">],</span> <span class="n">gold</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="nb">float</span><span class="p">:</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;Compute extraction F1 score for criteria lists.</span>
 
 <span class="sd">    Args:</span>
@@ -2807,7 +2839,17 @@ normalize text and compute precision/recall on span matches.</p>
 <span class="sd">        This is a wireframe stub. The production implementation will</span>
 <span class="sd">        normalize text and compute precision/recall on span matches.</span>
 <span class="sd">    &quot;&quot;&quot;</span>
-    <span class="k">return</span> <span class="mf">0.0</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">predicted</span> <span class="ow">or</span> <span class="ow">not</span> <span class="n">gold</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;predicted and gold must be non-empty&quot;</span><span class="p">)</span>
+
+    <span class="n">predicted_set</span> <span class="o">=</span> <span class="nb">set</span><span class="p">(</span><span class="n">predicted</span><span class="p">)</span>
+    <span class="n">gold_set</span> <span class="o">=</span> <span class="nb">set</span><span class="p">(</span><span class="n">gold</span><span class="p">)</span>
+    <span class="n">true_positives</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">predicted_set</span> <span class="o">&amp;</span> <span class="n">gold_set</span><span class="p">)</span>
+    <span class="n">precision</span> <span class="o">=</span> <span class="n">true_positives</span> <span class="o">/</span> <span class="nb">len</span><span class="p">(</span><span class="n">predicted_set</span><span class="p">)</span>
+    <span class="n">recall</span> <span class="o">=</span> <span class="n">true_positives</span> <span class="o">/</span> <span class="nb">len</span><span class="p">(</span><span class="n">gold_set</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">precision</span> <span class="o">+</span> <span class="n">recall</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+        <span class="k">return</span> <span class="mf">0.0</span>
+    <span class="k">return</span> <span class="mi">2</span> <span class="o">*</span> <span class="n">precision</span> <span class="o">*</span> <span class="n">recall</span> <span class="o">/</span> <span class="p">(</span><span class="n">precision</span> <span class="o">+</span> <span class="n">recall</span><span class="p">)</span>
 </code></pre></div></td></tr></table></div>
             </details>
     </div>
@@ -2937,17 +2979,7 @@ UBKG candidate ranking outputs.</p>
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>components/evaluation/src/evaluation/metrics.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">30</span>
-<span class="normal">31</span>
-<span class="normal">32</span>
-<span class="normal">33</span>
-<span class="normal">34</span>
-<span class="normal">35</span>
-<span class="normal">36</span>
-<span class="normal">37</span>
-<span class="normal">38</span>
-<span class="normal">39</span>
-<span class="normal">40</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">40</span>
 <span class="normal">41</span>
 <span class="normal">42</span>
 <span class="normal">43</span>
@@ -2958,7 +2990,26 @@ UBKG candidate ranking outputs.</p>
 <span class="normal">48</span>
 <span class="normal">49</span>
 <span class="normal">50</span>
-<span class="normal">51</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">snomed_top1_accuracy</span><span class="p">(</span><span class="n">predicted</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">],</span> <span class="n">gold</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="nb">float</span><span class="p">:</span>
+<span class="normal">51</span>
+<span class="normal">52</span>
+<span class="normal">53</span>
+<span class="normal">54</span>
+<span class="normal">55</span>
+<span class="normal">56</span>
+<span class="normal">57</span>
+<span class="normal">58</span>
+<span class="normal">59</span>
+<span class="normal">60</span>
+<span class="normal">61</span>
+<span class="normal">62</span>
+<span class="normal">63</span>
+<span class="normal">64</span>
+<span class="normal">65</span>
+<span class="normal">66</span>
+<span class="normal">67</span>
+<span class="normal">68</span>
+<span class="normal">69</span>
+<span class="normal">70</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">snomed_top1_accuracy</span><span class="p">(</span><span class="n">predicted</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">],</span> <span class="n">gold</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="nb">float</span><span class="p">:</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;Compute Top-1 accuracy for SNOMED grounding.</span>
 
 <span class="sd">    Args:</span>
@@ -2979,7 +3030,206 @@ UBKG candidate ranking outputs.</p>
 <span class="sd">        This stub will be replaced by a metric implementation aligned with</span>
 <span class="sd">        UBKG candidate ranking outputs.</span>
 <span class="sd">    &quot;&quot;&quot;</span>
-    <span class="k">return</span> <span class="mf">0.0</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">predicted</span> <span class="ow">or</span> <span class="ow">not</span> <span class="n">gold</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;predicted and gold must be non-empty&quot;</span><span class="p">)</span>
+
+    <span class="n">comparisons</span> <span class="o">=</span> <span class="nb">zip</span><span class="p">(</span><span class="n">predicted</span><span class="p">,</span> <span class="n">gold</span><span class="p">)</span>
+    <span class="n">matches</span> <span class="o">=</span> <span class="nb">sum</span><span class="p">(</span>
+        <span class="mi">1</span>
+        <span class="k">for</span> <span class="n">predicted_code</span><span class="p">,</span> <span class="n">gold_code</span> <span class="ow">in</span> <span class="n">comparisons</span>
+        <span class="k">if</span> <span class="n">predicted_code</span> <span class="o">==</span> <span class="n">gold_code</span>
+    <span class="p">)</span>
+    <span class="k">return</span> <span class="n">matches</span> <span class="o">/</span> <span class="nb">len</span><span class="p">(</span><span class="n">gold</span><span class="p">)</span>
+</code></pre></div></td></tr></table></div>
+            </details>
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h6 id="evaluation.metrics.field_mapping_accuracy" class="doc doc-heading">
+            <span class="doc doc-object-name doc-function-name">field_mapping_accuracy</span>
+
+
+</h6>
+<div class="doc-signature highlight"><pre><span></span><code><span class="nf">field_mapping_accuracy</span><span class="p">(</span><span class="n">predicted</span><span class="p">:</span> <span class="n"><span title="typing.List">List</span></span><span class="p">[</span><span class="n"><span title="str">str</span></span><span class="p">],</span> <span class="n">gold</span><span class="p">:</span> <span class="n"><span title="typing.List">List</span></span><span class="p">[</span><span class="n"><span title="str">str</span></span><span class="p">])</span> <span class="o">-&gt;</span> <span class="n"><span title="float">float</span></span>
+</code></pre></div>
+
+    <div class="doc doc-contents ">
+
+        <p>Compute accuracy for field/relation/value mappings.</p>
+
+
+<p><span class="doc-section-title">Parameters:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Type</th>
+          <th>Description</th>
+          <th>Default</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                <code>predicted</code>
+            </td>
+            <td>
+                  <code><span title="typing.List">List</span>[<span title="str">str</span>]</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Predicted normalized mapping strings (field|relation|value).</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>gold</code>
+            </td>
+            <td>
+                  <code><span title="typing.List">List</span>[<span title="str">str</span>]</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Gold-standard normalized mapping strings.</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+    <p><span class="doc-section-title">Returns:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Type</th>
+          <th>Description</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                  <code><span title="float">float</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Accuracy in the range [0.0, 1.0].</p>
+              </div>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+<p><span class="doc-section-title">Raises:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Type</th>
+          <th>Description</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                  <code><span title="ValueError">ValueError</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>If the inputs are empty or not comparable.</p>
+              </div>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+<p><span class="doc-section-title">Examples:</span></p>
+    <div class="highlight"><pre><span></span><code><span class="gp">&gt;&gt;&gt; </span><span class="n">field_mapping_accuracy</span><span class="p">([</span><span class="s2">&quot;demographics.age|&gt;|75&quot;</span><span class="p">],</span> <span class="p">[</span><span class="s2">&quot;demographics.age|&gt;|75&quot;</span><span class="p">])</span>
+<span class="go">0.0</span>
+</code></pre></div>
+
+
+<details class="notes" open>
+  <summary>Notes</summary>
+  <p>This stub will be replaced by a metric implementation aligned with
+normalized field/value parsing in the grounding service.</p>
+</details>
+
+            <details class="mkdocstrings-source">
+              <summary>Source code in <code>components/evaluation/src/evaluation/metrics.py</code></summary>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"> 73</span>
+<span class="normal"> 74</span>
+<span class="normal"> 75</span>
+<span class="normal"> 76</span>
+<span class="normal"> 77</span>
+<span class="normal"> 78</span>
+<span class="normal"> 79</span>
+<span class="normal"> 80</span>
+<span class="normal"> 81</span>
+<span class="normal"> 82</span>
+<span class="normal"> 83</span>
+<span class="normal"> 84</span>
+<span class="normal"> 85</span>
+<span class="normal"> 86</span>
+<span class="normal"> 87</span>
+<span class="normal"> 88</span>
+<span class="normal"> 89</span>
+<span class="normal"> 90</span>
+<span class="normal"> 91</span>
+<span class="normal"> 92</span>
+<span class="normal"> 93</span>
+<span class="normal"> 94</span>
+<span class="normal"> 95</span>
+<span class="normal"> 96</span>
+<span class="normal"> 97</span>
+<span class="normal"> 98</span>
+<span class="normal"> 99</span>
+<span class="normal">100</span>
+<span class="normal">101</span>
+<span class="normal">102</span>
+<span class="normal">103</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">field_mapping_accuracy</span><span class="p">(</span><span class="n">predicted</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">],</span> <span class="n">gold</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="nb">float</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Compute accuracy for field/relation/value mappings.</span>
+
+<span class="sd">    Args:</span>
+<span class="sd">        predicted: Predicted normalized mapping strings (field|relation|value).</span>
+<span class="sd">        gold: Gold-standard normalized mapping strings.</span>
+
+<span class="sd">    Returns:</span>
+<span class="sd">        Accuracy in the range [0.0, 1.0].</span>
+
+<span class="sd">    Raises:</span>
+<span class="sd">        ValueError: If the inputs are empty or not comparable.</span>
+
+<span class="sd">    Examples:</span>
+<span class="sd">        &gt;&gt;&gt; field_mapping_accuracy([&quot;demographics.age|&gt;|75&quot;], [&quot;demographics.age|&gt;|75&quot;])</span>
+<span class="sd">        0.0</span>
+
+<span class="sd">    Notes:</span>
+<span class="sd">        This stub will be replaced by a metric implementation aligned with</span>
+<span class="sd">        normalized field/value parsing in the grounding service.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">predicted</span> <span class="ow">or</span> <span class="ow">not</span> <span class="n">gold</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;predicted and gold must be non-empty&quot;</span><span class="p">)</span>
+
+    <span class="n">comparisons</span> <span class="o">=</span> <span class="nb">zip</span><span class="p">(</span><span class="n">predicted</span><span class="p">,</span> <span class="n">gold</span><span class="p">)</span>
+    <span class="n">matches</span> <span class="o">=</span> <span class="nb">sum</span><span class="p">(</span>
+        <span class="mi">1</span>
+        <span class="k">for</span> <span class="n">predicted_value</span><span class="p">,</span> <span class="n">gold_value</span> <span class="ow">in</span> <span class="n">comparisons</span>
+        <span class="k">if</span> <span class="n">predicted_value</span> <span class="o">==</span> <span class="n">gold_value</span>
+    <span class="p">)</span>
+    <span class="k">return</span> <span class="n">matches</span> <span class="o">/</span> <span class="nb">len</span><span class="p">(</span><span class="n">gold</span><span class="p">)</span>
 </code></pre></div></td></tr></table></div>
             </details>
     </div>
@@ -3092,26 +3342,31 @@ UBKG candidate ranking outputs.</p>
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>components/evaluation/src/evaluation/metrics.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">54</span>
-<span class="normal">55</span>
-<span class="normal">56</span>
-<span class="normal">57</span>
-<span class="normal">58</span>
-<span class="normal">59</span>
-<span class="normal">60</span>
-<span class="normal">61</span>
-<span class="normal">62</span>
-<span class="normal">63</span>
-<span class="normal">64</span>
-<span class="normal">65</span>
-<span class="normal">66</span>
-<span class="normal">67</span>
-<span class="normal">68</span>
-<span class="normal">69</span>
-<span class="normal">70</span>
-<span class="normal">71</span>
-<span class="normal">72</span>
-<span class="normal">73</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">hitl_acceptance_rate</span><span class="p">(</span><span class="n">actions</span><span class="p">:</span> <span class="n">Iterable</span><span class="p">[</span><span class="nb">str</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="nb">float</span><span class="p">:</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">106</span>
+<span class="normal">107</span>
+<span class="normal">108</span>
+<span class="normal">109</span>
+<span class="normal">110</span>
+<span class="normal">111</span>
+<span class="normal">112</span>
+<span class="normal">113</span>
+<span class="normal">114</span>
+<span class="normal">115</span>
+<span class="normal">116</span>
+<span class="normal">117</span>
+<span class="normal">118</span>
+<span class="normal">119</span>
+<span class="normal">120</span>
+<span class="normal">121</span>
+<span class="normal">122</span>
+<span class="normal">123</span>
+<span class="normal">124</span>
+<span class="normal">125</span>
+<span class="normal">126</span>
+<span class="normal">127</span>
+<span class="normal">128</span>
+<span class="normal">129</span>
+<span class="normal">130</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">hitl_acceptance_rate</span><span class="p">(</span><span class="n">actions</span><span class="p">:</span> <span class="n">Iterable</span><span class="p">[</span><span class="nb">str</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="nb">float</span><span class="p">:</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;Compute acceptance rate from HITL action labels.</span>
 
 <span class="sd">    Args:</span>
@@ -3130,7 +3385,12 @@ UBKG candidate ranking outputs.</p>
 <span class="sd">    Notes:</span>
 <span class="sd">        This stub represents the acceptance metric tracked in the hackathon.</span>
 <span class="sd">    &quot;&quot;&quot;</span>
-    <span class="k">return</span> <span class="mf">0.0</span>
+    <span class="n">action_list</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="n">actions</span><span class="p">)</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">action_list</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;actions must be non-empty&quot;</span><span class="p">)</span>
+
+    <span class="n">accepted</span> <span class="o">=</span> <span class="nb">sum</span><span class="p">(</span><span class="mi">1</span> <span class="k">for</span> <span class="n">action</span> <span class="ow">in</span> <span class="n">action_list</span> <span class="k">if</span> <span class="n">action</span> <span class="o">==</span> <span class="s2">&quot;accept&quot;</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">accepted</span> <span class="o">/</span> <span class="nb">len</span><span class="p">(</span><span class="n">action_list</span><span class="p">)</span>
 </code></pre></div></td></tr></table></div>
             </details>
     </div>

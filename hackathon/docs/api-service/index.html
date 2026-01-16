@@ -2477,10 +2477,10 @@
 
 
 <h1 id="api-service">api-service</h1>
-<p>FastAPI service that orchestrates protocol ingestion, extraction, grounding, and HITL feedback. This is the entry point for the demo API.</p>
+<p>FastAPI service that orchestrates protocol ingestion, extraction, grounding (SNOMED + field/relation/value), and HITL feedback. This is the entry point for the demo API.</p>
 <h2 id="responsibilities">Responsibilities</h2>
 <ul>
-<li>Expose REST endpoints for protocols, criteria, grounding, and HITL edits.</li>
+<li>Expose REST endpoints for protocols, criteria, grounding (SNOMED + field mapping), and HITL edits.</li>
 <li>Validate request payloads and manage response shapes.</li>
 <li>Orchestrate calls to extraction and grounding components.</li>
 </ul>

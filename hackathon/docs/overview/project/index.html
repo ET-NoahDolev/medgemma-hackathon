@@ -2412,12 +2412,13 @@
 
 
 <h1 id="project-overview">Project Overview</h1>
-<p>The MedGemma hackathon demo focuses on protocol ingestion, criteria extraction, UBKG grounding, and HITL review. The objective is to reduce nurse review time while preserving transparency and provenance.</p>
+<p>The MedGemma hackathon demo focuses on protocol ingestion, criteria extraction, UBKG grounding, field/relation/value mapping, and HITL review. The objective is to reduce nurse review time while preserving transparency and provenance.</p>
 <h2 id="scope">Scope</h2>
 <ul>
 <li>Protocol ingestion and parsing.</li>
 <li>Criteria extraction and classification.</li>
 <li>SNOMED grounding via UBKG.</li>
+<li>Field/relation/value mapping for EMR screening.</li>
 <li>HITL UI for review and corrections.</li>
 <li>Minimal evaluation metrics.</li>
 </ul>
@@ -2425,12 +2426,13 @@
 <ul>
 <li>Extraction F1 &gt;= 0.85.</li>
 <li>SNOMED Top-1 accuracy &gt;= 0.80.</li>
+<li>Field/relation/value mapping quality tracked (target TBD).</li>
 <li>Nurse acceptance rate &gt;= 70%.</li>
 <li>Time per protocol reduction &gt;= 60% vs manual.</li>
 </ul>
 <h2 id="deliverables">Deliverables</h2>
 <ul>
-<li>End-to-end demo (protocol -&gt; extraction -&gt; grounding -&gt; HITL edits).</li>
+<li>End-to-end demo (protocol -&gt; extraction -&gt; grounding + field mapping -&gt; HITL edits).</li>
 <li>API spec and component documentation.</li>
 <li>Training and evaluation notebook.</li>
 <li>3-5 minute demo video.</li>

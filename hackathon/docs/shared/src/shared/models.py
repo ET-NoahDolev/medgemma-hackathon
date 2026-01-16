@@ -43,6 +43,37 @@ class Criterion:
 
 
 @dataclass
+class FieldMapping:
+    """Field/relation/value mapping attached to a criterion.
+
+    Args:
+        field: Target field path (e.g., demographics.age).
+        relation: Comparison operator (e.g., >, >=, =).
+        value: Normalized value string (e.g., 75).
+        confidence: Optional confidence score.
+
+    Examples:
+        >>> FieldMapping(
+        ...     field="demographics.age",
+        ...     relation=">",
+        ...     value="75",
+        ...     confidence=0.87,
+        ... )
+        FieldMapping(
+        ...     field='demographics.age',
+        ...     relation='>',
+        ...     value='75',
+        ...     confidence=0.87,
+        ... )
+    """
+
+    field: str
+    relation: str
+    value: str
+    confidence: Optional[float] = None
+
+
+@dataclass
 class Protocol:
     """Protocol metadata tracked by the API.
 
@@ -164,3 +195,101 @@ class HitlEdit:
     criterion_id: str
     action: str
     note: Optional[str]
+
+
+def build_criterion(
+    *,
+    id: str = "crit-1",
+    text: str = "Age >= 18 years",
+    criterion_type: str = "inclusion",
+    confidence: float = 0.92,
+    snomed_codes: Optional[List[str]] = None,
+) -> Criterion:
+    """Create a Criterion instance with defaults for tests and examples."""
+    return Criterion(
+        id=id,
+        text=text,
+        criterion_type=criterion_type,
+        confidence=confidence,
+        snomed_codes=snomed_codes or ["371273006"],
+    )
+
+
+def build_field_mapping(
+    *,
+    field: str = "demographics.age",
+    relation: str = ">=",
+    value: str = "18",
+    confidence: Optional[float] = 0.87,
+) -> FieldMapping:
+    """Create a FieldMapping instance with defaults for tests and examples."""
+    return FieldMapping(
+        field=field,
+        relation=relation,
+        value=value,
+        confidence=confidence,
+    )
+
+
+def build_protocol(
+    *,
+    id: str = "proto-1",
+    title: str = "Example Trial",
+    nct_id: str = "NCT00000000",
+    condition: str = "Melanoma",
+    phase: str = "Phase 2",
+) -> Protocol:
+    """Create a Protocol instance with defaults for tests and examples."""
+    return Protocol(
+        id=id,
+        title=title,
+        nct_id=nct_id,
+        condition=condition,
+        phase=phase,
+    )
+
+
+def build_document(
+    *,
+    id: str = "doc-1",
+    protocol_id: str = "proto-1",
+    text: str = "Inclusion: Age >= 18.",
+    source_url: Optional[str] = None,
+) -> Document:
+    """Create a Document instance with defaults for tests and examples."""
+    return Document(
+        id=id,
+        protocol_id=protocol_id,
+        text=text,
+        source_url=source_url,
+    )
+
+
+def build_grounding_candidate(
+    *,
+    code: str = "372244006",
+    display: str = "Malignant melanoma, stage III",
+    confidence: float = 0.92,
+) -> GroundingCandidate:
+    """Create a GroundingCandidate instance with defaults for tests and examples."""
+    return GroundingCandidate(
+        code=code,
+        display=display,
+        confidence=confidence,
+    )
+
+
+def build_hitl_edit(
+    *,
+    id: str = "edit-1",
+    criterion_id: str = "crit-1",
+    action: str = "accept",
+    note: Optional[str] = "Matches protocol text",
+) -> HitlEdit:
+    """Create a HitlEdit instance with defaults for tests and examples."""
+    return HitlEdit(
+        id=id,
+        criterion_id=criterion_id,
+        action=action,
+        note=note,
+    )
