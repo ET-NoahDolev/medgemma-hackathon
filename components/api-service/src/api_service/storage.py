@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+from datetime import datetime
 from functools import lru_cache
 from pathlib import Path
 from typing import Iterable
@@ -27,6 +28,9 @@ class Protocol(SQLModel, table=True):  # type: ignore[call-arg]
     id: str = Field(primary_key=True)
     title: str
     document_text: str
+    nct_id: str | None = None
+    condition: str | None = None
+    phase: str | None = None
 
 
 class Criterion(SQLModel, table=True):  # type: ignore[call-arg]
@@ -40,6 +44,20 @@ class Criterion(SQLModel, table=True):  # type: ignore[call-arg]
     snomed_codes: list[str] = Field(
         default_factory=list, sa_column=Column(JSON, nullable=False)
     )
+
+
+class HitlEdit(SQLModel, table=True):  # type: ignore[call-arg]
+    """HITL edit record for tracking reviewer changes."""
+
+    id: str = Field(primary_key=True)
+    criterion_id: str = Field(foreign_key="criterion.id")
+    action: str
+    snomed_code_added: str | None = None
+    snomed_code_removed: str | None = None
+    field_mapping_added: str | None = None
+    field_mapping_removed: str | None = None
+    note: str | None = None
+    created_at: datetime = Field(default_factory=datetime.utcnow)
 
 
 class IdCounter(SQLModel, table=True):  # type: ignore[call-arg]
@@ -79,6 +97,7 @@ def reset_storage() -> None:
     """Clear all stored data (used for tests and demos)."""
     init_db()
     with Session(get_engine()) as session:
+        session.exec(delete(HitlEdit))
         session.exec(delete(Criterion))
         session.exec(delete(Protocol))
         session.exec(delete(IdCounter))
@@ -104,12 +123,25 @@ class Storage:
         """Initialize the storage with a database engine."""
         self._engine = engine
 
-    def create_protocol(self, *, title: str, document_text: str) -> Protocol:
+    def create_protocol(
+        self,
+        *,
+        title: str,
+        document_text: str,
+        nct_id: str | None = None,
+        condition: str | None = None,
+        phase: str | None = None,
+    ) -> Protocol:
         """Persist a protocol record and return it."""
         with Session(self._engine) as session:
             protocol_id = _next_id(session, "protocol", "proto")
             protocol = Protocol(
-                id=protocol_id, title=title, document_text=document_text
+                id=protocol_id,
+                title=title,
+                document_text=document_text,
+                nct_id=nct_id,
+                condition=condition,
+                phase=phase,
             )
             session.add(protocol)
             session.commit()
@@ -196,3 +228,42 @@ class Storage:
             session.commit()
             session.refresh(criterion)
             return criterion
+
+    def create_hitl_edit(
+        self,
+        *,
+        criterion_id: str,
+        action: str,
+        snomed_code_added: str | None = None,
+        snomed_code_removed: str | None = None,
+        field_mapping_added: str | None = None,
+        field_mapping_removed: str | None = None,
+        note: str | None = None,
+    ) -> HitlEdit:
+        """Persist a HITL edit record."""
+        with Session(self._engine) as session:
+            edit_id = _next_id(session, "hitl_edit", "edit")
+            edit = HitlEdit(
+                id=edit_id,
+                criterion_id=criterion_id,
+                action=action,
+                snomed_code_added=snomed_code_added,
+                snomed_code_removed=snomed_code_removed,
+                field_mapping_added=field_mapping_added,
+                field_mapping_removed=field_mapping_removed,
+                note=note,
+            )
+            session.add(edit)
+            session.commit()
+            session.refresh(edit)
+            return edit
+
+    def list_hitl_edits(self, criterion_id: str) -> list[HitlEdit]:
+        """List all HITL edits for a criterion."""
+        with Session(self._engine) as session:
+            statement = (
+                select(HitlEdit)
+                .where(HitlEdit.criterion_id == criterion_id)  # type: ignore[arg-type]
+                .order_by(HitlEdit.created_at)
+            )
+            return list(session.exec(statement))
