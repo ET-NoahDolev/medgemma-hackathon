@@ -4,15 +4,38 @@ The system is structured as a component-based monorepo with distinct services fo
 
 ```mermaid
 flowchart LR
-  protocolUpload --> extractionService
-  extractionService --> apiService
-  groundingService --> apiService
+  protocolSource["ProtocolSource (CT.gov)"] --> dataPipeline
+  dataPipeline --> apiService
+  apiService --> extractionService
+  apiService --> groundingService
+  groundingService --> ubkgApi
   hitlUi --> apiService
   apiService --> database
 ```
 
-Key integration points:
+## Key Integration Points
 
-- `POST /v1/protocols/{id}/extract` for extraction.
-- `POST /v1/criteria/{id}/ground` for grounding.
-- `POST /v1/hitl/feedback` for HITL edits.
+- `POST /v1/protocols` to register protocol metadata and text/PDF.
+- `POST /v1/protocols/{id}/extract` to trigger extraction.
+- `POST /v1/criteria/{id}/ground` to retrieve SNOMED candidates.
+- `POST /v1/hitl/feedback` to log nurse actions.
+
+## Component Responsibilities
+
+| Component | Responsibilities |
+| --- | --- |
+| `api-service` | Orchestration, persistence, request validation, HITL feedback. |
+| `extraction-service` | Extract atomic criteria and classify inclusion/exclusion. |
+| `grounding-service` | UBKG REST lookup for SNOMED candidates. |
+| `data-pipeline` | Protocol ingestion and normalization. |
+| `evaluation` | Metrics (extraction F1, SNOMED Top-1, HITL stats). |
+| `shared` | Shared schemas and types. |
+| `hitl-ui` | Nurse-facing review, edit, and evidence display. |
+
+## Storage
+
+- `protocols`: protocol metadata and trial IDs.
+- `documents`: protocol text and provenance.
+- `criteria`: atomic criteria with type and evidence spans.
+- `groundings`: SNOMED candidates and confidence scores.
+- `hitl_edits`: nurse actions for audit and retraining.
