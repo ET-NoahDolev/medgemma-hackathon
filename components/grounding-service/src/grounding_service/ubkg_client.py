@@ -38,6 +38,40 @@ class UbkgCandidate:
     confidence: float
 
 
+@dataclass
+class FieldMappingSuggestion:
+    """Field/relation/value mapping suggestion for a criterion.
+
+    Args:
+        field: Target field path (e.g., demographics.age).
+        relation: Comparison operator (e.g., >, >=, =).
+        value: Normalized value string (e.g., 75).
+        confidence: Confidence or relevance score.
+
+    Examples:
+        >>> FieldMappingSuggestion(
+        ...     field="demographics.age",
+        ...     relation=">",
+        ...     value="75",
+        ...     confidence=0.87,
+        ... )
+        FieldMappingSuggestion(
+        ...     field='demographics.age',
+        ...     relation='>',
+        ...     value='75',
+        ...     confidence=0.87,
+        ... )
+
+    Notes:
+        This is a wireframe stub; production mapping will come from a model.
+    """
+
+    field: str
+    relation: str
+    value: str
+    confidence: float
+
+
 class UbkgClient:
     """Client for UBKG REST search endpoints.
 
@@ -50,6 +84,8 @@ class UbkgClient:
 
     Notes:
         This is a wireframe stub; HTTP calls and caching are not implemented.
+        Field mapping suggestions are handled alongside grounding in the
+        production service.
     """
 
     def __init__(self, base_url: str = "https://ubkg-api.xconsortia.org") -> None:
@@ -78,3 +114,26 @@ class UbkgClient:
             results into ``UbkgCandidate`` instances.
         """
         return []
+
+
+def propose_field_mapping(criterion_text: str) -> List[FieldMappingSuggestion]:
+    """Propose field/relation/value mappings for a criterion.
+
+    Args:
+        criterion_text: Criterion text span to map.
+
+    Returns:
+        A list of field mapping suggestions.
+
+    Raises:
+        ValueError: If the criterion text is empty.
+
+    Examples:
+        >>> propose_field_mapping("Age >= 75 years")
+        []
+
+    Notes:
+        This is a wireframe stub. The production implementation will use
+        a MedGemma adapter or rule-based parser for field mapping.
+    """
+    return []

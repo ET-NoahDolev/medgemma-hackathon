@@ -43,6 +43,37 @@ class Criterion:
 
 
 @dataclass
+class FieldMapping:
+    """Field/relation/value mapping attached to a criterion.
+
+    Args:
+        field: Target field path (e.g., demographics.age).
+        relation: Comparison operator (e.g., >, >=, =).
+        value: Normalized value string (e.g., 75).
+        confidence: Optional confidence score.
+
+    Examples:
+        >>> FieldMapping(
+        ...     field="demographics.age",
+        ...     relation=">",
+        ...     value="75",
+        ...     confidence=0.87,
+        ... )
+        FieldMapping(
+        ...     field='demographics.age',
+        ...     relation='>',
+        ...     value='75',
+        ...     confidence=0.87,
+        ... )
+    """
+
+    field: str
+    relation: str
+    value: str
+    confidence: Optional[float] = None
+
+
+@dataclass
 class Protocol:
     """Protocol metadata tracked by the API.
 

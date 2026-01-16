@@ -51,6 +51,30 @@ def snomed_top1_accuracy(predicted: List[str], gold: List[str]) -> float:
     return 0.0
 
 
+def field_mapping_accuracy(predicted: List[str], gold: List[str]) -> float:
+    """Compute accuracy for field/relation/value mappings.
+
+    Args:
+        predicted: Predicted normalized mapping strings (field|relation|value).
+        gold: Gold-standard normalized mapping strings.
+
+    Returns:
+        Accuracy in the range [0.0, 1.0].
+
+    Raises:
+        ValueError: If the inputs are empty or not comparable.
+
+    Examples:
+        >>> field_mapping_accuracy(["demographics.age|>|75"], ["demographics.age|>|75"])
+        0.0
+
+    Notes:
+        This stub will be replaced by a metric implementation aligned with
+        normalized field/value parsing in the grounding service.
+    """
+    return 0.0
+
+
 def hitl_acceptance_rate(actions: Iterable[str]) -> float:
     """Compute acceptance rate from HITL action labels.
 

@@ -22,7 +22,8 @@ class Criterion:
         Criterion(text='Age >= 18 years', criterion_type='inclusion', confidence=0.92)
 
     Notes:
-        Evidence spans and grounding candidates are stored downstream by the API.
+        Evidence spans, grounding candidates, and field mappings are stored
+        downstream by the API.
     """
 
     text: str

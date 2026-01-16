@@ -129,31 +129,31 @@ def update_criterion(criterion_id: str) -> dict:
 
 @app.post("/v1/criteria/{criterion_id}/ground")
 def ground_criterion(criterion_id: str) -> dict:
-    """Retrieve SNOMED candidates for a criterion.
+    """Retrieve SNOMED candidates and field mappings for a criterion.
 
     Args:
         criterion_id: Identifier of the criterion to ground.
 
     Returns:
-        A response containing candidate SNOMED codes.
+        A response containing candidate SNOMED codes and field/relation/value mappings.
 
     Raises:
         ValueError: If the criterion is not found.
 
     Examples:
         >>> ground_criterion("crit-1")
-        {'criterion_id': 'crit-1', 'candidates': []}
+        {'criterion_id': 'crit-1', 'candidates': [], 'field_mapping': None}
 
     Notes:
-        This endpoint will call the grounding service and cache candidate
-        codes for HITL review.
+        This endpoint will call the grounding service, cache candidate
+        codes, and attach field/relation/value suggestions for HITL review.
     """
-    return {"criterion_id": criterion_id, "candidates": []}
+    return {"criterion_id": criterion_id, "candidates": [], "field_mapping": None}
 
 
 @app.post("/v1/hitl/feedback")
 def hitl_feedback() -> dict:
-    """Record HITL feedback for criteria and SNOMED candidates.
+    """Record HITL feedback for criteria, SNOMED candidates, and field mappings.
 
     Returns:
         A confirmation that feedback was recorded.
@@ -167,6 +167,6 @@ def hitl_feedback() -> dict:
 
     Notes:
         The final version will accept a payload describing the nurse action
-        (accept/reject/add code) and evidence rationale.
+        (accept/reject/add code), field/relation/value edits, and evidence rationale.
     """
     return {"status": "recorded"}

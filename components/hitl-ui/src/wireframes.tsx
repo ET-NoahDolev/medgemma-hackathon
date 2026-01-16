@@ -60,28 +60,28 @@ export function CriterionCardWireframe({
 }
 
 /**
- * Render a placeholder candidate list for SNOMED grounding.
+ * Render a placeholder panel for SNOMED grounding and field mapping.
  *
  * @param props - Component props for the wireframe.
- * @returns A React element representing the grounding candidates placeholder.
+ * @returns A React element representing the grounding and field mapping placeholder.
  *
  * @example
  * ```tsx
- * <GroundingCandidatesWireframe title="SNOMED Candidates" />
+ * <GroundingCandidatesWireframe title="Grounding + Field Mapping" />
  * ```
  *
  * @remarks
  * Use this wireframe to align candidate metadata and actions.
  */
 export function GroundingCandidatesWireframe({
-  title = "SNOMED Candidates",
-  description = "Review and accept candidate SNOMED concepts.",
+  title = "Grounding + Field Mapping",
+  description = "Review SNOMED candidates and field/relation/value mappings.",
 }: WireframeProps): ReactElement {
   return (
     <section aria-label="Grounding candidates wireframe">
       <h2>{title}</h2>
       <p>{description}</p>
-      <div className="wireframe-panel">Candidates placeholder</div>
+      <div className="wireframe-panel">Grounding + field mapping placeholder</div>
     </section>
   );
 }
