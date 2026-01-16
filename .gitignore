@@ -372,3 +372,4 @@ audit.wal
 instructions/
 .playwright-mcp/
 .cursor/
+data/
