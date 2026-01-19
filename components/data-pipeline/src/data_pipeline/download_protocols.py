@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import List
 
 import httpx
-from pypdf import PdfReader
+from pypdf import PdfReader  # type: ignore[import-not-found]
 
 
 @dataclass
@@ -48,6 +48,8 @@ class ProtocolRecord:
     phase: str
     document_text: str
     source: str | None = None
+    registry_id: str | None = None
+    registry_type: str | None = None
 
 
 CT_API_BASE = "https://clinicaltrials.gov/api/v2/studies"
@@ -139,9 +141,65 @@ def _derive_title(path: Path, text: str) -> str:
     return fallback or "Protocol"
 
 
-def _extract_nct_id(url: str) -> str:
-    match = re.search(r"/(NCT\d{8})/", url)
-    return match.group(1) if match else ""
+def _extract_registry_id(url: str) -> tuple[str | None, str | None]:
+    nct_match = re.search(r"(NCT\d{8})", url)
+    if nct_match:
+        return nct_match.group(1), "nct"
+    isrctn_match = re.search(r"(ISRCTN\d+)", url, flags=re.IGNORECASE)
+    if isrctn_match:
+        return isrctn_match.group(1).upper(), "isrctn"
+    actrn_match = re.search(r"(ACTRN\d{14})", url, flags=re.IGNORECASE)
+    if actrn_match:
+        return actrn_match.group(1).upper(), "actrn"
+    return None, None
+
+
+def _iter_manifest_entries(manifest_path: Path) -> list[dict]:
+    entries: list[dict] = []
+    with manifest_path.open(encoding="utf-8") as handle:
+        for line in handle:
+            if line.strip():
+                entries.append(json.loads(line))
+    return entries
+
+
+def _build_record_from_entry(entry: dict) -> ProtocolRecord | None:
+    if entry.get("status") != "downloaded":
+        return None
+    path_value = entry.get("path")
+    if not path_value:
+        return None
+    pdf_path = Path(path_value)
+    if not pdf_path.exists():
+        logger.warning("Missing PDF at %s", pdf_path)
+        return None
+    try:
+        text = extract_text_from_pdf(pdf_path)
+    except Exception as exc:  # pragma: no cover - defensive
+        logger.warning("Failed to read %s: %s", pdf_path, exc)
+        return None
+    if not text:
+        logger.warning("Empty text extracted from %s", pdf_path)
+        return None
+
+    url = entry.get("url", "")
+    title = _derive_title(pdf_path, text)
+    registry_id = entry.get("registry_id")
+    registry_type = entry.get("registry_type")
+    if not registry_id or not registry_type:
+        derived_id, derived_type = _extract_registry_id(url)
+        registry_id = registry_id or derived_id
+        registry_type = registry_type or derived_type
+    return ProtocolRecord(
+        nct_id=registry_id if registry_type == "nct" and registry_id else "",
+        title=title,
+        condition="",
+        phase="",
+        document_text=text,
+        source=entry.get("source"),
+        registry_id=registry_id,
+        registry_type=registry_type,
+    )
 
 
 def ingest_local_protocols(
@@ -154,43 +212,12 @@ def ingest_local_protocols(
         raise FileNotFoundError(f"Manifest not found: {manifest_path}")
 
     records: list[ProtocolRecord] = []
-    with manifest_path.open(encoding="utf-8") as handle:
-        for line in handle:
-            if len(records) >= limit:
-                break
-            if not line.strip():
-                continue
-            entry = json.loads(line)
-            if entry.get("status") != "downloaded":
-                continue
-            path_value = entry.get("path")
-            if not path_value:
-                continue
-            pdf_path = Path(path_value)
-            if not pdf_path.exists():
-                logger.warning("Missing PDF at %s", pdf_path)
-                continue
-            try:
-                text = extract_text_from_pdf(pdf_path)
-            except Exception as exc:  # pragma: no cover - defensive
-                logger.warning("Failed to read %s: %s", pdf_path, exc)
-                continue
-            if not text:
-                logger.warning("Empty text extracted from %s", pdf_path)
-                continue
-
-            url = entry.get("url", "")
-            title = _derive_title(pdf_path, text)
-            records.append(
-                ProtocolRecord(
-                    nct_id=_extract_nct_id(url),
-                    title=title,
-                    condition="",
-                    phase="",
-                    document_text=text,
-                    source=entry.get("source"),
-                )
-            )
+    for entry in _iter_manifest_entries(manifest_path):
+        if len(records) >= limit:
+            break
+        record = _build_record_from_entry(entry)
+        if record is not None:
+            records.append(record)
     return records
 
 
@@ -213,10 +240,12 @@ def emit_records(
             output_path.parent.mkdir(parents=True, exist_ok=True)
             output_path.write_text("\n".join(lines) + "\n")
         except OSError as exc:
-            raise RuntimeError(f"Failed to write output to {output_path}: {exc}") from exc
+            message = f"Failed to write output to {output_path}: {exc}"
+            raise RuntimeError(message) from exc
     else:
         for line in lines:
             print(line)
+
 
 def main() -> None:
     """CLI entrypoint."""

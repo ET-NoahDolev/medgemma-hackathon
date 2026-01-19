@@ -6,7 +6,7 @@ import os
 from datetime import datetime, timezone
 from functools import lru_cache
 from pathlib import Path
-from typing import Iterable
+from typing import Any, Iterable, cast
 from typing import Protocol as TypingProtocol
 
 from sqlalchemy import JSON, Column, delete
@@ -22,7 +22,7 @@ class ExtractedCriterion(TypingProtocol):
     confidence: float
 
 
-class Protocol(SQLModel, table=True):
+class Protocol(SQLModel, table=True):  # type: ignore[call-arg]
     """Protocol record persisted for API requests."""
 
     id: str = Field(primary_key=True)
@@ -34,7 +34,7 @@ class Protocol(SQLModel, table=True):
     source: str | None = None
 
 
-class Criterion(SQLModel, table=True):
+class Criterion(SQLModel, table=True):  # type: ignore[call-arg]
     """Criterion record persisted for API requests."""
 
     id: str = Field(primary_key=True)
@@ -47,7 +47,7 @@ class Criterion(SQLModel, table=True):
     )
 
 
-class HitlEdit(SQLModel, table=True):
+class HitlEdit(SQLModel, table=True):  # type: ignore[call-arg]
     """HITL edit record for tracking reviewer changes."""
 
     id: str = Field(primary_key=True)
@@ -61,7 +61,7 @@ class HitlEdit(SQLModel, table=True):
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 
-class IdCounter(SQLModel, table=True):
+class IdCounter(SQLModel, table=True):  # type: ignore[call-arg]
     """Simple counter table for stable prefixed identifiers."""
 
     key: str = Field(primary_key=True)
@@ -161,10 +161,10 @@ class Storage:
     def list_criteria(self, protocol_id: str) -> list[Criterion]:
         """List criteria for a protocol."""
         with Session(self._engine) as session:
-            # Keep full models for simplicity; revisit partial selects if perf becomes an issue.
+            # Keep full models for simplicity; revisit partial selects if needed later.
             statement = (
                 select(Criterion)
-                .where(Criterion.protocol_id == protocol_id)
+                .where(cast(Any, Criterion.protocol_id) == protocol_id)
                 .order_by(Criterion.id)
             )
             return list(session.exec(statement))
@@ -175,7 +175,7 @@ class Storage:
         """Replace criteria for a protocol with extracted entries."""
         with Session(self._engine) as session:
             session.exec(
-                delete(Criterion).where(Criterion.protocol_id == protocol_id)
+                delete(Criterion).where(cast(Any, Criterion.protocol_id) == protocol_id)
             )
             stored: list[Criterion] = []
             for item in extracted:
@@ -267,7 +267,7 @@ class Storage:
         with Session(self._engine) as session:
             statement = (
                 select(HitlEdit)
-                .where(HitlEdit.criterion_id == criterion_id)
-                .order_by(HitlEdit.created_at)
+                .where(cast(Any, HitlEdit.criterion_id) == criterion_id)
+                .order_by(cast(Any, HitlEdit.created_at))
             )
             return list(session.exec(statement))
