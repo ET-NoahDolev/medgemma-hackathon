@@ -1150,10 +1150,32 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#data_pipeline.download_protocols.download_protocols" class="md-nav__link">
+  <a href="#data_pipeline.download_protocols.fetch_from_clinicaltrials" class="md-nav__link">
     <span class="md-ellipsis">
       
-        download_protocols
+        fetch_from_clinicaltrials
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#data_pipeline.download_protocols.extract_text_from_pdf" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        extract_text_from_pdf
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#data_pipeline.download_protocols.ingest_local_protocols" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ingest_local_protocols
       
     </span>
   </a>
@@ -2552,10 +2574,32 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#data_pipeline.download_protocols.download_protocols" class="md-nav__link">
+  <a href="#data_pipeline.download_protocols.fetch_from_clinicaltrials" class="md-nav__link">
     <span class="md-ellipsis">
       
-        download_protocols
+        fetch_from_clinicaltrials
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#data_pipeline.download_protocols.extract_text_from_pdf" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        extract_text_from_pdf
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#data_pipeline.download_protocols.ingest_local_protocols" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ingest_local_protocols
       
     </span>
   </a>
@@ -2676,7 +2720,7 @@
 
     <div class="doc doc-contents ">
 
-        <p>Placeholder script for ClinicalTrials.gov protocol ingestion.</p>
+        <p>Download protocols and emit normalized records.</p>
 
 
 
@@ -2710,7 +2754,7 @@
   </span>
 
 </h6>
-<div class="doc-signature highlight"><pre><span></span><code><span class="nf">ProtocolRecord</span><span class="p">(</span><span class="n">nct_id</span><span class="p">:</span> <span class="n"><span title="str">str</span></span><span class="p">,</span> <span class="n">title</span><span class="p">:</span> <span class="n"><span title="str">str</span></span><span class="p">,</span> <span class="n">condition</span><span class="p">:</span> <span class="n"><span title="str">str</span></span><span class="p">,</span> <span class="n">phase</span><span class="p">:</span> <span class="n"><span title="str">str</span></span><span class="p">,</span> <span class="n">document_text</span><span class="p">:</span> <span class="n"><span title="str">str</span></span><span class="p">)</span>
+<div class="doc-signature highlight"><pre><span></span><code><span class="nf">ProtocolRecord</span><span class="p">(</span><span class="n">nct_id</span><span class="p">:</span> <span class="n"><span title="str">str</span></span><span class="p">,</span> <span class="n">title</span><span class="p">:</span> <span class="n"><span title="str">str</span></span><span class="p">,</span> <span class="n">condition</span><span class="p">:</span> <span class="n"><span title="str">str</span></span><span class="p">,</span> <span class="n">phase</span><span class="p">:</span> <span class="n"><span title="str">str</span></span><span class="p">,</span> <span class="n">document_text</span><span class="p">:</span> <span class="n"><span title="str">str</span></span><span class="p">,</span> <span class="n">source</span><span class="p">:</span> <span class="n"><span title="str">str</span></span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">registry_id</span><span class="p">:</span> <span class="n"><span title="str">str</span></span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">registry_type</span><span class="p">:</span> <span class="n"><span title="str">str</span></span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">)</span>
 </code></pre></div>
 
     <div class="doc doc-contents ">
@@ -2870,12 +2914,12 @@
 <div class="doc doc-object doc-function">
 
 
-<h6 id="data_pipeline.download_protocols.download_protocols" class="doc doc-heading">
-            <span class="doc doc-object-name doc-function-name">download_protocols</span>
+<h6 id="data_pipeline.download_protocols.fetch_from_clinicaltrials" class="doc doc-heading">
+            <span class="doc doc-object-name doc-function-name">fetch_from_clinicaltrials</span>
 
 
 </h6>
-<div class="doc-signature highlight"><pre><span></span><code><span class="nf">download_protocols</span><span class="p">(</span><span class="n">limit</span><span class="p">:</span> <span class="n"><span title="int">int</span></span> <span class="o">=</span> <span class="mi">200</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n"><span title="typing.List">List</span></span><span class="p">[</span><span class="n"><a class="autorefs autorefs-internal" title="ProtocolRecord
+<div class="doc-signature highlight"><pre><span></span><code><span class="nf">fetch_from_clinicaltrials</span><span class="p">(</span><span class="n">query</span><span class="p">:</span> <span class="n"><span title="str">str</span></span><span class="p">,</span> <span class="n">limit</span><span class="p">:</span> <span class="n"><span title="int">int</span></span> <span class="o">=</span> <span class="mi">50</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n"><span title="typing.List">List</span></span><span class="p">[</span><span class="n"><a class="autorefs autorefs-internal" title="ProtocolRecord
 
 
   
@@ -2885,7 +2929,7 @@
 
     <div class="doc doc-contents ">
 
-        <p>Download and normalize protocol records from ClinicalTrials.gov.</p>
+        <p>Fetch protocols from ClinicalTrials.gov API v2.</p>
 
 
 <p><span class="doc-section-title">Parameters:</span></p>
@@ -2901,6 +2945,22 @@
       <tbody>
           <tr class="doc-section-item">
             <td>
+                <code>query</code>
+            </td>
+            <td>
+                  <code><span title="str">str</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Condition or keyword to search.</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
                 <code>limit</code>
             </td>
             <td>
@@ -2908,11 +2968,11 @@
             </td>
             <td>
               <div class="doc-md-description">
-                <p>Maximum number of protocols to retrieve.</p>
+                <p>Maximum records to fetch.</p>
               </div>
             </td>
             <td>
-                  <code>200</code>
+                  <code>50</code>
             </td>
           </tr>
       </tbody>
@@ -2939,7 +2999,7 @@
             </td>
             <td>
               <div class="doc-md-description">
-                <p>A list of normalized protocol records.</p>
+                <p>List of normalized protocol records.</p>
               </div>
             </td>
           </tr>
@@ -2970,90 +3030,229 @@
     </table>
 
 
-<p><span class="doc-section-title">Examples:</span></p>
-    <div class="highlight"><pre><span></span><code><span class="gp">&gt;&gt;&gt; </span><span class="n">download_protocols</span><span class="p">(</span><span class="n">limit</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
-<span class="go">[]</span>
-</code></pre></div>
-
-
-<details class="notes" open>
-  <summary>Notes</summary>
-  <p>This is a wireframe stub. The production implementation will call
-ClinicalTrials.gov APIs and persist records to the database.</p>
-</details>
-
             <details class="mkdocstrings-source">
               <summary>Source code in <code>components/data-pipeline/src/data_pipeline/download_protocols.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">45</span>
-<span class="normal">46</span>
-<span class="normal">47</span>
-<span class="normal">48</span>
-<span class="normal">49</span>
-<span class="normal">50</span>
-<span class="normal">51</span>
-<span class="normal">52</span>
-<span class="normal">53</span>
-<span class="normal">54</span>
-<span class="normal">55</span>
-<span class="normal">56</span>
-<span class="normal">57</span>
-<span class="normal">58</span>
-<span class="normal">59</span>
-<span class="normal">60</span>
-<span class="normal">61</span>
-<span class="normal">62</span>
-<span class="normal">63</span>
-<span class="normal">64</span>
-<span class="normal">65</span>
-<span class="normal">66</span>
-<span class="normal">67</span>
-<span class="normal">68</span>
-<span class="normal">69</span>
-<span class="normal">70</span>
-<span class="normal">71</span>
-<span class="normal">72</span>
-<span class="normal">73</span>
-<span class="normal">74</span>
-<span class="normal">75</span>
-<span class="normal">76</span>
-<span class="normal">77</span>
-<span class="normal">78</span>
-<span class="normal">79</span>
-<span class="normal">80</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">download_protocols</span><span class="p">(</span><span class="n">limit</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">200</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">List</span><span class="p">[</span><span class="n">ProtocolRecord</span><span class="p">]:</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Download and normalize protocol records from ClinicalTrials.gov.</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"> 63</span>
+<span class="normal"> 64</span>
+<span class="normal"> 65</span>
+<span class="normal"> 66</span>
+<span class="normal"> 67</span>
+<span class="normal"> 68</span>
+<span class="normal"> 69</span>
+<span class="normal"> 70</span>
+<span class="normal"> 71</span>
+<span class="normal"> 72</span>
+<span class="normal"> 73</span>
+<span class="normal"> 74</span>
+<span class="normal"> 75</span>
+<span class="normal"> 76</span>
+<span class="normal"> 77</span>
+<span class="normal"> 78</span>
+<span class="normal"> 79</span>
+<span class="normal"> 80</span>
+<span class="normal"> 81</span>
+<span class="normal"> 82</span>
+<span class="normal"> 83</span>
+<span class="normal"> 84</span>
+<span class="normal"> 85</span>
+<span class="normal"> 86</span>
+<span class="normal"> 87</span>
+<span class="normal"> 88</span>
+<span class="normal"> 89</span>
+<span class="normal"> 90</span>
+<span class="normal"> 91</span>
+<span class="normal"> 92</span>
+<span class="normal"> 93</span>
+<span class="normal"> 94</span>
+<span class="normal"> 95</span>
+<span class="normal"> 96</span>
+<span class="normal"> 97</span>
+<span class="normal"> 98</span>
+<span class="normal"> 99</span>
+<span class="normal">100</span>
+<span class="normal">101</span>
+<span class="normal">102</span>
+<span class="normal">103</span>
+<span class="normal">104</span>
+<span class="normal">105</span>
+<span class="normal">106</span>
+<span class="normal">107</span>
+<span class="normal">108</span>
+<span class="normal">109</span>
+<span class="normal">110</span>
+<span class="normal">111</span>
+<span class="normal">112</span>
+<span class="normal">113</span>
+<span class="normal">114</span>
+<span class="normal">115</span>
+<span class="normal">116</span>
+<span class="normal">117</span>
+<span class="normal">118</span>
+<span class="normal">119</span>
+<span class="normal">120</span>
+<span class="normal">121</span>
+<span class="normal">122</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">fetch_from_clinicaltrials</span><span class="p">(</span><span class="n">query</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">limit</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">50</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">List</span><span class="p">[</span><span class="n">ProtocolRecord</span><span class="p">]:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Fetch protocols from ClinicalTrials.gov API v2.</span>
 
 <span class="sd">    Args:</span>
-<span class="sd">        limit: Maximum number of protocols to retrieve.</span>
+<span class="sd">        query: Condition or keyword to search.</span>
+<span class="sd">        limit: Maximum records to fetch.</span>
 
 <span class="sd">    Returns:</span>
-<span class="sd">        A list of normalized protocol records.</span>
+<span class="sd">        List of normalized protocol records.</span>
 
 <span class="sd">    Raises:</span>
 <span class="sd">        ValueError: If limit is not positive.</span>
-
-<span class="sd">    Examples:</span>
-<span class="sd">        &gt;&gt;&gt; download_protocols(limit=1)</span>
-<span class="sd">        []</span>
-
-<span class="sd">    Notes:</span>
-<span class="sd">        This is a wireframe stub. The production implementation will call</span>
-<span class="sd">        ClinicalTrials.gov APIs and persist records to the database.</span>
 <span class="sd">    &quot;&quot;&quot;</span>
     <span class="k">if</span> <span class="n">limit</span> <span class="o">&lt;=</span> <span class="mi">0</span><span class="p">:</span>
         <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;limit must be positive&quot;</span><span class="p">)</span>
 
-    <span class="n">count</span> <span class="o">=</span> <span class="mi">1</span>
-    <span class="n">records</span> <span class="o">=</span> <span class="p">[]</span>
-    <span class="k">for</span> <span class="n">index</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">count</span><span class="p">):</span>
-        <span class="n">records</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
-            <span class="n">ProtocolRecord</span><span class="p">(</span>
-                <span class="n">nct_id</span><span class="o">=</span><span class="sa">f</span><span class="s2">&quot;NCT</span><span class="si">{</span><span class="n">index</span><span class="si">:</span><span class="s2">08d</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">,</span>
-                <span class="n">title</span><span class="o">=</span><span class="s2">&quot;Example Trial&quot;</span><span class="p">,</span>
-                <span class="n">condition</span><span class="o">=</span><span class="s2">&quot;Melanoma&quot;</span><span class="p">,</span>
-                <span class="n">phase</span><span class="o">=</span><span class="s2">&quot;Phase 2&quot;</span><span class="p">,</span>
-                <span class="n">document_text</span><span class="o">=</span><span class="s2">&quot;Inclusion: Age &gt;= 18.&quot;</span><span class="p">,</span>
+    <span class="n">page_size</span> <span class="o">=</span> <span class="nb">min</span><span class="p">(</span><span class="n">limit</span><span class="p">,</span> <span class="mi">100</span><span class="p">)</span>
+    <span class="n">params</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span> <span class="o">|</span> <span class="nb">int</span><span class="p">]</span> <span class="o">=</span> <span class="p">{</span>
+        <span class="s2">&quot;query.cond&quot;</span><span class="p">:</span> <span class="n">query</span><span class="p">,</span>
+        <span class="s2">&quot;fields&quot;</span><span class="p">:</span> <span class="s2">&quot;NCTId|BriefTitle|Condition|Phase|EligibilityModule&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;pageSize&quot;</span><span class="p">:</span> <span class="n">page_size</span><span class="p">,</span>
+        <span class="s2">&quot;format&quot;</span><span class="p">:</span> <span class="s2">&quot;json&quot;</span><span class="p">,</span>
+    <span class="p">}</span>
+
+    <span class="n">records</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">ProtocolRecord</span><span class="p">]</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="n">next_token</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span>
+    <span class="k">while</span> <span class="nb">len</span><span class="p">(</span><span class="n">records</span><span class="p">)</span> <span class="o">&lt;</span> <span class="n">limit</span><span class="p">:</span>
+        <span class="k">if</span> <span class="n">next_token</span><span class="p">:</span>
+            <span class="n">params</span><span class="p">[</span><span class="s2">&quot;pageToken&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">next_token</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">params</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="s2">&quot;pageToken&quot;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
+
+        <span class="n">resp</span> <span class="o">=</span> <span class="n">httpx</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">CT_API_BASE</span><span class="p">,</span> <span class="n">params</span><span class="o">=</span><span class="n">params</span><span class="p">,</span> <span class="n">timeout</span><span class="o">=</span><span class="mi">30</span><span class="p">)</span>
+        <span class="n">resp</span><span class="o">.</span><span class="n">raise_for_status</span><span class="p">()</span>
+        <span class="n">payload</span> <span class="o">=</span> <span class="n">resp</span><span class="o">.</span><span class="n">json</span><span class="p">()</span>
+
+        <span class="k">for</span> <span class="n">study</span> <span class="ow">in</span> <span class="n">payload</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;studies&quot;</span><span class="p">,</span> <span class="p">[]):</span>
+            <span class="n">proto</span> <span class="o">=</span> <span class="n">study</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;protocolSection&quot;</span><span class="p">,</span> <span class="p">{})</span>
+            <span class="n">ident</span> <span class="o">=</span> <span class="n">proto</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;identificationModule&quot;</span><span class="p">,</span> <span class="p">{})</span>
+            <span class="n">conds</span> <span class="o">=</span> <span class="n">proto</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;conditionsModule&quot;</span><span class="p">,</span> <span class="p">{})</span>
+            <span class="n">design</span> <span class="o">=</span> <span class="n">proto</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;designModule&quot;</span><span class="p">,</span> <span class="p">{})</span>
+            <span class="n">elig</span> <span class="o">=</span> <span class="n">proto</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;eligibilityModule&quot;</span><span class="p">,</span> <span class="p">{})</span>
+
+            <span class="n">records</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
+                <span class="n">ProtocolRecord</span><span class="p">(</span>
+                    <span class="n">nct_id</span><span class="o">=</span><span class="n">ident</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;nctId&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">),</span>
+                    <span class="n">title</span><span class="o">=</span><span class="n">ident</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;briefTitle&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">),</span>
+                    <span class="n">condition</span><span class="o">=</span><span class="p">(</span><span class="n">conds</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;conditions&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="p">[</span><span class="s2">&quot;&quot;</span><span class="p">])[</span><span class="mi">0</span><span class="p">],</span>
+                    <span class="n">phase</span><span class="o">=</span><span class="p">(</span><span class="n">design</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;phases&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="p">[</span><span class="s2">&quot;&quot;</span><span class="p">])[</span><span class="mi">0</span><span class="p">],</span>
+                    <span class="n">document_text</span><span class="o">=</span><span class="n">elig</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;eligibilityCriteria&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">),</span>
+                <span class="p">)</span>
             <span class="p">)</span>
-        <span class="p">)</span>
+            <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">records</span><span class="p">)</span> <span class="o">&gt;=</span> <span class="n">limit</span><span class="p">:</span>
+                <span class="k">break</span>
+
+        <span class="n">next_token</span> <span class="o">=</span> <span class="n">payload</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;nextPageToken&quot;</span><span class="p">)</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">next_token</span><span class="p">:</span>
+            <span class="k">break</span>
+
+    <span class="k">return</span> <span class="n">records</span>
+</code></pre></div></td></tr></table></div>
+            </details>
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h6 id="data_pipeline.download_protocols.extract_text_from_pdf" class="doc doc-heading">
+            <span class="doc doc-object-name doc-function-name">extract_text_from_pdf</span>
+
+
+</h6>
+<div class="doc-signature highlight"><pre><span></span><code><span class="nf">extract_text_from_pdf</span><span class="p">(</span><span class="n">path</span><span class="p">:</span> <span class="n"><span title="pathlib.Path">Path</span></span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n"><span title="str">str</span></span>
+</code></pre></div>
+
+    <div class="doc doc-contents ">
+
+        <p>Extract text from a PDF file using pypdf.</p>
+
+
+            <details class="mkdocstrings-source">
+              <summary>Source code in <code>components/data-pipeline/src/data_pipeline/download_protocols.py</code></summary>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">125</span>
+<span class="normal">126</span>
+<span class="normal">127</span>
+<span class="normal">128</span>
+<span class="normal">129</span>
+<span class="normal">130</span>
+<span class="normal">131</span>
+<span class="normal">132</span>
+<span class="normal">133</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">extract_text_from_pdf</span><span class="p">(</span><span class="n">path</span><span class="p">:</span> <span class="n">Path</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Extract text from a PDF file using pypdf.&quot;&quot;&quot;</span>
+    <span class="n">reader</span> <span class="o">=</span> <span class="n">PdfReader</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="n">path</span><span class="p">))</span>
+    <span class="n">chunks</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="k">for</span> <span class="n">page</span> <span class="ow">in</span> <span class="n">reader</span><span class="o">.</span><span class="n">pages</span><span class="p">:</span>
+        <span class="n">page_text</span> <span class="o">=</span> <span class="n">page</span><span class="o">.</span><span class="n">extract_text</span><span class="p">()</span> <span class="ow">or</span> <span class="s2">&quot;&quot;</span>
+        <span class="k">if</span> <span class="n">page_text</span><span class="p">:</span>
+            <span class="n">chunks</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">page_text</span><span class="p">)</span>
+    <span class="k">return</span> <span class="s2">&quot;</span><span class="se">\n</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">chunks</span><span class="p">)</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span>
+</code></pre></div></td></tr></table></div>
+            </details>
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h6 id="data_pipeline.download_protocols.ingest_local_protocols" class="doc doc-heading">
+            <span class="doc doc-object-name doc-function-name">ingest_local_protocols</span>
+
+
+</h6>
+<div class="doc-signature highlight"><pre><span></span><code><span class="nf">ingest_local_protocols</span><span class="p">(</span><span class="n">manifest_path</span><span class="p">:</span> <span class="n"><span title="pathlib.Path">Path</span></span> <span class="o">=</span> <span class="n"><span title="data_pipeline.download_protocols.DEFAULT_MANIFEST_PATH">DEFAULT_MANIFEST_PATH</span></span><span class="p">,</span> <span class="n">limit</span><span class="p">:</span> <span class="n"><span title="int">int</span></span> <span class="o">=</span> <span class="mi">50</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n"><span title="typing.List">List</span></span><span class="p">[</span><span class="n"><a class="autorefs autorefs-internal" title="ProtocolRecord
+
+
+  
+      dataclass
+   (data_pipeline.download_protocols.ProtocolRecord)" href="#data_pipeline.download_protocols.ProtocolRecord">ProtocolRecord</a></span><span class="p">]</span>
+</code></pre></div>
+
+    <div class="doc doc-contents ">
+
+        <p>Load protocol PDFs referenced in a manifest and extract document text.</p>
+
+
+            <details class="mkdocstrings-source">
+              <summary>Source code in <code>components/data-pipeline/src/data_pipeline/download_protocols.py</code></summary>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">202</span>
+<span class="normal">203</span>
+<span class="normal">204</span>
+<span class="normal">205</span>
+<span class="normal">206</span>
+<span class="normal">207</span>
+<span class="normal">208</span>
+<span class="normal">209</span>
+<span class="normal">210</span>
+<span class="normal">211</span>
+<span class="normal">212</span>
+<span class="normal">213</span>
+<span class="normal">214</span>
+<span class="normal">215</span>
+<span class="normal">216</span>
+<span class="normal">217</span>
+<span class="normal">218</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">ingest_local_protocols</span><span class="p">(</span>
+    <span class="n">manifest_path</span><span class="p">:</span> <span class="n">Path</span> <span class="o">=</span> <span class="n">DEFAULT_MANIFEST_PATH</span><span class="p">,</span> <span class="n">limit</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">50</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="n">List</span><span class="p">[</span><span class="n">ProtocolRecord</span><span class="p">]:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Load protocol PDFs referenced in a manifest and extract document text.&quot;&quot;&quot;</span>
+    <span class="k">if</span> <span class="n">limit</span> <span class="o">&lt;=</span> <span class="mi">0</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;limit must be positive&quot;</span><span class="p">)</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">manifest_path</span><span class="o">.</span><span class="n">exists</span><span class="p">():</span>
+        <span class="k">raise</span> <span class="ne">FileNotFoundError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Manifest not found: </span><span class="si">{</span><span class="n">manifest_path</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+
+    <span class="n">records</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="n">ProtocolRecord</span><span class="p">]</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="k">for</span> <span class="n">entry</span> <span class="ow">in</span> <span class="n">_iter_manifest_entries</span><span class="p">(</span><span class="n">manifest_path</span><span class="p">):</span>
+        <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">records</span><span class="p">)</span> <span class="o">&gt;=</span> <span class="n">limit</span><span class="p">:</span>
+            <span class="k">break</span>
+        <span class="n">record</span> <span class="o">=</span> <span class="n">_build_record_from_entry</span><span class="p">(</span><span class="n">entry</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">record</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">records</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">record</span><span class="p">)</span>
     <span class="k">return</span> <span class="n">records</span>
 </code></pre></div></td></tr></table></div>
             </details>
@@ -3069,17 +3268,17 @@ ClinicalTrials.gov APIs and persist records to the database.</p>
 
 
 </h6>
-<div class="doc-signature highlight"><pre><span></span><code><span class="nf">emit_records</span><span class="p">(</span><span class="n">records</span><span class="p">:</span> <span class="n"><span title="typing.Iterable">Iterable</span></span><span class="p">[</span><span class="n"><a class="autorefs autorefs-internal" title="ProtocolRecord
+<div class="doc-signature highlight"><pre><span></span><code><span class="nf">emit_records</span><span class="p">(</span><span class="n">records</span><span class="p">:</span> <span class="n"><span title="typing.List">List</span></span><span class="p">[</span><span class="n"><a class="autorefs autorefs-internal" title="ProtocolRecord
 
 
   
       dataclass
-   (data_pipeline.download_protocols.ProtocolRecord)" href="#data_pipeline.download_protocols.ProtocolRecord">ProtocolRecord</a></span><span class="p">])</span> <span class="o">-&gt;</span> <span class="kc">None</span>
+   (data_pipeline.download_protocols.ProtocolRecord)" href="#data_pipeline.download_protocols.ProtocolRecord">ProtocolRecord</a></span><span class="p">],</span> <span class="n">output_path</span><span class="p">:</span> <span class="n"><span title="pathlib.Path">Path</span></span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span>
 </code></pre></div>
 
     <div class="doc doc-contents ">
 
-        <p>Persist or stream protocol records for downstream services.</p>
+        <p>Write protocol records to JSONL file.</p>
 
 
 <p><span class="doc-section-title">Parameters:</span></p>
@@ -3098,7 +3297,7 @@ ClinicalTrials.gov APIs and persist records to the database.</p>
                 <code>records</code>
             </td>
             <td>
-                  <code><span title="typing.Iterable">Iterable</span>[<a class="autorefs autorefs-internal" title="ProtocolRecord
+                  <code><span title="typing.List">List</span>[<a class="autorefs autorefs-internal" title="ProtocolRecord
 
 
   
@@ -3107,11 +3306,27 @@ ClinicalTrials.gov APIs and persist records to the database.</p>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>Iterable of normalized protocol records.</p>
+                <p>Protocol records to emit.</p>
               </div>
             </td>
             <td>
                 <em>required</em>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>output_path</code>
+            </td>
+            <td>
+                  <code><span title="pathlib.Path">Path</span> | None</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Output file path. If None, prints to stdout.</p>
+              </div>
+            </td>
+            <td>
+                  <code>None</code>
             </td>
           </tr>
       </tbody>
@@ -3141,55 +3356,55 @@ ClinicalTrials.gov APIs and persist records to the database.</p>
     </table>
 
 
-<p><span class="doc-section-title">Examples:</span></p>
-    <div class="highlight"><pre><span></span><code><span class="gp">&gt;&gt;&gt; </span><span class="n">emit_records</span><span class="p">([])</span>
-<span class="go">None</span>
-</code></pre></div>
-
-
-<details class="notes" open>
-  <summary>Notes</summary>
-  <p>This stub represents the integration point for database writes or
-JSONL exports used by the extraction pipeline.</p>
-</details>
-
             <details class="mkdocstrings-source">
               <summary>Source code in <code>components/data-pipeline/src/data_pipeline/download_protocols.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"> 83</span>
-<span class="normal"> 84</span>
-<span class="normal"> 85</span>
-<span class="normal"> 86</span>
-<span class="normal"> 87</span>
-<span class="normal"> 88</span>
-<span class="normal"> 89</span>
-<span class="normal"> 90</span>
-<span class="normal"> 91</span>
-<span class="normal"> 92</span>
-<span class="normal"> 93</span>
-<span class="normal"> 94</span>
-<span class="normal"> 95</span>
-<span class="normal"> 96</span>
-<span class="normal"> 97</span>
-<span class="normal"> 98</span>
-<span class="normal"> 99</span>
-<span class="normal">100</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">emit_records</span><span class="p">(</span><span class="n">records</span><span class="p">:</span> <span class="n">Iterable</span><span class="p">[</span><span class="n">ProtocolRecord</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Persist or stream protocol records for downstream services.</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">221</span>
+<span class="normal">222</span>
+<span class="normal">223</span>
+<span class="normal">224</span>
+<span class="normal">225</span>
+<span class="normal">226</span>
+<span class="normal">227</span>
+<span class="normal">228</span>
+<span class="normal">229</span>
+<span class="normal">230</span>
+<span class="normal">231</span>
+<span class="normal">232</span>
+<span class="normal">233</span>
+<span class="normal">234</span>
+<span class="normal">235</span>
+<span class="normal">236</span>
+<span class="normal">237</span>
+<span class="normal">238</span>
+<span class="normal">239</span>
+<span class="normal">240</span>
+<span class="normal">241</span>
+<span class="normal">242</span>
+<span class="normal">243</span>
+<span class="normal">244</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">emit_records</span><span class="p">(</span>
+    <span class="n">records</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">ProtocolRecord</span><span class="p">],</span> <span class="n">output_path</span><span class="p">:</span> <span class="n">Path</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Write protocol records to JSONL file.</span>
 
 <span class="sd">    Args:</span>
-<span class="sd">        records: Iterable of normalized protocol records.</span>
+<span class="sd">        records: Protocol records to emit.</span>
+<span class="sd">        output_path: Output file path. If None, prints to stdout.</span>
 
 <span class="sd">    Returns:</span>
 <span class="sd">        None.</span>
-
-<span class="sd">    Examples:</span>
-<span class="sd">        &gt;&gt;&gt; emit_records([])</span>
-<span class="sd">        None</span>
-
-<span class="sd">    Notes:</span>
-<span class="sd">        This stub represents the integration point for database writes or</span>
-<span class="sd">        JSONL exports used by the extraction pipeline.</span>
 <span class="sd">    &quot;&quot;&quot;</span>
-    <span class="k">return</span> <span class="kc">None</span>
+    <span class="n">lines</span> <span class="o">=</span> <span class="p">[</span><span class="n">json</span><span class="o">.</span><span class="n">dumps</span><span class="p">(</span><span class="n">asdict</span><span class="p">(</span><span class="n">record</span><span class="p">))</span> <span class="k">for</span> <span class="n">record</span> <span class="ow">in</span> <span class="n">records</span><span class="p">]</span>
+
+    <span class="k">if</span> <span class="n">output_path</span><span class="p">:</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">output_path</span><span class="o">.</span><span class="n">parent</span><span class="o">.</span><span class="n">mkdir</span><span class="p">(</span><span class="n">parents</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">exist_ok</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+            <span class="n">output_path</span><span class="o">.</span><span class="n">write_text</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">lines</span><span class="p">)</span> <span class="o">+</span> <span class="s2">&quot;</span><span class="se">\n</span><span class="s2">&quot;</span><span class="p">)</span>
+        <span class="k">except</span> <span class="ne">OSError</span> <span class="k">as</span> <span class="n">exc</span><span class="p">:</span>
+            <span class="n">message</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;Failed to write output to </span><span class="si">{</span><span class="n">output_path</span><span class="si">}</span><span class="s2">: </span><span class="si">{</span><span class="n">exc</span><span class="si">}</span><span class="s2">&quot;</span>
+            <span class="k">raise</span> <span class="ne">RuntimeError</span><span class="p">(</span><span class="n">message</span><span class="p">)</span> <span class="kn">from</span><span class="w"> </span><span class="nn">exc</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="k">for</span> <span class="n">line</span> <span class="ow">in</span> <span class="n">lines</span><span class="p">:</span>
+            <span class="nb">print</span><span class="p">(</span><span class="n">line</span><span class="p">)</span>
 </code></pre></div></td></tr></table></div>
             </details>
     </div>
@@ -3209,36 +3424,68 @@ JSONL exports used by the extraction pipeline.</p>
 
     <div class="doc doc-contents ">
 
-        <p>CLI entrypoint for protocol ingestion.</p>
-
-
-<p><span class="doc-section-title">Examples:</span></p>
-    <div class="highlight"><pre><span></span><code><span class="gp">&gt;&gt;&gt; </span><span class="n">main</span><span class="p">()</span>
-<span class="go">None</span>
-</code></pre></div>
+        <p>CLI entrypoint.</p>
 
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>components/data-pipeline/src/data_pipeline/download_protocols.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">102</span>
-<span class="normal">103</span>
-<span class="normal">104</span>
-<span class="normal">105</span>
-<span class="normal">106</span>
-<span class="normal">107</span>
-<span class="normal">108</span>
-<span class="normal">109</span>
-<span class="normal">110</span>
-<span class="normal">111</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">main</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;CLI entrypoint for protocol ingestion.</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">247</span>
+<span class="normal">248</span>
+<span class="normal">249</span>
+<span class="normal">250</span>
+<span class="normal">251</span>
+<span class="normal">252</span>
+<span class="normal">253</span>
+<span class="normal">254</span>
+<span class="normal">255</span>
+<span class="normal">256</span>
+<span class="normal">257</span>
+<span class="normal">258</span>
+<span class="normal">259</span>
+<span class="normal">260</span>
+<span class="normal">261</span>
+<span class="normal">262</span>
+<span class="normal">263</span>
+<span class="normal">264</span>
+<span class="normal">265</span>
+<span class="normal">266</span>
+<span class="normal">267</span>
+<span class="normal">268</span>
+<span class="normal">269</span>
+<span class="normal">270</span>
+<span class="normal">271</span>
+<span class="normal">272</span>
+<span class="normal">273</span>
+<span class="normal">274</span>
+<span class="normal">275</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">main</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;CLI entrypoint.&quot;&quot;&quot;</span>
+    <span class="kn">import</span><span class="w"> </span><span class="nn">argparse</span>
 
-<span class="sd">    Examples:</span>
-<span class="sd">        &gt;&gt;&gt; main()</span>
-<span class="sd">        None</span>
-<span class="sd">    &quot;&quot;&quot;</span>
-    <span class="n">records</span> <span class="o">=</span> <span class="n">download_protocols</span><span class="p">(</span><span class="n">limit</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
-    <span class="n">emit_records</span><span class="p">(</span><span class="n">records</span><span class="p">)</span>
-    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Download protocols placeholder&quot;</span><span class="p">)</span>
+    <span class="n">parser</span> <span class="o">=</span> <span class="n">argparse</span><span class="o">.</span><span class="n">ArgumentParser</span><span class="p">(</span>
+        <span class="n">description</span><span class="o">=</span><span class="s2">&quot;Download protocols from ClinicalTrials.gov or local PDFs&quot;</span>
+    <span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s2">&quot;--query&quot;</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="s2">&quot;oncology&quot;</span><span class="p">,</span> <span class="n">help</span><span class="o">=</span><span class="s2">&quot;Search condition&quot;</span><span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s2">&quot;--limit&quot;</span><span class="p">,</span> <span class="nb">type</span><span class="o">=</span><span class="nb">int</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="mi">50</span><span class="p">,</span> <span class="n">help</span><span class="o">=</span><span class="s2">&quot;Max records&quot;</span><span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span>
+        <span class="s2">&quot;--local&quot;</span><span class="p">,</span>
+        <span class="n">action</span><span class="o">=</span><span class="s2">&quot;store_true&quot;</span><span class="p">,</span>
+        <span class="n">help</span><span class="o">=</span><span class="s2">&quot;Ingest protocols from local PDFs using the manifest.jsonl&quot;</span><span class="p">,</span>
+    <span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span>
+        <span class="s2">&quot;--manifest-path&quot;</span><span class="p">,</span>
+        <span class="nb">type</span><span class="o">=</span><span class="n">Path</span><span class="p">,</span>
+        <span class="n">default</span><span class="o">=</span><span class="n">DEFAULT_MANIFEST_PATH</span><span class="p">,</span>
+        <span class="n">help</span><span class="o">=</span><span class="s2">&quot;Path to manifest.jsonl for local ingestion&quot;</span><span class="p">,</span>
+    <span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s2">&quot;--output&quot;</span><span class="p">,</span> <span class="nb">type</span><span class="o">=</span><span class="n">Path</span><span class="p">,</span> <span class="n">help</span><span class="o">=</span><span class="s2">&quot;Output JSONL path&quot;</span><span class="p">)</span>
+    <span class="n">args</span> <span class="o">=</span> <span class="n">parser</span><span class="o">.</span><span class="n">parse_args</span><span class="p">()</span>
+
+    <span class="k">if</span> <span class="n">args</span><span class="o">.</span><span class="n">local</span><span class="p">:</span>
+        <span class="n">records</span> <span class="o">=</span> <span class="n">ingest_local_protocols</span><span class="p">(</span><span class="n">args</span><span class="o">.</span><span class="n">manifest_path</span><span class="p">,</span> <span class="n">args</span><span class="o">.</span><span class="n">limit</span><span class="p">)</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="n">records</span> <span class="o">=</span> <span class="n">fetch_from_clinicaltrials</span><span class="p">(</span><span class="n">args</span><span class="o">.</span><span class="n">query</span><span class="p">,</span> <span class="n">args</span><span class="o">.</span><span class="n">limit</span><span class="p">)</span>
+    <span class="n">emit_records</span><span class="p">(</span><span class="n">records</span><span class="p">,</span> <span class="n">args</span><span class="o">.</span><span class="n">output</span><span class="p">)</span>
+    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Downloaded </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">records</span><span class="p">)</span><span class="si">}</span><span class="s2"> protocols&quot;</span><span class="p">)</span>
 </code></pre></div></td></tr></table></div>
             </details>
     </div>

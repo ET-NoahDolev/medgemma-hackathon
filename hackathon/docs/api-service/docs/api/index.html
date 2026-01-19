@@ -726,6 +726,15 @@
 </a>
 </li>
 <li class="md-nav__item">
+<a class="md-nav__link" href="#api_service.storage.HitlEdit">
+<span class="md-ellipsis">
+      
+        HitlEdit
+      
+    </span>
+</a>
+</li>
+<li class="md-nav__item">
 <a class="md-nav__link" href="#api_service.storage.IdCounter">
 <span class="md-ellipsis">
       
@@ -1723,6 +1732,15 @@
 </a>
 </li>
 <li class="md-nav__item">
+<a class="md-nav__link" href="#api_service.storage.HitlEdit">
+<span class="md-ellipsis">
+      
+        HitlEdit
+      
+    </span>
+</a>
+</li>
+<li class="md-nav__item">
 <a class="md-nav__link" href="#api_service.storage.IdCounter">
 <span class="md-ellipsis">
       
@@ -2231,18 +2249,18 @@
 <small class="doc doc-label doc-label-async"><code>async</code></small>
 </span>
 </h6>
-<div class="doc-signature highlight"><pre><span></span><code><span class="nf">lifespan</span><span class="p">(</span><span class="n">app_instance</span><span class="p">:</span> <span class="n"><span title="fastapi.FastAPI">FastAPI</span></span><span class="p">)</span>
+<div class="doc-signature highlight"><pre><span></span><code><span class="nf">lifespan</span><span class="p">(</span><span class="n">app_instance</span><span class="p">:</span> <span class="n"><span title="fastapi.FastAPI">FastAPI</span></span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n"><span title="collections.abc.AsyncIterator">AsyncIterator</span></span><span class="p">[</span><span class="kc">None</span><span class="p">]</span>
 </code></pre></div>
 <div class="doc doc-contents">
 <p>Initialize and teardown app state for the lifespan scope.</p>
 <details class="mkdocstrings-source">
 <summary>Source code in <code>components/api-service/src/api_service/main.py</code></summary>
-<div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">20</span>
-<span class="normal">21</span>
+<div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">21</span>
 <span class="normal">22</span>
 <span class="normal">23</span>
-<span class="normal">24</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="nd">@asynccontextmanager</span>
-<span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">lifespan</span><span class="p">(</span><span class="n">app_instance</span><span class="p">:</span> <span class="n">FastAPI</span><span class="p">):</span>
+<span class="normal">24</span>
+<span class="normal">25</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="nd">@asynccontextmanager</span>
+<span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">lifespan</span><span class="p">(</span><span class="n">app_instance</span><span class="p">:</span> <span class="n">FastAPI</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">AsyncIterator</span><span class="p">[</span><span class="kc">None</span><span class="p">]:</span>
 <span class="w">    </span><span class="sd">"""Initialize and teardown app state for the lifespan scope."""</span>
     <span class="n">init_db</span><span class="p">()</span>
     <span class="k">yield</span>
@@ -2260,8 +2278,7 @@
 <p>Create a protocol record and initial document entry.</p>
 <details class="mkdocstrings-source">
 <summary>Source code in <code>components/api-service/src/api_service/main.py</code></summary>
-<div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">121</span>
-<span class="normal">122</span>
+<div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">122</span>
 <span class="normal">123</span>
 <span class="normal">124</span>
 <span class="normal">125</span>
@@ -2269,7 +2286,8 @@
 <span class="normal">127</span>
 <span class="normal">128</span>
 <span class="normal">129</span>
-<span class="normal">130</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="nd">@app</span><span class="o">.</span><span class="n">post</span><span class="p">(</span><span class="s2">"/v1/protocols"</span><span class="p">)</span>
+<span class="normal">130</span>
+<span class="normal">131</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="nd">@app</span><span class="o">.</span><span class="n">post</span><span class="p">(</span><span class="s2">"/v1/protocols"</span><span class="p">)</span>
 <span class="k">def</span><span class="w"> </span><span class="nf">create_protocol</span><span class="p">(</span>
     <span class="n">payload</span><span class="p">:</span> <span class="n">ProtocolCreateRequest</span><span class="p">,</span>
     <span class="n">storage</span><span class="p">:</span> <span class="n">Storage</span> <span class="o">=</span> <span class="n">Depends</span><span class="p">(</span><span class="n">get_storage</span><span class="p">),</span>
@@ -2293,8 +2311,7 @@
 <p>Trigger extraction of atomic criteria for a protocol.</p>
 <details class="mkdocstrings-source">
 <summary>Source code in <code>components/api-service/src/api_service/main.py</code></summary>
-<div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">133</span>
-<span class="normal">134</span>
+<div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">134</span>
 <span class="normal">135</span>
 <span class="normal">136</span>
 <span class="normal">137</span>
@@ -2310,7 +2327,8 @@
 <span class="normal">147</span>
 <span class="normal">148</span>
 <span class="normal">149</span>
-<span class="normal">150</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="nd">@app</span><span class="o">.</span><span class="n">post</span><span class="p">(</span><span class="s2">"/v1/protocols/</span><span class="si">{protocol_id}</span><span class="s2">/extract"</span><span class="p">)</span>
+<span class="normal">150</span>
+<span class="normal">151</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="nd">@app</span><span class="o">.</span><span class="n">post</span><span class="p">(</span><span class="s2">"/v1/protocols/</span><span class="si">{protocol_id}</span><span class="s2">/extract"</span><span class="p">)</span>
 <span class="k">def</span><span class="w"> </span><span class="nf">extract_criteria</span><span class="p">(</span>
     <span class="n">protocol_id</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
     <span class="n">storage</span><span class="p">:</span> <span class="n">Storage</span> <span class="o">=</span> <span class="n">Depends</span><span class="p">(</span><span class="n">get_storage</span><span class="p">),</span>
@@ -2342,8 +2360,7 @@
 <p>List criteria generated for a protocol.</p>
 <details class="mkdocstrings-source">
 <summary>Source code in <code>components/api-service/src/api_service/main.py</code></summary>
-<div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">153</span>
-<span class="normal">154</span>
+<div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">154</span>
 <span class="normal">155</span>
 <span class="normal">156</span>
 <span class="normal">157</span>
@@ -2356,7 +2373,8 @@
 <span class="normal">164</span>
 <span class="normal">165</span>
 <span class="normal">166</span>
-<span class="normal">167</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="nd">@app</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"/v1/protocols/</span><span class="si">{protocol_id}</span><span class="s2">/criteria"</span><span class="p">)</span>
+<span class="normal">167</span>
+<span class="normal">168</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="nd">@app</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"/v1/protocols/</span><span class="si">{protocol_id}</span><span class="s2">/criteria"</span><span class="p">)</span>
 <span class="k">def</span><span class="w"> </span><span class="nf">list_criteria</span><span class="p">(</span>
     <span class="n">protocol_id</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
     <span class="n">storage</span><span class="p">:</span> <span class="n">Storage</span> <span class="o">=</span> <span class="n">Depends</span><span class="p">(</span><span class="n">get_storage</span><span class="p">),</span>
@@ -2385,8 +2403,7 @@
 <p>Update a single criterion or its metadata.</p>
 <details class="mkdocstrings-source">
 <summary>Source code in <code>components/api-service/src/api_service/main.py</code></summary>
-<div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">170</span>
-<span class="normal">171</span>
+<div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">171</span>
 <span class="normal">172</span>
 <span class="normal">173</span>
 <span class="normal">174</span>
@@ -2404,7 +2421,8 @@
 <span class="normal">186</span>
 <span class="normal">187</span>
 <span class="normal">188</span>
-<span class="normal">189</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="nd">@app</span><span class="o">.</span><span class="n">patch</span><span class="p">(</span><span class="s2">"/v1/criteria/</span><span class="si">{criterion_id}</span><span class="s2">"</span><span class="p">)</span>
+<span class="normal">189</span>
+<span class="normal">190</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="nd">@app</span><span class="o">.</span><span class="n">patch</span><span class="p">(</span><span class="s2">"/v1/criteria/</span><span class="si">{criterion_id}</span><span class="s2">"</span><span class="p">)</span>
 <span class="k">def</span><span class="w"> </span><span class="nf">update_criterion</span><span class="p">(</span>
     <span class="n">criterion_id</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
     <span class="n">payload</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">CriterionUpdateRequest</span><span class="p">]</span> <span class="o">=</span> <span class="n">Body</span><span class="p">(</span><span class="n">default</span><span class="o">=</span><span class="kc">None</span><span class="p">),</span>
@@ -2438,8 +2456,7 @@
 <p>Retrieve SNOMED candidates and field mappings for a criterion.</p>
 <details class="mkdocstrings-source">
 <summary>Source code in <code>components/api-service/src/api_service/main.py</code></summary>
-<div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">192</span>
-<span class="normal">193</span>
+<div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">193</span>
 <span class="normal">194</span>
 <span class="normal">195</span>
 <span class="normal">196</span>
@@ -2481,7 +2498,8 @@
 <span class="normal">232</span>
 <span class="normal">233</span>
 <span class="normal">234</span>
-<span class="normal">235</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="nd">@app</span><span class="o">.</span><span class="n">post</span><span class="p">(</span><span class="s2">"/v1/criteria/</span><span class="si">{criterion_id}</span><span class="s2">/ground"</span><span class="p">)</span>
+<span class="normal">235</span>
+<span class="normal">236</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="nd">@app</span><span class="o">.</span><span class="n">post</span><span class="p">(</span><span class="s2">"/v1/criteria/</span><span class="si">{criterion_id}</span><span class="s2">/ground"</span><span class="p">)</span>
 <span class="k">def</span><span class="w"> </span><span class="nf">ground_criterion</span><span class="p">(</span>
     <span class="n">criterion_id</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
     <span class="n">storage</span><span class="p">:</span> <span class="n">Storage</span> <span class="o">=</span> <span class="n">Depends</span><span class="p">(</span><span class="n">get_storage</span><span class="p">),</span>
@@ -2539,15 +2557,15 @@
 <p>Record HITL feedback for criteria, SNOMED candidates, and field mappings.</p>
 <details class="mkdocstrings-source">
 <summary>Source code in <code>components/api-service/src/api_service/main.py</code></summary>
-<div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">248</span>
-<span class="normal">249</span>
+<div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">249</span>
 <span class="normal">250</span>
 <span class="normal">251</span>
 <span class="normal">252</span>
 <span class="normal">253</span>
 <span class="normal">254</span>
 <span class="normal">255</span>
-<span class="normal">256</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="nd">@app</span><span class="o">.</span><span class="n">post</span><span class="p">(</span><span class="s2">"/v1/hitl/feedback"</span><span class="p">)</span>
+<span class="normal">256</span>
+<span class="normal">257</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="nd">@app</span><span class="o">.</span><span class="n">post</span><span class="p">(</span><span class="s2">"/v1/hitl/feedback"</span><span class="p">)</span>
 <span class="k">def</span><span class="w"> </span><span class="nf">hitl_feedback</span><span class="p">(</span>
     <span class="n">payload</span><span class="p">:</span> <span class="n">HitlFeedbackRequest</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
     <span class="n">storage</span><span class="p">:</span> <span class="n">Storage</span> <span class="o">=</span> <span class="n">Depends</span><span class="p">(</span><span class="n">get_storage</span><span class="p">),</span>
@@ -2674,6 +2692,40 @@
 </div>
 </div>
 <div class="doc doc-object doc-class">
+<h6 class="doc doc-heading" id="api_service.storage.HitlEdit">
+<span class="doc doc-object-name doc-class-name">HitlEdit</span>
+</h6>
+<div class="doc doc-contents">
+<p class="doc doc-class-bases">
+              Bases: <code><span title="sqlmodel.SQLModel">SQLModel</span></code></p>
+<div style="display: none">
+<a class="autorefs autorefs-internal" href="#api_service.storage.HitlEdit" id="mermaid-link-api_service.storage.HitlEdit" title="HitlEdit (api_service.storage.HitlEdit)"></a>
+</div>
+<pre class="mermaid"><code id="mermaid-diagram-api_service.storage.HitlEdit">
+              flowchart TD
+              api_service.storage.HitlEdit[HitlEdit]
+
+              
+
+              click api_service.storage.HitlEdit href "" "api_service.storage.HitlEdit"
+            </code></pre>
+<script>
+              var diagram = document.getElementById('mermaid-diagram-api_service.storage.HitlEdit');
+              diagram.innerHTML = diagram.innerHTML.replace(/click ([\w.]+) href "" "\1"/g, function(match, nodeID, offset) {
+                try {
+                  const link = document.getElementById("mermaid-link-" + nodeID).href;
+                  return `click ${nodeID} href "${link}" "${nodeID}"`
+                } catch (e) {
+                  return '';
+                }
+              });
+            </script>
+<p>HITL edit record for tracking reviewer changes.</p>
+<div class="doc doc-children">
+</div>
+</div>
+</div>
+<div class="doc doc-object doc-class">
 <h6 class="doc doc-heading" id="api_service.storage.IdCounter">
 <span class="doc doc-object-name doc-class-name">IdCounter</span>
 </h6>
@@ -2718,9 +2770,9 @@
 <p>Initialize the storage with a database engine.</p>
 <details class="mkdocstrings-source">
 <summary>Source code in <code>components/api-service/src/api_service/storage.py</code></summary>
-<div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">103</span>
-<span class="normal">104</span>
-<span class="normal">105</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">engine</span><span class="p">:</span> <span class="n">Engine</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">125</span>
+<span class="normal">126</span>
+<span class="normal">127</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">engine</span><span class="p">:</span> <span class="n">Engine</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
 <span class="w">    </span><span class="sd">"""Initialize the storage with a database engine."""</span>
     <span class="bp">self</span><span class="o">.</span><span class="n">_engine</span> <span class="o">=</span> <span class="n">engine</span>
 </code></pre></div></td></tr></table></div>
@@ -2731,100 +2783,18 @@
 <h8 class="doc doc-heading" id="api_service.storage.Storage.create_protocol">
 <span class="doc doc-object-name doc-function-name">create_protocol</span>
 </h8>
-<div class="doc-signature highlight"><pre><span></span><code><span class="nf">create_protocol</span><span class="p">(</span><span class="o">*</span><span class="p">,</span> <span class="n">title</span><span class="p">:</span> <span class="n"><span title="str">str</span></span><span class="p">,</span> <span class="n">document_text</span><span class="p">:</span> <span class="n"><span title="str">str</span></span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n"><a class="autorefs autorefs-internal" href="#api_service.storage.Protocol" title="Protocol (api_service.storage.Protocol)">Protocol</a></span>
+<div class="doc-signature highlight"><pre><span></span><code><span class="nf">create_protocol</span><span class="p">(</span><span class="o">*</span><span class="p">,</span> <span class="n">title</span><span class="p">:</span> <span class="n"><span title="str">str</span></span><span class="p">,</span> <span class="n">document_text</span><span class="p">:</span> <span class="n"><span title="str">str</span></span><span class="p">,</span> <span class="n">nct_id</span><span class="p">:</span> <span class="n"><span title="str">str</span></span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">condition</span><span class="p">:</span> <span class="n"><span title="str">str</span></span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">phase</span><span class="p">:</span> <span class="n"><span title="str">str</span></span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">source</span><span class="p">:</span> <span class="n"><span title="str">str</span></span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n"><a class="autorefs autorefs-internal" href="#api_service.storage.Protocol" title="Protocol (api_service.storage.Protocol)">Protocol</a></span>
 </code></pre></div>
 <div class="doc doc-contents">
 <p>Persist a protocol record and return it.</p>
 <details class="mkdocstrings-source">
 <summary>Source code in <code>components/api-service/src/api_service/storage.py</code></summary>
-<div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">107</span>
-<span class="normal">108</span>
-<span class="normal">109</span>
-<span class="normal">110</span>
-<span class="normal">111</span>
-<span class="normal">112</span>
-<span class="normal">113</span>
-<span class="normal">114</span>
-<span class="normal">115</span>
-<span class="normal">116</span>
-<span class="normal">117</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">create_protocol</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">title</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">document_text</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Protocol</span><span class="p">:</span>
-<span class="w">    </span><span class="sd">"""Persist a protocol record and return it."""</span>
-    <span class="k">with</span> <span class="n">Session</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_engine</span><span class="p">)</span> <span class="k">as</span> <span class="n">session</span><span class="p">:</span>
-        <span class="n">protocol_id</span> <span class="o">=</span> <span class="n">_next_id</span><span class="p">(</span><span class="n">session</span><span class="p">,</span> <span class="s2">"protocol"</span><span class="p">,</span> <span class="s2">"proto"</span><span class="p">)</span>
-        <span class="n">protocol</span> <span class="o">=</span> <span class="n">Protocol</span><span class="p">(</span>
-            <span class="nb">id</span><span class="o">=</span><span class="n">protocol_id</span><span class="p">,</span> <span class="n">title</span><span class="o">=</span><span class="n">title</span><span class="p">,</span> <span class="n">document_text</span><span class="o">=</span><span class="n">document_text</span>
-        <span class="p">)</span>
-        <span class="n">session</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="n">protocol</span><span class="p">)</span>
-        <span class="n">session</span><span class="o">.</span><span class="n">commit</span><span class="p">()</span>
-        <span class="n">session</span><span class="o">.</span><span class="n">refresh</span><span class="p">(</span><span class="n">protocol</span><span class="p">)</span>
-        <span class="k">return</span> <span class="n">protocol</span>
-</code></pre></div></td></tr></table></div>
-</details>
-</div>
-</div>
-<div class="doc doc-object doc-function">
-<h8 class="doc doc-heading" id="api_service.storage.Storage.get_protocol">
-<span class="doc doc-object-name doc-function-name">get_protocol</span>
-</h8>
-<div class="doc-signature highlight"><pre><span></span><code><span class="nf">get_protocol</span><span class="p">(</span><span class="n">protocol_id</span><span class="p">:</span> <span class="n"><span title="str">str</span></span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n"><a class="autorefs autorefs-internal" href="#api_service.storage.Protocol" title="Protocol (api_service.storage.Protocol)">Protocol</a></span> <span class="o">|</span> <span class="kc">None</span>
-</code></pre></div>
-<div class="doc doc-contents">
-<p>Fetch a protocol by ID.</p>
-<details class="mkdocstrings-source">
-<summary>Source code in <code>components/api-service/src/api_service/storage.py</code></summary>
-<div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">119</span>
-<span class="normal">120</span>
-<span class="normal">121</span>
-<span class="normal">122</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">get_protocol</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">protocol_id</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Protocol</span> <span class="o">|</span> <span class="kc">None</span><span class="p">:</span>
-<span class="w">    </span><span class="sd">"""Fetch a protocol by ID."""</span>
-    <span class="k">with</span> <span class="n">Session</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_engine</span><span class="p">)</span> <span class="k">as</span> <span class="n">session</span><span class="p">:</span>
-        <span class="k">return</span> <span class="n">session</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">Protocol</span><span class="p">,</span> <span class="n">protocol_id</span><span class="p">)</span>
-</code></pre></div></td></tr></table></div>
-</details>
-</div>
-</div>
-<div class="doc doc-object doc-function">
-<h8 class="doc doc-heading" id="api_service.storage.Storage.list_criteria">
-<span class="doc doc-object-name doc-function-name">list_criteria</span>
-</h8>
-<div class="doc-signature highlight"><pre><span></span><code><span class="nf">list_criteria</span><span class="p">(</span><span class="n">protocol_id</span><span class="p">:</span> <span class="n"><span title="str">str</span></span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n"><span title="list">list</span></span><span class="p">[</span><span class="n"><a class="autorefs autorefs-internal" href="#api_service.storage.Criterion" title="Criterion (api_service.storage.Criterion)">Criterion</a></span><span class="p">]</span>
-</code></pre></div>
-<div class="doc doc-contents">
-<p>List criteria for a protocol.</p>
-<details class="mkdocstrings-source">
-<summary>Source code in <code>components/api-service/src/api_service/storage.py</code></summary>
-<div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">124</span>
-<span class="normal">125</span>
-<span class="normal">126</span>
-<span class="normal">127</span>
-<span class="normal">128</span>
-<span class="normal">129</span>
+<div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">129</span>
 <span class="normal">130</span>
 <span class="normal">131</span>
-<span class="normal">132</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">list_criteria</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">protocol_id</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">list</span><span class="p">[</span><span class="n">Criterion</span><span class="p">]:</span>
-<span class="w">    </span><span class="sd">"""List criteria for a protocol."""</span>
-    <span class="k">with</span> <span class="n">Session</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_engine</span><span class="p">)</span> <span class="k">as</span> <span class="n">session</span><span class="p">:</span>
-        <span class="n">statement</span> <span class="o">=</span> <span class="p">(</span>
-            <span class="n">select</span><span class="p">(</span><span class="n">Criterion</span><span class="p">)</span>
-            <span class="o">.</span><span class="n">where</span><span class="p">(</span><span class="n">Criterion</span><span class="o">.</span><span class="n">protocol_id</span> <span class="o">==</span> <span class="n">protocol_id</span><span class="p">)</span>  <span class="c1"># type: ignore[arg-type]</span>
-            <span class="o">.</span><span class="n">order_by</span><span class="p">(</span><span class="n">Criterion</span><span class="o">.</span><span class="n">id</span><span class="p">)</span>
-        <span class="p">)</span>
-        <span class="k">return</span> <span class="nb">list</span><span class="p">(</span><span class="n">session</span><span class="o">.</span><span class="n">exec</span><span class="p">(</span><span class="n">statement</span><span class="p">))</span>
-</code></pre></div></td></tr></table></div>
-</details>
-</div>
-</div>
-<div class="doc doc-object doc-function">
-<h8 class="doc doc-heading" id="api_service.storage.Storage.replace_criteria">
-<span class="doc doc-object-name doc-function-name">replace_criteria</span>
-</h8>
-<div class="doc-signature highlight"><pre><span></span><code><span class="nf">replace_criteria</span><span class="p">(</span><span class="o">*</span><span class="p">,</span> <span class="n">protocol_id</span><span class="p">:</span> <span class="n"><span title="str">str</span></span><span class="p">,</span> <span class="n">extracted</span><span class="p">:</span> <span class="n"><span title="typing.Iterable">Iterable</span></span><span class="p">[</span><span class="n"><a class="autorefs autorefs-internal" href="#api_service.storage.ExtractedCriterion" title="ExtractedCriterion (api_service.storage.ExtractedCriterion)">ExtractedCriterion</a></span><span class="p">])</span> <span class="o">-&gt;</span> <span class="n"><span title="list">list</span></span><span class="p">[</span><span class="n"><a class="autorefs autorefs-internal" href="#api_service.storage.Criterion" title="Criterion (api_service.storage.Criterion)">Criterion</a></span><span class="p">]</span>
-</code></pre></div>
-<div class="doc doc-contents">
-<p>Replace criteria for a protocol with extracted entries.</p>
-<details class="mkdocstrings-source">
-<summary>Source code in <code>components/api-service/src/api_service/storage.py</code></summary>
-<div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">134</span>
+<span class="normal">132</span>
+<span class="normal">133</span>
+<span class="normal">134</span>
 <span class="normal">135</span>
 <span class="normal">136</span>
 <span class="normal">137</span>
@@ -2844,19 +2814,129 @@
 <span class="normal">151</span>
 <span class="normal">152</span>
 <span class="normal">153</span>
-<span class="normal">154</span>
-<span class="normal">155</span>
-<span class="normal">156</span>
+<span class="normal">154</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">create_protocol</span><span class="p">(</span>
+    <span class="bp">self</span><span class="p">,</span>
+    <span class="o">*</span><span class="p">,</span>
+    <span class="n">title</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+    <span class="n">document_text</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+    <span class="n">nct_id</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="n">condition</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="n">phase</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="n">source</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Protocol</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">"""Persist a protocol record and return it."""</span>
+    <span class="k">with</span> <span class="n">Session</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_engine</span><span class="p">)</span> <span class="k">as</span> <span class="n">session</span><span class="p">:</span>
+        <span class="n">protocol_id</span> <span class="o">=</span> <span class="n">_next_id</span><span class="p">(</span><span class="n">session</span><span class="p">,</span> <span class="s2">"protocol"</span><span class="p">,</span> <span class="s2">"proto"</span><span class="p">)</span>
+        <span class="n">protocol</span> <span class="o">=</span> <span class="n">Protocol</span><span class="p">(</span>
+            <span class="nb">id</span><span class="o">=</span><span class="n">protocol_id</span><span class="p">,</span>
+            <span class="n">title</span><span class="o">=</span><span class="n">title</span><span class="o">.</span><span class="n">strip</span><span class="p">(),</span>
+            <span class="n">document_text</span><span class="o">=</span><span class="n">document_text</span><span class="p">,</span>
+            <span class="n">nct_id</span><span class="o">=</span><span class="n">_norm_opt</span><span class="p">(</span><span class="n">nct_id</span><span class="p">),</span>
+            <span class="n">condition</span><span class="o">=</span><span class="n">_norm_opt</span><span class="p">(</span><span class="n">condition</span><span class="p">),</span>
+            <span class="n">phase</span><span class="o">=</span><span class="n">_norm_opt</span><span class="p">(</span><span class="n">phase</span><span class="p">),</span>
+            <span class="n">source</span><span class="o">=</span><span class="n">_norm_opt</span><span class="p">(</span><span class="n">source</span><span class="p">),</span>
+        <span class="p">)</span>
+        <span class="n">session</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="n">protocol</span><span class="p">)</span>
+        <span class="n">session</span><span class="o">.</span><span class="n">commit</span><span class="p">()</span>
+        <span class="n">session</span><span class="o">.</span><span class="n">refresh</span><span class="p">(</span><span class="n">protocol</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">protocol</span>
+</code></pre></div></td></tr></table></div>
+</details>
+</div>
+</div>
+<div class="doc doc-object doc-function">
+<h8 class="doc doc-heading" id="api_service.storage.Storage.get_protocol">
+<span class="doc doc-object-name doc-function-name">get_protocol</span>
+</h8>
+<div class="doc-signature highlight"><pre><span></span><code><span class="nf">get_protocol</span><span class="p">(</span><span class="n">protocol_id</span><span class="p">:</span> <span class="n"><span title="str">str</span></span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n"><a class="autorefs autorefs-internal" href="#api_service.storage.Protocol" title="Protocol (api_service.storage.Protocol)">Protocol</a></span> <span class="o">|</span> <span class="kc">None</span>
+</code></pre></div>
+<div class="doc doc-contents">
+<p>Fetch a protocol by ID.</p>
+<details class="mkdocstrings-source">
+<summary>Source code in <code>components/api-service/src/api_service/storage.py</code></summary>
+<div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">156</span>
 <span class="normal">157</span>
-<span class="normal">158</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">replace_criteria</span><span class="p">(</span>
+<span class="normal">158</span>
+<span class="normal">159</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">get_protocol</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">protocol_id</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Protocol</span> <span class="o">|</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">"""Fetch a protocol by ID."""</span>
+    <span class="k">with</span> <span class="n">Session</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_engine</span><span class="p">)</span> <span class="k">as</span> <span class="n">session</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">session</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">Protocol</span><span class="p">,</span> <span class="n">protocol_id</span><span class="p">)</span>
+</code></pre></div></td></tr></table></div>
+</details>
+</div>
+</div>
+<div class="doc doc-object doc-function">
+<h8 class="doc doc-heading" id="api_service.storage.Storage.list_criteria">
+<span class="doc doc-object-name doc-function-name">list_criteria</span>
+</h8>
+<div class="doc-signature highlight"><pre><span></span><code><span class="nf">list_criteria</span><span class="p">(</span><span class="n">protocol_id</span><span class="p">:</span> <span class="n"><span title="str">str</span></span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n"><span title="list">list</span></span><span class="p">[</span><span class="n"><a class="autorefs autorefs-internal" href="#api_service.storage.Criterion" title="Criterion (api_service.storage.Criterion)">Criterion</a></span><span class="p">]</span>
+</code></pre></div>
+<div class="doc doc-contents">
+<p>List criteria for a protocol.</p>
+<details class="mkdocstrings-source">
+<summary>Source code in <code>components/api-service/src/api_service/storage.py</code></summary>
+<div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">161</span>
+<span class="normal">162</span>
+<span class="normal">163</span>
+<span class="normal">164</span>
+<span class="normal">165</span>
+<span class="normal">166</span>
+<span class="normal">167</span>
+<span class="normal">168</span>
+<span class="normal">169</span>
+<span class="normal">170</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">list_criteria</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">protocol_id</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">list</span><span class="p">[</span><span class="n">Criterion</span><span class="p">]:</span>
+<span class="w">    </span><span class="sd">"""List criteria for a protocol."""</span>
+    <span class="k">with</span> <span class="n">Session</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_engine</span><span class="p">)</span> <span class="k">as</span> <span class="n">session</span><span class="p">:</span>
+        <span class="c1"># Keep full models for simplicity; revisit partial selects if needed later.</span>
+        <span class="n">statement</span> <span class="o">=</span> <span class="p">(</span>
+            <span class="n">select</span><span class="p">(</span><span class="n">Criterion</span><span class="p">)</span>
+            <span class="o">.</span><span class="n">where</span><span class="p">(</span><span class="n">cast</span><span class="p">(</span><span class="n">Any</span><span class="p">,</span> <span class="n">Criterion</span><span class="o">.</span><span class="n">protocol_id</span><span class="p">)</span> <span class="o">==</span> <span class="n">protocol_id</span><span class="p">)</span>
+            <span class="o">.</span><span class="n">order_by</span><span class="p">(</span><span class="n">Criterion</span><span class="o">.</span><span class="n">id</span><span class="p">)</span>
+        <span class="p">)</span>
+        <span class="k">return</span> <span class="nb">list</span><span class="p">(</span><span class="n">session</span><span class="o">.</span><span class="n">exec</span><span class="p">(</span><span class="n">statement</span><span class="p">))</span>
+</code></pre></div></td></tr></table></div>
+</details>
+</div>
+</div>
+<div class="doc doc-object doc-function">
+<h8 class="doc doc-heading" id="api_service.storage.Storage.replace_criteria">
+<span class="doc doc-object-name doc-function-name">replace_criteria</span>
+</h8>
+<div class="doc-signature highlight"><pre><span></span><code><span class="nf">replace_criteria</span><span class="p">(</span><span class="o">*</span><span class="p">,</span> <span class="n">protocol_id</span><span class="p">:</span> <span class="n"><span title="str">str</span></span><span class="p">,</span> <span class="n">extracted</span><span class="p">:</span> <span class="n"><span title="typing.Iterable">Iterable</span></span><span class="p">[</span><span class="n"><a class="autorefs autorefs-internal" href="#api_service.storage.ExtractedCriterion" title="ExtractedCriterion (api_service.storage.ExtractedCriterion)">ExtractedCriterion</a></span><span class="p">])</span> <span class="o">-&gt;</span> <span class="n"><span title="list">list</span></span><span class="p">[</span><span class="n"><a class="autorefs autorefs-internal" href="#api_service.storage.Criterion" title="Criterion (api_service.storage.Criterion)">Criterion</a></span><span class="p">]</span>
+</code></pre></div>
+<div class="doc doc-contents">
+<p>Replace criteria for a protocol with extracted entries.</p>
+<details class="mkdocstrings-source">
+<summary>Source code in <code>components/api-service/src/api_service/storage.py</code></summary>
+<div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">172</span>
+<span class="normal">173</span>
+<span class="normal">174</span>
+<span class="normal">175</span>
+<span class="normal">176</span>
+<span class="normal">177</span>
+<span class="normal">178</span>
+<span class="normal">179</span>
+<span class="normal">180</span>
+<span class="normal">181</span>
+<span class="normal">182</span>
+<span class="normal">183</span>
+<span class="normal">184</span>
+<span class="normal">185</span>
+<span class="normal">186</span>
+<span class="normal">187</span>
+<span class="normal">188</span>
+<span class="normal">189</span>
+<span class="normal">190</span>
+<span class="normal">191</span>
+<span class="normal">192</span>
+<span class="normal">193</span>
+<span class="normal">194</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">replace_criteria</span><span class="p">(</span>
     <span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">protocol_id</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">extracted</span><span class="p">:</span> <span class="n">Iterable</span><span class="p">[</span><span class="n">ExtractedCriterion</span><span class="p">]</span>
 <span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">list</span><span class="p">[</span><span class="n">Criterion</span><span class="p">]:</span>
 <span class="w">    </span><span class="sd">"""Replace criteria for a protocol with extracted entries."""</span>
     <span class="k">with</span> <span class="n">Session</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_engine</span><span class="p">)</span> <span class="k">as</span> <span class="n">session</span><span class="p">:</span>
         <span class="n">session</span><span class="o">.</span><span class="n">exec</span><span class="p">(</span>
-            <span class="n">delete</span><span class="p">(</span><span class="n">Criterion</span><span class="p">)</span><span class="o">.</span><span class="n">where</span><span class="p">(</span>
-                <span class="n">Criterion</span><span class="o">.</span><span class="n">protocol_id</span> <span class="o">==</span> <span class="n">protocol_id</span>  <span class="c1"># type: ignore[arg-type]</span>
-            <span class="p">)</span>
+            <span class="n">delete</span><span class="p">(</span><span class="n">Criterion</span><span class="p">)</span><span class="o">.</span><span class="n">where</span><span class="p">(</span><span class="n">cast</span><span class="p">(</span><span class="n">Any</span><span class="p">,</span> <span class="n">Criterion</span><span class="o">.</span><span class="n">protocol_id</span><span class="p">)</span> <span class="o">==</span> <span class="n">protocol_id</span><span class="p">)</span>
         <span class="p">)</span>
         <span class="n">stored</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="n">Criterion</span><span class="p">]</span> <span class="o">=</span> <span class="p">[]</span>
         <span class="k">for</span> <span class="n">item</span> <span class="ow">in</span> <span class="n">extracted</span><span class="p">:</span>
@@ -2887,26 +2967,26 @@
 <p>Update a criterion's text/type and return the updated row.</p>
 <details class="mkdocstrings-source">
 <summary>Source code in <code>components/api-service/src/api_service/storage.py</code></summary>
-<div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">160</span>
-<span class="normal">161</span>
-<span class="normal">162</span>
-<span class="normal">163</span>
-<span class="normal">164</span>
-<span class="normal">165</span>
-<span class="normal">166</span>
-<span class="normal">167</span>
-<span class="normal">168</span>
-<span class="normal">169</span>
-<span class="normal">170</span>
-<span class="normal">171</span>
-<span class="normal">172</span>
-<span class="normal">173</span>
-<span class="normal">174</span>
-<span class="normal">175</span>
-<span class="normal">176</span>
-<span class="normal">177</span>
-<span class="normal">178</span>
-<span class="normal">179</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">update_criterion</span><span class="p">(</span>
+<div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">196</span>
+<span class="normal">197</span>
+<span class="normal">198</span>
+<span class="normal">199</span>
+<span class="normal">200</span>
+<span class="normal">201</span>
+<span class="normal">202</span>
+<span class="normal">203</span>
+<span class="normal">204</span>
+<span class="normal">205</span>
+<span class="normal">206</span>
+<span class="normal">207</span>
+<span class="normal">208</span>
+<span class="normal">209</span>
+<span class="normal">210</span>
+<span class="normal">211</span>
+<span class="normal">212</span>
+<span class="normal">213</span>
+<span class="normal">214</span>
+<span class="normal">215</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">update_criterion</span><span class="p">(</span>
     <span class="bp">self</span><span class="p">,</span>
     <span class="o">*</span><span class="p">,</span>
     <span class="n">criterion_id</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
@@ -2940,10 +3020,10 @@
 <p>Fetch a criterion by ID.</p>
 <details class="mkdocstrings-source">
 <summary>Source code in <code>components/api-service/src/api_service/storage.py</code></summary>
-<div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">181</span>
-<span class="normal">182</span>
-<span class="normal">183</span>
-<span class="normal">184</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">get_criterion</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">criterion_id</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Criterion</span> <span class="o">|</span> <span class="kc">None</span><span class="p">:</span>
+<div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">217</span>
+<span class="normal">218</span>
+<span class="normal">219</span>
+<span class="normal">220</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">get_criterion</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">criterion_id</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Criterion</span> <span class="o">|</span> <span class="kc">None</span><span class="p">:</span>
 <span class="w">    </span><span class="sd">"""Fetch a criterion by ID."""</span>
     <span class="k">with</span> <span class="n">Session</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_engine</span><span class="p">)</span> <span class="k">as</span> <span class="n">session</span><span class="p">:</span>
         <span class="k">return</span> <span class="n">session</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">Criterion</span><span class="p">,</span> <span class="n">criterion_id</span><span class="p">)</span>
@@ -2961,19 +3041,19 @@
 <p>Set SNOMED codes for a criterion.</p>
 <details class="mkdocstrings-source">
 <summary>Source code in <code>components/api-service/src/api_service/storage.py</code></summary>
-<div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">186</span>
-<span class="normal">187</span>
-<span class="normal">188</span>
-<span class="normal">189</span>
-<span class="normal">190</span>
-<span class="normal">191</span>
-<span class="normal">192</span>
-<span class="normal">193</span>
-<span class="normal">194</span>
-<span class="normal">195</span>
-<span class="normal">196</span>
-<span class="normal">197</span>
-<span class="normal">198</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">set_snomed_codes</span><span class="p">(</span>
+<div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">222</span>
+<span class="normal">223</span>
+<span class="normal">224</span>
+<span class="normal">225</span>
+<span class="normal">226</span>
+<span class="normal">227</span>
+<span class="normal">228</span>
+<span class="normal">229</span>
+<span class="normal">230</span>
+<span class="normal">231</span>
+<span class="normal">232</span>
+<span class="normal">233</span>
+<span class="normal">234</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">set_snomed_codes</span><span class="p">(</span>
     <span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">criterion_id</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">snomed_codes</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span>
 <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Criterion</span> <span class="o">|</span> <span class="kc">None</span><span class="p">:</span>
 <span class="w">    </span><span class="sd">"""Set SNOMED codes for a criterion."""</span>
@@ -2986,6 +3066,106 @@
         <span class="n">session</span><span class="o">.</span><span class="n">commit</span><span class="p">()</span>
         <span class="n">session</span><span class="o">.</span><span class="n">refresh</span><span class="p">(</span><span class="n">criterion</span><span class="p">)</span>
         <span class="k">return</span> <span class="n">criterion</span>
+</code></pre></div></td></tr></table></div>
+</details>
+</div>
+</div>
+<div class="doc doc-object doc-function">
+<h8 class="doc doc-heading" id="api_service.storage.Storage.create_hitl_edit">
+<span class="doc doc-object-name doc-function-name">create_hitl_edit</span>
+</h8>
+<div class="doc-signature highlight"><pre><span></span><code><span class="nf">create_hitl_edit</span><span class="p">(</span><span class="o">*</span><span class="p">,</span> <span class="n">criterion_id</span><span class="p">:</span> <span class="n"><span title="str">str</span></span><span class="p">,</span> <span class="n">action</span><span class="p">:</span> <span class="n"><span title="str">str</span></span><span class="p">,</span> <span class="n">snomed_code_added</span><span class="p">:</span> <span class="n"><span title="str">str</span></span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">snomed_code_removed</span><span class="p">:</span> <span class="n"><span title="str">str</span></span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">field_mapping_added</span><span class="p">:</span> <span class="n"><span title="str">str</span></span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">field_mapping_removed</span><span class="p">:</span> <span class="n"><span title="str">str</span></span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">note</span><span class="p">:</span> <span class="n"><span title="str">str</span></span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n"><a class="autorefs autorefs-internal" href="#api_service.storage.HitlEdit" title="HitlEdit (api_service.storage.HitlEdit)">HitlEdit</a></span>
+</code></pre></div>
+<div class="doc doc-contents">
+<p>Persist a HITL edit record.</p>
+<details class="mkdocstrings-source">
+<summary>Source code in <code>components/api-service/src/api_service/storage.py</code></summary>
+<div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">236</span>
+<span class="normal">237</span>
+<span class="normal">238</span>
+<span class="normal">239</span>
+<span class="normal">240</span>
+<span class="normal">241</span>
+<span class="normal">242</span>
+<span class="normal">243</span>
+<span class="normal">244</span>
+<span class="normal">245</span>
+<span class="normal">246</span>
+<span class="normal">247</span>
+<span class="normal">248</span>
+<span class="normal">249</span>
+<span class="normal">250</span>
+<span class="normal">251</span>
+<span class="normal">252</span>
+<span class="normal">253</span>
+<span class="normal">254</span>
+<span class="normal">255</span>
+<span class="normal">256</span>
+<span class="normal">257</span>
+<span class="normal">258</span>
+<span class="normal">259</span>
+<span class="normal">260</span>
+<span class="normal">261</span>
+<span class="normal">262</span>
+<span class="normal">263</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">create_hitl_edit</span><span class="p">(</span>
+    <span class="bp">self</span><span class="p">,</span>
+    <span class="o">*</span><span class="p">,</span>
+    <span class="n">criterion_id</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+    <span class="n">action</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+    <span class="n">snomed_code_added</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="n">snomed_code_removed</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="n">field_mapping_added</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="n">field_mapping_removed</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="n">note</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="n">HitlEdit</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">"""Persist a HITL edit record."""</span>
+    <span class="k">with</span> <span class="n">Session</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_engine</span><span class="p">)</span> <span class="k">as</span> <span class="n">session</span><span class="p">:</span>
+        <span class="n">edit_id</span> <span class="o">=</span> <span class="n">_next_id</span><span class="p">(</span><span class="n">session</span><span class="p">,</span> <span class="s2">"hitl_edit"</span><span class="p">,</span> <span class="s2">"edit"</span><span class="p">)</span>
+        <span class="n">edit</span> <span class="o">=</span> <span class="n">HitlEdit</span><span class="p">(</span>
+            <span class="nb">id</span><span class="o">=</span><span class="n">edit_id</span><span class="p">,</span>
+            <span class="n">criterion_id</span><span class="o">=</span><span class="n">criterion_id</span><span class="p">,</span>
+            <span class="n">action</span><span class="o">=</span><span class="n">action</span><span class="p">,</span>
+            <span class="n">snomed_code_added</span><span class="o">=</span><span class="n">snomed_code_added</span><span class="p">,</span>
+            <span class="n">snomed_code_removed</span><span class="o">=</span><span class="n">snomed_code_removed</span><span class="p">,</span>
+            <span class="n">field_mapping_added</span><span class="o">=</span><span class="n">field_mapping_added</span><span class="p">,</span>
+            <span class="n">field_mapping_removed</span><span class="o">=</span><span class="n">field_mapping_removed</span><span class="p">,</span>
+            <span class="n">note</span><span class="o">=</span><span class="n">note</span><span class="p">,</span>
+        <span class="p">)</span>
+        <span class="n">session</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="n">edit</span><span class="p">)</span>
+        <span class="n">session</span><span class="o">.</span><span class="n">commit</span><span class="p">()</span>
+        <span class="n">session</span><span class="o">.</span><span class="n">refresh</span><span class="p">(</span><span class="n">edit</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">edit</span>
+</code></pre></div></td></tr></table></div>
+</details>
+</div>
+</div>
+<div class="doc doc-object doc-function">
+<h8 class="doc doc-heading" id="api_service.storage.Storage.list_hitl_edits">
+<span class="doc doc-object-name doc-function-name">list_hitl_edits</span>
+</h8>
+<div class="doc-signature highlight"><pre><span></span><code><span class="nf">list_hitl_edits</span><span class="p">(</span><span class="n">criterion_id</span><span class="p">:</span> <span class="n"><span title="str">str</span></span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n"><span title="list">list</span></span><span class="p">[</span><span class="n"><a class="autorefs autorefs-internal" href="#api_service.storage.HitlEdit" title="HitlEdit (api_service.storage.HitlEdit)">HitlEdit</a></span><span class="p">]</span>
+</code></pre></div>
+<div class="doc doc-contents">
+<p>List all HITL edits for a criterion.</p>
+<details class="mkdocstrings-source">
+<summary>Source code in <code>components/api-service/src/api_service/storage.py</code></summary>
+<div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">265</span>
+<span class="normal">266</span>
+<span class="normal">267</span>
+<span class="normal">268</span>
+<span class="normal">269</span>
+<span class="normal">270</span>
+<span class="normal">271</span>
+<span class="normal">272</span>
+<span class="normal">273</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">list_hitl_edits</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">criterion_id</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">list</span><span class="p">[</span><span class="n">HitlEdit</span><span class="p">]:</span>
+<span class="w">    </span><span class="sd">"""List all HITL edits for a criterion."""</span>
+    <span class="k">with</span> <span class="n">Session</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_engine</span><span class="p">)</span> <span class="k">as</span> <span class="n">session</span><span class="p">:</span>
+        <span class="n">statement</span> <span class="o">=</span> <span class="p">(</span>
+            <span class="n">select</span><span class="p">(</span><span class="n">HitlEdit</span><span class="p">)</span>
+            <span class="o">.</span><span class="n">where</span><span class="p">(</span><span class="n">cast</span><span class="p">(</span><span class="n">Any</span><span class="p">,</span> <span class="n">HitlEdit</span><span class="o">.</span><span class="n">criterion_id</span><span class="p">)</span> <span class="o">==</span> <span class="n">criterion_id</span><span class="p">)</span>
+            <span class="o">.</span><span class="n">order_by</span><span class="p">(</span><span class="n">cast</span><span class="p">(</span><span class="n">Any</span><span class="p">,</span> <span class="n">HitlEdit</span><span class="o">.</span><span class="n">created_at</span><span class="p">))</span>
+        <span class="p">)</span>
+        <span class="k">return</span> <span class="nb">list</span><span class="p">(</span><span class="n">session</span><span class="o">.</span><span class="n">exec</span><span class="p">(</span><span class="n">statement</span><span class="p">))</span>
 </code></pre></div></td></tr></table></div>
 </details>
 </div>
@@ -3007,16 +3187,16 @@
 <p>Create or return the cached database engine.</p>
 <details class="mkdocstrings-source">
 <summary>Source code in <code>components/api-service/src/api_service/storage.py</code></summary>
-<div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">61</span>
-<span class="normal">62</span>
-<span class="normal">63</span>
-<span class="normal">64</span>
-<span class="normal">65</span>
-<span class="normal">66</span>
-<span class="normal">67</span>
-<span class="normal">68</span>
-<span class="normal">69</span>
-<span class="normal">70</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="nd">@lru_cache</span>
+<div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">80</span>
+<span class="normal">81</span>
+<span class="normal">82</span>
+<span class="normal">83</span>
+<span class="normal">84</span>
+<span class="normal">85</span>
+<span class="normal">86</span>
+<span class="normal">87</span>
+<span class="normal">88</span>
+<span class="normal">89</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="nd">@lru_cache</span>
 <span class="k">def</span><span class="w"> </span><span class="nf">get_engine</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="n">Engine</span><span class="p">:</span>
 <span class="w">    </span><span class="sd">"""Create or return the cached database engine."""</span>
     <span class="n">db_path</span> <span class="o">=</span> <span class="n">DEFAULT_DB_PATH</span>
@@ -3040,9 +3220,9 @@
 <p>Initialize the database tables.</p>
 <details class="mkdocstrings-source">
 <summary>Source code in <code>components/api-service/src/api_service/storage.py</code></summary>
-<div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">73</span>
-<span class="normal">74</span>
-<span class="normal">75</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">init_db</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">92</span>
+<span class="normal">93</span>
+<span class="normal">94</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">init_db</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
 <span class="w">    </span><span class="sd">"""Initialize the database tables."""</span>
     <span class="n">SQLModel</span><span class="o">.</span><span class="n">metadata</span><span class="o">.</span><span class="n">create_all</span><span class="p">(</span><span class="n">get_engine</span><span class="p">())</span>
 </code></pre></div></td></tr></table></div>
@@ -3059,21 +3239,17 @@
 <p>Clear all stored data (used for tests and demos).</p>
 <details class="mkdocstrings-source">
 <summary>Source code in <code>components/api-service/src/api_service/storage.py</code></summary>
-<div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">78</span>
-<span class="normal">79</span>
-<span class="normal">80</span>
-<span class="normal">81</span>
-<span class="normal">82</span>
-<span class="normal">83</span>
-<span class="normal">84</span>
-<span class="normal">85</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">reset_storage</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"> 97</span>
+<span class="normal"> 98</span>
+<span class="normal"> 99</span>
+<span class="normal">100</span>
+<span class="normal">101</span>
+<span class="normal">102</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">reset_storage</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
 <span class="w">    </span><span class="sd">"""Clear all stored data (used for tests and demos)."""</span>
+    <span class="n">engine</span> <span class="o">=</span> <span class="n">get_engine</span><span class="p">()</span>
+    <span class="n">SQLModel</span><span class="o">.</span><span class="n">metadata</span><span class="o">.</span><span class="n">drop_all</span><span class="p">(</span><span class="n">engine</span><span class="p">)</span>
+    <span class="n">SQLModel</span><span class="o">.</span><span class="n">metadata</span><span class="o">.</span><span class="n">create_all</span><span class="p">(</span><span class="n">engine</span><span class="p">)</span>
     <span class="n">init_db</span><span class="p">()</span>
-    <span class="k">with</span> <span class="n">Session</span><span class="p">(</span><span class="n">get_engine</span><span class="p">())</span> <span class="k">as</span> <span class="n">session</span><span class="p">:</span>
-        <span class="n">session</span><span class="o">.</span><span class="n">exec</span><span class="p">(</span><span class="n">delete</span><span class="p">(</span><span class="n">Criterion</span><span class="p">))</span>
-        <span class="n">session</span><span class="o">.</span><span class="n">exec</span><span class="p">(</span><span class="n">delete</span><span class="p">(</span><span class="n">Protocol</span><span class="p">))</span>
-        <span class="n">session</span><span class="o">.</span><span class="n">exec</span><span class="p">(</span><span class="n">delete</span><span class="p">(</span><span class="n">IdCounter</span><span class="p">))</span>
-        <span class="n">session</span><span class="o">.</span><span class="n">commit</span><span class="p">()</span>
 </code></pre></div></td></tr></table></div>
 </details>
 </div>
