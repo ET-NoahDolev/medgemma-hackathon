@@ -5,7 +5,9 @@ description = "api-service component"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
+    "extraction-service",
     "fastapi>=0.110.0",
+    "grounding-service",
     "pyyaml>=6.0.0",
     "sqlalchemy>=2.0.0",
     "sqlmodel>=0.0.18",
@@ -23,10 +25,10 @@ dev = [
 [tool.ruff]
 lint.select = ["E", "F", "W", "C", "N", "I", "D"]
 lint.ignore = ["E203", "D203", "D213", "D100", "D413", "D104"]
+lint.pydocstyle.convention = "google"
 target-version = "py312"
 line-length = 88
 exclude = ["venv", ".venv", "docs"]
-lint.pydocstyle.convention = "google"
 
 [tool.ruff.lint.per-file-ignores]
 "tests/**/*.py" = ["D"]
@@ -48,3 +50,7 @@ markers = ["e2e: end-to-end API workflow tests"]
 
 [tool.uv]
 cache-dir = "./.uv_cache"
+
+[tool.uv.sources]
+extraction-service = { workspace = true }
+grounding-service = { workspace = true }

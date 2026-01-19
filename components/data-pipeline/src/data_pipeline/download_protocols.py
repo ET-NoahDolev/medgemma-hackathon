@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import List
 
 import httpx
-from pypdf import PdfReader  # type: ignore[import-not-found]
+from pypdf import PdfReader
 
 
 @dataclass
@@ -151,8 +151,8 @@ def _extract_registry_id(url: str) -> tuple[str | None, str | None]:
     return None, None
 
 
-def _iter_manifest_entries(manifest_path: Path) -> list[dict]:
-    entries: list[dict] = []
+def _iter_manifest_entries(manifest_path: Path) -> list[dict[str, object]]:
+    entries: list[dict[str, object]] = []
     with manifest_path.open(encoding="utf-8") as handle:
         for line in handle:
             if line.strip():
@@ -160,10 +160,15 @@ def _iter_manifest_entries(manifest_path: Path) -> list[dict]:
     return entries
 
 
-def _build_record_from_entry(entry: dict) -> ProtocolRecord | None:
-    if entry.get("status") != "downloaded":
+def _get_optional_str(entry: dict[str, object], key: str) -> str | None:
+    value = entry.get(key)
+    return value if isinstance(value, str) else None
+
+
+def _build_record_from_entry(entry: dict[str, object]) -> ProtocolRecord | None:
+    if _get_optional_str(entry, "status") != "downloaded":
         return None
-    path_value = entry.get("path")
+    path_value = _get_optional_str(entry, "path")
     if not path_value:
         return None
     pdf_path = Path(path_value)
@@ -179,10 +184,10 @@ def _build_record_from_entry(entry: dict) -> ProtocolRecord | None:
         logger.warning("Empty text extracted from %s", pdf_path)
         return None
 
-    url = entry.get("url", "")
+    url = _get_optional_str(entry, "url") or ""
     title = _derive_title(pdf_path, text)
-    registry_id = entry.get("registry_id")
-    registry_type = entry.get("registry_type")
+    registry_id = _get_optional_str(entry, "registry_id")
+    registry_type = _get_optional_str(entry, "registry_type")
     if not registry_id or not registry_type:
         derived_id, derived_type = _extract_registry_id(url)
         registry_id = registry_id or derived_id
@@ -193,7 +198,7 @@ def _build_record_from_entry(entry: dict) -> ProtocolRecord | None:
         condition="",
         phase="",
         document_text=text,
-        source=entry.get("source"),
+        source=_get_optional_str(entry, "source"),
         registry_id=registry_id,
         registry_type=registry_type,
     )

@@ -22,7 +22,7 @@ class ExtractedCriterion(TypingProtocol):
     confidence: float
 
 
-class Protocol(SQLModel, table=True):  # type: ignore[call-arg]
+class Protocol(SQLModel, table=True):
     """Protocol record persisted for API requests."""
 
     id: str = Field(primary_key=True)
@@ -34,7 +34,7 @@ class Protocol(SQLModel, table=True):  # type: ignore[call-arg]
     source: str | None = None
 
 
-class Criterion(SQLModel, table=True):  # type: ignore[call-arg]
+class Criterion(SQLModel, table=True):
     """Criterion record persisted for API requests."""
 
     id: str = Field(primary_key=True)
@@ -47,7 +47,7 @@ class Criterion(SQLModel, table=True):  # type: ignore[call-arg]
     )
 
 
-class HitlEdit(SQLModel, table=True):  # type: ignore[call-arg]
+class HitlEdit(SQLModel, table=True):
     """HITL edit record for tracking reviewer changes."""
 
     id: str = Field(primary_key=True)
@@ -61,7 +61,7 @@ class HitlEdit(SQLModel, table=True):  # type: ignore[call-arg]
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 
-class IdCounter(SQLModel, table=True):  # type: ignore[call-arg]
+class IdCounter(SQLModel, table=True):
     """Simple counter table for stable prefixed identifiers."""
 
     key: str = Field(primary_key=True)

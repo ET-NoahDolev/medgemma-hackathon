@@ -36,6 +36,7 @@ dev = [
     "pytest-cov>=6.0.0",
     "ruff>=0.14.8",
     "aioresponses>=0.7.8",
+    "gsutil>=5.35",
 ]
 
 [tool.uv.workspace]

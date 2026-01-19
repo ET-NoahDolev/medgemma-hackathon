@@ -6,11 +6,11 @@ from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from typing import List, Optional
 
-from extraction_service import (  # type: ignore[import-not-found]
+from extraction_service import (  # type: ignore[import-untyped]
     pipeline as extraction_pipeline,
 )
 from fastapi import Body, Depends, FastAPI, HTTPException
-from grounding_service import ubkg_client  # type: ignore[import-not-found]
+from grounding_service import ubkg_client  # type: ignore[import-untyped]
 from pydantic import BaseModel
 
 from api_service.dependencies import get_storage
