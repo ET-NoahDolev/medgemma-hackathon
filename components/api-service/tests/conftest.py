@@ -41,8 +41,9 @@ class FakeServicesState:
 
 
 @pytest.fixture()
-def client() -> TestClient:
+def client(monkeypatch: pytest.MonkeyPatch) -> TestClient:
     reset_storage()
+    monkeypatch.setenv("UMLS_API_KEY", "test-key")
     return TestClient(app)
 
 
@@ -77,6 +78,16 @@ def fake_services(monkeypatch: pytest.MonkeyPatch) -> FakeServicesState:
         return state.extracted
 
     class FakeUmlsClient:
+        def __init__(
+            self,
+            base_url: str | None = None,
+            api_key: str | None = None,
+            timeout: float | None = None,
+        ) -> None:
+            _ = base_url
+            _ = api_key
+            _ = timeout
+
         def search_snomed(self, _text: str) -> list[FakeGroundingCandidate]:
             return state.candidates
 

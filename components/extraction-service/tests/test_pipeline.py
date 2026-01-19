@@ -75,7 +75,10 @@ class TestClassification:
         assert result == "exclusion"
 
     def test_classify_exclusion_keywords(self) -> None:
-        result = classify_criterion_type("Pregnant or breastfeeding", section="inclusion")
+        result = classify_criterion_type(
+            "Pregnant or breastfeeding",
+            section="inclusion",
+        )
         assert result == "exclusion"
 
     def test_classify_handles_negation(self) -> None:

@@ -55,12 +55,17 @@ class UmlsClient:
         self,
         base_url: str | None = None,
         api_key: str | None = None,
-        timeout: float = 10.0,
+        timeout: float | None = None,
     ) -> None:
         """Initialize the UMLS client configuration."""
         self.base_url: str = base_url or os.getenv("UMLS_BASE_URL") or UMLS_DEFAULT_URL
         self.api_key = api_key or os.getenv("UMLS_API_KEY")
-        self.timeout = timeout
+        env_timeout = os.getenv("UMLS_TIMEOUT_SECONDS")
+        self.timeout = (
+            float(env_timeout)
+            if env_timeout
+            else (timeout if timeout is not None else 10.0)
+        )
         self._cache: dict[str, list[SnomedCandidate]] = {}
 
     def search_snomed(self, query: str, limit: int = 5) -> List[SnomedCandidate]:
@@ -127,11 +132,14 @@ class UmlsClient:
         for item in results[:limit]:
             if not isinstance(item, dict):
                 continue
+            ui = item.get("ui")
+            name = item.get("name")
+            root = item.get("rootSource")
             candidates.append(
                 SnomedCandidate(
-                    code=str(item.get("ui", "")),
-                    display=str(item.get("name", "")),
-                    ontology=str(item.get("rootSource", "SNOMEDCT_US")),
+                    code=str(ui) if isinstance(ui, (str, int)) else "",
+                    display=str(name) if isinstance(name, str) else "",
+                    ontology=str(root) if isinstance(root, str) else "SNOMEDCT_US",
                     confidence=0.9,
                 )
             )

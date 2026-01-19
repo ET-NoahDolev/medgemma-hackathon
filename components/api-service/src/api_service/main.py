@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from typing import List, Optional
@@ -22,6 +23,11 @@ from api_service.storage import Storage, init_db, reset_storage
 async def lifespan(app_instance: FastAPI) -> AsyncIterator[None]:
     """Initialize and teardown app state for the lifespan scope."""
     init_db()
+    if not (os.getenv("UMLS_API_KEY") or os.getenv("GROUNDING_SERVICE_UMLS_API_KEY")):
+        raise RuntimeError(
+            "UMLS_API_KEY (or GROUNDING_SERVICE_UMLS_API_KEY) must be set "
+            "for grounding-service"
+        )
     yield
 
 
@@ -200,9 +206,20 @@ def ground_criterion(
     if criterion is None:
         raise HTTPException(status_code=404, detail="Criterion not found")
 
-    client = umls_client.UmlsClient()
+    client = umls_client.UmlsClient(
+        api_key=os.getenv("GROUNDING_SERVICE_UMLS_API_KEY")
+        or os.getenv("UMLS_API_KEY")
+    )
     candidates = client.search_snomed(criterion.text)
     field_mappings = umls_client.propose_field_mapping(criterion.text)
+
+    if not candidates:
+        storage.set_snomed_codes(criterion_id=criterion_id, snomed_codes=[])
+        return GroundingResponse(
+            criterion_id=criterion_id,
+            candidates=[],
+            field_mapping=None,
+        )
 
     snomed_codes = [candidate.code for candidate in candidates]
     storage.set_snomed_codes(

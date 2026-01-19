@@ -1,3 +1,7 @@
+import asyncio
+
+import pytest
+from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from tests.conftest import FakeExtractedCriterion
@@ -168,3 +172,40 @@ def test_ground_criterion_handles_no_mapping(
     assert response.status_code == 200
     payload = response.json()
     assert payload["field_mapping"] is None
+
+
+def test_ground_criterion_returns_empty_candidates(
+    client: TestClient,
+    fake_services: object,
+) -> None:
+    create_response = client.post(
+        "/v1/protocols",
+        json={"title": PROTOCOL_TITLE, "document_text": DOCUMENT_TEXT},
+    )
+    protocol_id = create_response.json()["protocol_id"]
+    client.post(f"/v1/protocols/{protocol_id}/extract")
+
+    list_response = client.get(f"/v1/protocols/{protocol_id}/criteria")
+    criterion_id = list_response.json()["criteria"][0]["id"]
+
+    state = fake_services
+    state.candidates = []
+
+    response = client.post(f"/v1/criteria/{criterion_id}/ground")
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["candidates"] == []
+    assert payload["field_mapping"] is None
+
+
+def test_lifespan_requires_api_key(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("UMLS_API_KEY", raising=False)
+    monkeypatch.delenv("GROUNDING_SERVICE_UMLS_API_KEY", raising=False)
+    from api_service import main as api_main
+
+    async def _run() -> None:
+        async with api_main.lifespan(FastAPI()):
+            pass
+
+    with pytest.raises(RuntimeError, match="UMLS_API_KEY"):
+        asyncio.run(_run())

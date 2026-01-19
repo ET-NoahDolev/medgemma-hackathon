@@ -156,7 +156,22 @@ def _iter_manifest_entries(manifest_path: Path) -> list[dict[str, object]]:
     with manifest_path.open(encoding="utf-8") as handle:
         for line in handle:
             if line.strip():
-                entries.append(json.loads(line))
+                try:
+                    parsed = json.loads(line)
+                except json.JSONDecodeError as exc:
+                    logger.warning(
+                        "Skipping malformed manifest line: %s (%s)",
+                        line[:200].rstrip(),
+                        exc,
+                    )
+                    continue
+                if isinstance(parsed, dict):
+                    entries.append(parsed)
+                else:
+                    logger.warning(
+                        "Skipping non-dict manifest entry: %r",
+                        type(parsed),
+                    )
     return entries
 
 

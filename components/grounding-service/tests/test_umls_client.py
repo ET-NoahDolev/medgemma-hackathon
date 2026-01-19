@@ -26,7 +26,10 @@ def mock_umls_success() -> dict[str, object]:
 
 
 class TestUmlsClientSearch:
-    def test_search_snomed_returns_candidates(self, mock_umls_success: dict[str, object]) -> None:
+    def test_search_snomed_returns_candidates(
+        self,
+        mock_umls_success: dict[str, object],
+    ) -> None:
         with patch("httpx.get") as mock_get:
             mock_get.return_value = MagicMock(
                 json=lambda: mock_umls_success,
@@ -39,7 +42,10 @@ class TestUmlsClientSearch:
         assert len(candidates) == 2
         assert isinstance(candidates[0], SnomedCandidate)
 
-    def test_search_snomed_maps_fields(self, mock_umls_success: dict[str, object]) -> None:
+    def test_search_snomed_maps_fields(
+        self,
+        mock_umls_success: dict[str, object],
+    ) -> None:
         with patch("httpx.get") as mock_get:
             mock_get.return_value = MagicMock(
                 json=lambda: mock_umls_success,
@@ -53,7 +59,10 @@ class TestUmlsClientSearch:
         assert candidates[0].display == "Malignant melanoma, stage III"
         assert candidates[0].ontology == "SNOMEDCT_US"
 
-    def test_search_snomed_caches_results(self, mock_umls_success: dict[str, object]) -> None:
+    def test_search_snomed_caches_results(
+        self,
+        mock_umls_success: dict[str, object],
+    ) -> None:
         with patch("httpx.get") as mock_get:
             mock_get.return_value = MagicMock(
                 json=lambda: mock_umls_success,
@@ -76,7 +85,10 @@ class TestUmlsClientSearch:
         with pytest.raises(ValueError, match="UMLS_API_KEY is required"):
             client.search_snomed("melanoma")
 
-    def test_search_snomed_respects_limit(self, mock_umls_success: dict[str, object]) -> None:
+    def test_search_snomed_respects_limit(
+        self,
+        mock_umls_success: dict[str, object],
+    ) -> None:
         with patch("httpx.get") as mock_get:
             mock_get.return_value = MagicMock(
                 json=lambda: mock_umls_success,

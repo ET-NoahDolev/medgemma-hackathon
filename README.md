@@ -123,6 +123,16 @@ uv run uvicorn api_service.main:app --reload
 
 API will be available at `http://localhost:8000` (FastAPI default).
 
+#### 🔐 UMLS Configuration
+
+Set these environment variables before running services that perform grounding:
+
+- `UMLS_API_KEY` (required): Your UMLS API key from NLM UTS.
+- `UMLS_BASE_URL` (optional): Defaults to `https://uts-ws.nlm.nih.gov/rest`.
+- `UMLS_TIMEOUT_SECONDS` (optional): HTTP timeout in seconds (default 10).
+
+The API service also respects `GROUNDING_SERVICE_UMLS_API_KEY` to override per-service deployments.
+
 #### 📥 Data Pipeline
 
 ```bash
