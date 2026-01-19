@@ -148,9 +148,6 @@ def _extract_registry_id(url: str) -> tuple[str | None, str | None]:
     isrctn_match = re.search(r"(ISRCTN\d+)", url, flags=re.IGNORECASE)
     if isrctn_match:
         return isrctn_match.group(1).upper(), "isrctn"
-    actrn_match = re.search(r"(ACTRN\d{14})", url, flags=re.IGNORECASE)
-    if actrn_match:
-        return actrn_match.group(1).upper(), "actrn"
     return None, None
 
 
