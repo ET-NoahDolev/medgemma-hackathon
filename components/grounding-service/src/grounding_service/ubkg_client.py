@@ -1,8 +1,15 @@
-"""UBKG REST client stub."""
+"""UBKG REST client."""
 
+import logging
 import re
 from dataclasses import dataclass
-from typing import List
+from typing import List, Sequence
+
+import httpx
+
+logger = logging.getLogger(__name__)
+
+UBKG_DEFAULT_URL = "https://ubkg-api.xconsortia.org"
 
 
 @dataclass
@@ -74,7 +81,7 @@ class FieldMappingSuggestion:
 
 
 class UbkgClient:
-    """Client for UBKG REST search endpoints.
+    """Client for UBKG REST search endpoints with caching.
 
     Args:
         base_url: Base URL for the UBKG REST API.
@@ -84,14 +91,14 @@ class UbkgClient:
         'https://ubkg-api.xconsortia.org'
 
     Notes:
-        This is a wireframe stub; HTTP calls and caching are not implemented.
-        Field mapping suggestions are handled alongside grounding in the
-        production service.
+        Results are cached in-memory by query/limit for faster repeated calls.
     """
 
-    def __init__(self, base_url: str = "https://ubkg-api.xconsortia.org") -> None:
+    def __init__(self, base_url: str = UBKG_DEFAULT_URL, timeout: float = 10.0) -> None:
         """Initialize the client with a base URL."""
         self.base_url = base_url
+        self.timeout = timeout
+        self._cache: dict[str, list[UbkgCandidate]] = {}
 
     def search_snomed(self, query: str, limit: int = 5) -> List[UbkgCandidate]:
         """Search SNOMED concepts via UBKG.
@@ -110,13 +117,53 @@ class UbkgClient:
             >>> UbkgClient().search_snomed("stage III melanoma")
             []
 
-        Notes:
-            The production version will call the UBKG search endpoint and map
-            results into ``UbkgCandidate`` instances.
         """
         if not query.strip():
             raise ValueError("query is required")
 
+        cache_key = f"{query.lower()}:{limit}"
+        cached = self._cache.get(cache_key)
+        if cached is not None:
+            return cached
+
+        candidates = self._fetch_from_api(query, limit)
+        self._cache[cache_key] = candidates
+        return candidates
+
+    def _fetch_from_api(self, query: str, limit: int) -> List[UbkgCandidate]:
+        """Execute HTTP request to UBKG API."""
+        try:
+            response = httpx.get(
+                f"{self.base_url}/concepts/search",
+                params={"query": query, "sab": "SNOMEDCT_US", "limit": limit},
+                timeout=self.timeout,
+            )
+            response.raise_for_status()
+            return self._parse_response(response.json(), limit)
+        except Exception as exc:
+            logger.warning("UBKG API error: %s, falling back to local search", exc)
+            return self._fallback_search(query, limit)
+
+    def _parse_response(
+        self,
+        data: Sequence[dict[str, object]],
+        limit: int,
+    ) -> List[UbkgCandidate]:
+        """Parse UBKG API response into candidates."""
+        candidates: List[UbkgCandidate] = []
+        for item in data[:limit]:
+            candidates.append(
+                UbkgCandidate(
+                    code=str(item.get("ui", "")),
+                    display=str(item.get("name", "")),
+                    ontology="SNOMED CT",
+                    confidence=0.9,
+                )
+            )
+        return candidates
+
+    def _fallback_search(self, query: str, limit: int) -> List[UbkgCandidate]:
+        """Fallback to local SNOMED subset when API unavailable."""
         lowered = query.lower()
         candidates: List[UbkgCandidate] = []
         if "melanoma" in lowered:
@@ -125,28 +172,67 @@ class UbkgClient:
                     code="372244006",
                     display="Malignant melanoma, stage III",
                     ontology="SNOMED CT",
-                    confidence=0.92,
+                    confidence=0.7,
                 )
             )
-        elif "age" in lowered:
+        if "age" in lowered:
             candidates.append(
                 UbkgCandidate(
                     code="371273006",
                     display="Age",
                     ontology="SNOMED CT",
-                    confidence=0.85,
+                    confidence=0.6,
                 )
             )
-        elif "pregnant" in lowered:
+        if "pregnant" in lowered:
             candidates.append(
                 UbkgCandidate(
                     code="77386006",
                     display="Pregnant",
                     ontology="SNOMED CT",
-                    confidence=0.88,
+                    confidence=0.6,
                 )
             )
         return candidates[:limit]
+
+    def clear_cache(self) -> None:
+        """Clear the search cache."""
+        self._cache.clear()
+
+
+FIELD_PATTERNS: list[tuple[re.Pattern[str], str, tuple[int, ...]]] = [
+    (re.compile(r"age\s*(>=|<=|>|<|=)\s*(\d+)", re.I), "demographics.age", (1, 2)),
+    (re.compile(r"age\s*(\d+)\s*-\s*(\d+)", re.I), "demographics.age", (1, 2)),
+    (
+        re.compile(r"(\d+)\s*-\s*(\d+)\s*years?\s*(?:of\s*age|old)?", re.I),
+        "demographics.age",
+        (1, 2),
+    ),
+    (
+        re.compile(r"bmi\s*(>=|<=|>|<|=)\s*(\d+(?:\.\d+)?)", re.I),
+        "vitals.bmi",
+        (1, 2),
+    ),
+    (
+        re.compile(
+            r"ecog\s*(?:ps|performance\s*status)?\s*(>=|<=|>|<|=)?\s*(\d)",
+            re.I,
+        ),
+        "performance.ecog",
+        (1, 2),
+    ),
+    (
+        re.compile(r"ecog\s*(?:ps|performance\s*status)?\s*(\d)\s*-\s*(\d)", re.I),
+        "performance.ecog",
+        (1, 2),
+    ),
+    (re.compile(r"\b(male|female)\b", re.I), "demographics.sex", (1,)),
+    (
+        re.compile(r"\b(pregnant|pregnancy|breastfeeding)\b", re.I),
+        "conditions.pregnancy",
+        (1,),
+    ),
+]
 
 
 def propose_field_mapping(criterion_text: str) -> List[FieldMappingSuggestion]:
@@ -166,22 +252,41 @@ def propose_field_mapping(criterion_text: str) -> List[FieldMappingSuggestion]:
         []
 
     Notes:
-        This is a wireframe stub. The production implementation will use
-        a MedGemma adapter or rule-based parser for field mapping.
+        This rule-based mapper targets common screening patterns.
     """
     if not criterion_text.strip():
         raise ValueError("criterion_text is required")
 
-    match = re.search(r"age\s*(>=|<=|=|>|<)\s*(\d+)", criterion_text, re.IGNORECASE)
-    if not match:
-        return []
+    suggestions: List[FieldMappingSuggestion] = []
+    range_fields_added: set[str] = set()
 
-    relation, value = match.group(1), match.group(2)
-    return [
-        FieldMappingSuggestion(
-            field="demographics.age",
-            relation=relation,
-            value=value,
-            confidence=0.87,
-        )
-    ]
+    for pattern, field, groups in FIELD_PATTERNS:
+        match = pattern.search(criterion_text)
+        if not match:
+            continue
+
+        if field in {"demographics.age", "performance.ecog"} and len(groups) == 2:
+            if "-" in match.group(0):
+                if field in range_fields_added:
+                    continue
+                low, high = match.group(groups[0]), match.group(groups[1])
+                suggestions.append(FieldMappingSuggestion(field, ">=", low, 0.85))
+                suggestions.append(FieldMappingSuggestion(field, "<=", high, 0.85))
+                range_fields_added.add(field)
+                continue
+
+        if field == "demographics.sex":
+            value = match.group(groups[0]).lower()
+            suggestions.append(FieldMappingSuggestion(field, "=", value, 0.9))
+            continue
+
+        if field == "conditions.pregnancy":
+            suggestions.append(FieldMappingSuggestion(field, "=", "true", 0.85))
+            continue
+
+        if len(groups) == 2:
+            relation = match.group(groups[0]) or "="
+            value = match.group(groups[1])
+            suggestions.append(FieldMappingSuggestion(field, relation, value, 0.87))
+
+    return suggestions
