@@ -23,6 +23,9 @@ dependencies = [
     "tenacity>=8.2.0",
     "pytest-asyncio>=1.3.0",
     "aioresponses>=0.7.8",
+    "fastapi>=0.128.0",
+    "sqlalchemy>=2.0.45",
+    "sqlmodel>=0.0.31",
 ]
 
 [dependency-groups]
