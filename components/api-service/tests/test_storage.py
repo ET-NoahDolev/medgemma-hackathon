@@ -37,6 +37,15 @@ class TestProtocolSchema:
 
         assert proto.condition == "Melanoma"
 
+    def test_protocol_has_source_column(self, storage: Storage) -> None:
+        proto = storage.create_protocol(
+            title="Test",
+            document_text="Text",
+            source="bmjopen",
+        )
+
+        assert proto.source == "bmjopen"
+
 
 class TestHitlEditTable:
     def test_create_hitl_edit(self, storage: Storage) -> None:

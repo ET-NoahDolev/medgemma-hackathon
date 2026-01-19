@@ -97,7 +97,11 @@ class FieldMapping:
         """Deserialize from pipe-delimited string."""
         parts = value.split("|")
         if len(parts) != 3:
-            raise ValueError(f"Invalid field mapping string: {value}")
+            raise ValueError(
+                "Invalid field mapping string: "
+                f"'{value}'. Expected format 'field|relation|value' "
+                "(e.g., 'demographics.age|>=|18')."
+            )
         return cls(field=parts[0], relation=parts[1], value=parts[2])
 
 

@@ -1,3 +1,4 @@
+import json
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
@@ -7,6 +8,7 @@ from data_pipeline.download_protocols import (
     ProtocolRecord,
     emit_records,
     fetch_from_clinicaltrials,
+    ingest_local_protocols,
 )
 
 
@@ -126,3 +128,52 @@ class TestEmitRecords:
 
         lines = output.read_text().strip().split("\n")
         assert len(lines) == 5
+
+    def test_raises_on_write_error(self, tmp_path: Path) -> None:
+        output = tmp_path / "protocols.jsonl"
+        records = [
+            ProtocolRecord(
+                nct_id="NCT1",
+                title="Trial 1",
+                condition="Cancer",
+                phase="Phase 1",
+                document_text="Inclusion: Age >= 18",
+            )
+        ]
+
+        with patch.object(Path, "write_text", side_effect=OSError("nope")):
+            with pytest.raises(RuntimeError, match="Failed to write output"):
+                emit_records(records, output_path=output)
+
+
+class TestLocalIngestion:
+    def test_ingests_from_manifest(self, tmp_path: Path) -> None:
+        pdf_path = tmp_path / "protocol.pdf"
+        pdf_path.write_bytes(b"%PDF-1.4 fake")
+        manifest_path = tmp_path / "manifest.jsonl"
+        manifest_path.write_text(
+            "\n".join(
+                [
+                    json.dumps(
+                        {
+                            "source": "clinicaltrials",
+                            "url": "https://clinicaltrials.gov/ProvidedDocs/42/NCT12345678/Prot_000.pdf",
+                            "path": str(pdf_path),
+                            "status": "downloaded",
+                        }
+                    )
+                ]
+            )
+            + "\n"
+        )
+
+        with patch(
+            "data_pipeline.download_protocols.extract_text_from_pdf",
+            return_value="Sample Protocol\nMore text",
+        ):
+            records = ingest_local_protocols(manifest_path, limit=5)
+
+        assert len(records) == 1
+        assert records[0].title == "Sample Protocol"
+        assert records[0].source == "clinicaltrials"
+        assert records[0].nct_id == "NCT12345678"

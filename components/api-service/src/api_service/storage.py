@@ -11,7 +11,7 @@ from typing import Protocol as TypingProtocol
 
 from sqlalchemy import JSON, Column, delete
 from sqlalchemy.engine import Engine
-from sqlmodel import Field, Session, SQLModel, col, create_engine, select
+from sqlmodel import Field, Session, SQLModel, create_engine, select
 
 
 class ExtractedCriterion(TypingProtocol):
@@ -31,13 +31,14 @@ class Protocol(SQLModel, table=True):
     nct_id: str | None = None
     condition: str | None = None
     phase: str | None = None
+    source: str | None = None
 
 
 class Criterion(SQLModel, table=True):
     """Criterion record persisted for API requests."""
 
     id: str = Field(primary_key=True)
-    protocol_id: str = Field(foreign_key="protocol.id")
+    protocol_id: str = Field(foreign_key="protocol.id", index=True)
     text: str
     criterion_type: str
     confidence: float
@@ -50,7 +51,7 @@ class HitlEdit(SQLModel, table=True):
     """HITL edit record for tracking reviewer changes."""
 
     id: str = Field(primary_key=True)
-    criterion_id: str = Field(foreign_key="criterion.id")
+    criterion_id: str = Field(foreign_key="criterion.id", index=True)
     action: str
     snomed_code_added: str | None = None
     snomed_code_removed: str | None = None
@@ -98,6 +99,7 @@ def reset_storage() -> None:
     engine = get_engine()
     SQLModel.metadata.drop_all(engine)
     SQLModel.metadata.create_all(engine)
+    init_db()
 
 
 def _next_id(session: Session, key: str, prefix: str) -> str:
@@ -110,6 +112,11 @@ def _next_id(session: Session, key: str, prefix: str) -> str:
     session.add(counter)
     session.flush()
     return f"{prefix}-{counter.value}"
+
+
+def _norm_opt(value: str | None) -> str | None:
+    cleaned = (value or "").strip()
+    return cleaned if cleaned else None
 
 
 class Storage:
@@ -127,17 +134,19 @@ class Storage:
         nct_id: str | None = None,
         condition: str | None = None,
         phase: str | None = None,
+        source: str | None = None,
     ) -> Protocol:
         """Persist a protocol record and return it."""
         with Session(self._engine) as session:
             protocol_id = _next_id(session, "protocol", "proto")
             protocol = Protocol(
                 id=protocol_id,
-                title=title,
+                title=title.strip(),
                 document_text=document_text,
-                nct_id=nct_id,
-                condition=condition,
-                phase=phase,
+                nct_id=_norm_opt(nct_id),
+                condition=_norm_opt(condition),
+                phase=_norm_opt(phase),
+                source=_norm_opt(source),
             )
             session.add(protocol)
             session.commit()
@@ -152,10 +161,11 @@ class Storage:
     def list_criteria(self, protocol_id: str) -> list[Criterion]:
         """List criteria for a protocol."""
         with Session(self._engine) as session:
+            # Keep full models for simplicity; revisit partial selects if perf becomes an issue.
             statement = (
                 select(Criterion)
-                .where(col(Criterion.protocol_id) == protocol_id)
-                .order_by(col(Criterion.id))
+                .where(Criterion.protocol_id == protocol_id)
+                .order_by(Criterion.id)
             )
             return list(session.exec(statement))
 
@@ -165,7 +175,7 @@ class Storage:
         """Replace criteria for a protocol with extracted entries."""
         with Session(self._engine) as session:
             session.exec(
-                delete(Criterion).where(col(Criterion.protocol_id) == protocol_id)
+                delete(Criterion).where(Criterion.protocol_id == protocol_id)
             )
             stored: list[Criterion] = []
             for item in extracted:
@@ -257,7 +267,7 @@ class Storage:
         with Session(self._engine) as session:
             statement = (
                 select(HitlEdit)
-                .where(col(HitlEdit.criterion_id) == criterion_id)
-                .order_by(col(HitlEdit.created_at))
+                .where(HitlEdit.criterion_id == criterion_id)
+                .order_by(HitlEdit.created_at)
             )
             return list(session.exec(statement))
