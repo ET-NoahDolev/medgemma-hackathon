@@ -2,11 +2,12 @@
 
 from __future__ import annotations
 
+from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from typing import List, Optional
 
-from extraction_service import (
-    pipeline as extraction_pipeline,  # type: ignore[import-not-found]
+from extraction_service import (  # type: ignore[import-not-found]
+    pipeline as extraction_pipeline,
 )
 from fastapi import Body, Depends, FastAPI, HTTPException
 from grounding_service import ubkg_client  # type: ignore[import-not-found]
@@ -18,7 +19,7 @@ from api_service.storage import Storage, init_db, reset_storage
 
 
 @asynccontextmanager
-async def lifespan(app_instance: FastAPI):
+async def lifespan(app_instance: FastAPI) -> AsyncIterator[None]:
     """Initialize and teardown app state for the lifespan scope."""
     init_db()
     yield
