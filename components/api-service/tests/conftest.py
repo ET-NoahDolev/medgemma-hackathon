@@ -76,7 +76,7 @@ def fake_services(monkeypatch: pytest.MonkeyPatch) -> FakeServicesState:
     def _extract_criteria(_text: str) -> list[FakeExtractedCriterion]:
         return state.extracted
 
-    class FakeUbkgClient:
+    class FakeUmlsClient:
         def search_snomed(self, _text: str) -> list[FakeGroundingCandidate]:
             return state.candidates
 
@@ -86,9 +86,9 @@ def fake_services(monkeypatch: pytest.MonkeyPatch) -> FakeServicesState:
     monkeypatch.setattr(
         api_main.extraction_pipeline, "extract_criteria", _extract_criteria
     )
-    monkeypatch.setattr(api_main.ubkg_client, "UbkgClient", FakeUbkgClient)
+    monkeypatch.setattr(api_main.umls_client, "UmlsClient", FakeUmlsClient)
     monkeypatch.setattr(
-        api_main.ubkg_client, "propose_field_mapping", _propose_field_mapping
+        api_main.umls_client, "propose_field_mapping", _propose_field_mapping
     )
 
     return state

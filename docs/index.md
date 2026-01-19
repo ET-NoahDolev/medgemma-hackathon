@@ -1,6 +1,6 @@
 # MedGemma Hackathon
 
-This repository hosts the MedGemma hackathon demo for extracting atomic inclusion/exclusion criteria from clinical trial protocols, grounding them to SNOMED via UBKG, mapping field/relation/value for screening, and enabling a human-in-the-loop (HITL) review experience.
+This repository hosts the MedGemma hackathon demo for extracting atomic inclusion/exclusion criteria from clinical trial protocols, grounding them to SNOMED via the UMLS API, mapping field/relation/value for screening, and enabling a human-in-the-loop (HITL) review experience.
 
 ## Quick Links
 

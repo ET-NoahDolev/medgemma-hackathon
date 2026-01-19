@@ -6,7 +6,7 @@
 [![Python](https://img.shields.io/badge/python-3.12-blue?style=flat-square)](https://www.python.org/)
 [![License](https://img.shields.io/badge/license-Proprietary-red?style=flat-square)](LICENSE)
 
-A comprehensive demo system for extracting atomic inclusion/exclusion criteria from clinical trial protocols, grounding them to SNOMED CT via UBKG, mapping to field/relation/value structures for EMR screening, and enabling nurse review through an intuitive HITL (Human-In-The-Loop) interface.
+A comprehensive demo system for extracting atomic inclusion/exclusion criteria from clinical trial protocols, grounding them to SNOMED CT via the UMLS API, mapping to field/relation/value structures for EMR screening, and enabling nurse review through an intuitive HITL (Human-In-The-Loop) interface.
 
 ---
 
@@ -59,7 +59,7 @@ This repository is organized as a **component-based monorepo**, where each servi
     ┌────┴────┐
     ▼         ▼
 ┌─────────┐ ┌──────────────┐
-│Extraction│ │  Grounding   │ ──► UBKG integration
+│Extraction│ │  Grounding   │ ──► UMLS API integration
 │ Service  │ │   Service    │
 └─────────┘ └──────────────┘
     │         │
@@ -148,7 +148,7 @@ UI will be available at `http://localhost:5173` (Vite default).
 |-----------|-------------|------------|
 | **`api-service`** | FastAPI endpoints and orchestration | FastAPI, Python |
 | **`extraction-service`** | MedGemma-based extraction pipeline | Python, MedGemma |
-| **`grounding-service`** | UBKG client and SNOMED grounding logic | Python, UBKG API |
+| **`grounding-service`** | UMLS client and SNOMED grounding logic | Python, UMLS API |
 | **`hitl-ui`** | React/Vite frontend for nurse review | React, TypeScript, Vite |
 | **`data-pipeline`** | Protocol ingestion and parsing | Python |
 | **`evaluation`** | Metrics calculation and reporting | Python |

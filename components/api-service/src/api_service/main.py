@@ -10,7 +10,7 @@ from extraction_service import (  # type: ignore[import-untyped]
     pipeline as extraction_pipeline,
 )
 from fastapi import Body, Depends, FastAPI, HTTPException
-from grounding_service import ubkg_client  # type: ignore[import-untyped]
+from grounding_service import umls_client  # type: ignore[import-untyped]
 from pydantic import BaseModel
 
 from api_service.dependencies import get_storage
@@ -200,9 +200,9 @@ def ground_criterion(
     if criterion is None:
         raise HTTPException(status_code=404, detail="Criterion not found")
 
-    client = ubkg_client.UbkgClient()
+    client = umls_client.UmlsClient()
     candidates = client.search_snomed(criterion.text)
-    field_mappings = ubkg_client.propose_field_mapping(criterion.text)
+    field_mappings = umls_client.propose_field_mapping(criterion.text)
 
     snomed_codes = [candidate.code for candidate in candidates]
     storage.set_snomed_codes(

@@ -373,3 +373,5 @@ instructions/
 .playwright-mcp/
 .cursor/
 data/
+
+gcp-url-to-gcs-logs/

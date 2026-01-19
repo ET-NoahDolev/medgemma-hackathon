@@ -1,6 +1,6 @@
 import pytest
 
-from grounding_service.ubkg_client import FieldMappingSuggestion, propose_field_mapping
+from grounding_service.umls_client import FieldMappingSuggestion, propose_field_mapping
 
 
 class TestFieldMappingAge:

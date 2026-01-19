@@ -8,7 +8,7 @@ flowchart LR
   dataPipeline --> apiService
   apiService --> extractionService
   apiService --> groundingService
-  groundingService --> ubkgApi
+  groundingService --> umlsApi
   hitlUi --> apiService
   apiService --> database
 ```
@@ -26,7 +26,7 @@ flowchart LR
 | --- | --- |
 | `api-service` | Orchestration, persistence, request validation, HITL feedback. |
 | `extraction-service` | Extract atomic criteria and classify inclusion/exclusion. |
-| `grounding-service` | UBKG REST lookup for SNOMED candidates + field/relation/value mapping suggestions. |
+| `grounding-service` | UMLS REST lookup for SNOMED candidates + field/relation/value mapping suggestions. |
 | `data-pipeline` | Protocol ingestion and normalization. |
 | `evaluation` | Metrics (extraction F1, SNOMED Top-1, field mapping quality, HITL stats). |
 | `shared` | Shared schemas and types. |

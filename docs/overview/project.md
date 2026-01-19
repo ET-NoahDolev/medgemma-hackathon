@@ -1,12 +1,12 @@
 # Project Overview
 
-The MedGemma hackathon demo focuses on protocol ingestion, criteria extraction, UBKG grounding, field/relation/value mapping, and HITL review. The objective is to reduce nurse review time while preserving transparency and provenance.
+The MedGemma hackathon demo focuses on protocol ingestion, criteria extraction, UMLS grounding, field/relation/value mapping, and HITL review. The objective is to reduce nurse review time while preserving transparency and provenance.
 
 ## Scope
 
 - Protocol ingestion and parsing.
 - Criteria extraction and classification.
-- SNOMED grounding via UBKG.
+- SNOMED grounding via the UMLS API.
 - Field/relation/value mapping for EMR screening.
 - HITL UI for review and corrections.
 - Minimal evaluation metrics.

@@ -42,4 +42,4 @@ make check-all
 
 - `DATABASE_URL` for persistence.
 - `EXTRACTION_SERVICE_URL` for extraction orchestration.
-- `GROUNDING_SERVICE_URL` for UBKG grounding.
+- `GROUNDING_SERVICE_URL` for UMLS grounding.

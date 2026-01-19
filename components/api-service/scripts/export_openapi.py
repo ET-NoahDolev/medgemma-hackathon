@@ -27,20 +27,20 @@ if "extraction_service" not in sys.modules:
 
 if "grounding_service" not in sys.modules:
     grounding_service = types.ModuleType("grounding_service")
-    ubkg_client = types.ModuleType("grounding_service.ubkg_client")
+    umls_client = types.ModuleType("grounding_service.umls_client")
 
-    class _UbkgClient:
+    class _UmlsClient:
         def search_snomed(self, _text: str) -> list[object]:
             return []
 
     def _propose_field_mapping(_text: str) -> list[object]:
         return []
 
-    setattr(ubkg_client, "UbkgClient", _UbkgClient)
-    setattr(ubkg_client, "propose_field_mapping", _propose_field_mapping)
-    setattr(grounding_service, "ubkg_client", ubkg_client)
+    setattr(umls_client, "UmlsClient", _UmlsClient)
+    setattr(umls_client, "propose_field_mapping", _propose_field_mapping)
+    setattr(grounding_service, "umls_client", umls_client)
     sys.modules["grounding_service"] = grounding_service
-    sys.modules["grounding_service.ubkg_client"] = ubkg_client
+    sys.modules["grounding_service.umls_client"] = umls_client
 
 from api_service.main import app  # noqa: E402
 

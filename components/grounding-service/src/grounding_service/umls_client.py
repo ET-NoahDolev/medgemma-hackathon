@@ -1,6 +1,9 @@
-"""UBKG REST client."""
+"""UMLS REST client."""
+
+from __future__ import annotations
 
 import logging
+import os
 import re
 from dataclasses import dataclass
 from typing import List, Sequence
@@ -9,35 +12,18 @@ import httpx
 
 logger = logging.getLogger(__name__)
 
-UBKG_DEFAULT_URL = "https://ubkg-api.xconsortia.org"
+UMLS_DEFAULT_URL = "https://uts-ws.nlm.nih.gov/rest"
 
 
 @dataclass
-class UbkgCandidate:
-    """SNOMED candidate returned from UBKG.
+class SnomedCandidate:
+    """SNOMED candidate returned from UMLS.
 
     Args:
         code: SNOMED concept code.
         display: Human-readable concept name.
-        ontology: Ontology label (e.g., SNOMED CT).
+        ontology: Ontology label (e.g., SNOMEDCT_US).
         confidence: Confidence or relevance score.
-
-    Examples:
-        >>> UbkgCandidate(
-        ...     code="372244006",
-        ...     display="Malignant melanoma, stage III",
-        ...     ontology="SNOMED CT",
-        ...     confidence=0.92,
-        ... )
-        UbkgCandidate(
-        ...     code='372244006',
-        ...     display='Malignant melanoma, stage III',
-        ...     ontology='SNOMED CT',
-        ...     confidence=0.92,
-        ... )
-
-    Notes:
-        UBKG returns richer fields; this wireframe focuses on what the HITL UI needs.
     """
 
     code: str
@@ -48,31 +34,7 @@ class UbkgCandidate:
 
 @dataclass
 class FieldMappingSuggestion:
-    """Field/relation/value mapping suggestion for a criterion.
-
-    Args:
-        field: Target field path (e.g., demographics.age).
-        relation: Comparison operator (e.g., >, >=, =).
-        value: Normalized value string (e.g., 75).
-        confidence: Confidence or relevance score.
-
-    Examples:
-        >>> FieldMappingSuggestion(
-        ...     field="demographics.age",
-        ...     relation=">",
-        ...     value="75",
-        ...     confidence=0.87,
-        ... )
-        FieldMappingSuggestion(
-        ...     field='demographics.age',
-        ...     relation='>',
-        ...     value='75',
-        ...     confidence=0.87,
-        ... )
-
-    Notes:
-        This is a wireframe stub; production mapping will come from a model.
-    """
+    """Field/relation/value mapping suggestion for a criterion."""
 
     field: str
     relation: str
@@ -80,28 +42,29 @@ class FieldMappingSuggestion:
     confidence: float
 
 
-class UbkgClient:
-    """Client for UBKG REST search endpoints with caching.
+class UmlsClient:
+    """Client for UMLS REST search endpoints with caching.
 
     Args:
-        base_url: Base URL for the UBKG REST API.
-
-    Examples:
-        >>> UbkgClient().base_url
-        'https://ubkg-api.xconsortia.org'
-
-    Notes:
-        Results are cached in-memory by query/limit for faster repeated calls.
+        base_url: Base URL for the UMLS REST API.
+        api_key: UMLS API key (required).
+        timeout: HTTP timeout in seconds.
     """
 
-    def __init__(self, base_url: str = UBKG_DEFAULT_URL, timeout: float = 10.0) -> None:
-        """Initialize the client with a base URL."""
-        self.base_url = base_url
+    def __init__(
+        self,
+        base_url: str | None = None,
+        api_key: str | None = None,
+        timeout: float = 10.0,
+    ) -> None:
+        """Initialize the UMLS client configuration."""
+        self.base_url: str = base_url or os.getenv("UMLS_BASE_URL") or UMLS_DEFAULT_URL
+        self.api_key = api_key or os.getenv("UMLS_API_KEY")
         self.timeout = timeout
-        self._cache: dict[str, list[UbkgCandidate]] = {}
+        self._cache: dict[str, list[SnomedCandidate]] = {}
 
-    def search_snomed(self, query: str, limit: int = 5) -> List[UbkgCandidate]:
-        """Search SNOMED concepts via UBKG.
+    def search_snomed(self, query: str, limit: int = 5) -> List[SnomedCandidate]:
+        """Search SNOMED concepts via UMLS.
 
         Args:
             query: Free-text clinical concept to search.
@@ -111,15 +74,12 @@ class UbkgClient:
             A list of candidate SNOMED concepts.
 
         Raises:
-            ValueError: If the query is empty.
-
-        Examples:
-            >>> UbkgClient().search_snomed("stage III melanoma")
-            []
-
+            ValueError: If the query is empty or API key is missing.
         """
         if not query.strip():
             raise ValueError("query is required")
+        if not self.api_key:
+            raise ValueError("UMLS_API_KEY is required")
 
         cache_key = f"{query.lower()}:{limit}"
         cached = self._cache.get(cache_key)
@@ -130,70 +90,52 @@ class UbkgClient:
         self._cache[cache_key] = candidates
         return candidates
 
-    def _fetch_from_api(self, query: str, limit: int) -> List[UbkgCandidate]:
-        """Execute HTTP request to UBKG API."""
+    def _fetch_from_api(self, query: str, limit: int) -> List[SnomedCandidate]:
+        """Execute HTTP request to UMLS API."""
         try:
             response = httpx.get(
-                f"{self.base_url}/concepts/search",
-                params={"query": query, "sab": "SNOMEDCT_US", "limit": limit},
+                f"{self.base_url.rstrip('/')}/search/current",
+                params={
+                    "string": query,
+                    "sabs": "SNOMEDCT_US",
+                    "returnIdType": "code",
+                    "pageSize": limit,
+                    "apiKey": self.api_key,
+                },
                 timeout=self.timeout,
             )
             response.raise_for_status()
             return self._parse_response(response.json(), limit)
         except Exception as exc:
-            logger.warning("UBKG API error: %s, falling back to local search", exc)
-            return self._fallback_search(query, limit)
+            logger.warning("UMLS API error: %s", exc)
+            return []
 
     def _parse_response(
         self,
-        data: Sequence[dict[str, object]],
+        data: dict[str, object],
         limit: int,
-    ) -> List[UbkgCandidate]:
-        """Parse UBKG API response into candidates."""
-        candidates: List[UbkgCandidate] = []
-        for item in data[:limit]:
+    ) -> List[SnomedCandidate]:
+        """Parse UMLS API response into candidates."""
+        result = data.get("result", {})
+        if not isinstance(result, dict):
+            return []
+        results = result.get("results", [])
+        if not isinstance(results, Sequence):
+            return []
+
+        candidates: List[SnomedCandidate] = []
+        for item in results[:limit]:
+            if not isinstance(item, dict):
+                continue
             candidates.append(
-                UbkgCandidate(
+                SnomedCandidate(
                     code=str(item.get("ui", "")),
                     display=str(item.get("name", "")),
-                    ontology="SNOMED CT",
+                    ontology=str(item.get("rootSource", "SNOMEDCT_US")),
                     confidence=0.9,
                 )
             )
         return candidates
-
-    def _fallback_search(self, query: str, limit: int) -> List[UbkgCandidate]:
-        """Fallback to local SNOMED subset when API unavailable."""
-        lowered = query.lower()
-        candidates: List[UbkgCandidate] = []
-        if "melanoma" in lowered:
-            candidates.append(
-                UbkgCandidate(
-                    code="372244006",
-                    display="Malignant melanoma, stage III",
-                    ontology="SNOMED CT",
-                    confidence=0.7,
-                )
-            )
-        if "age" in lowered:
-            candidates.append(
-                UbkgCandidate(
-                    code="371273006",
-                    display="Age",
-                    ontology="SNOMED CT",
-                    confidence=0.6,
-                )
-            )
-        if "pregnant" in lowered:
-            candidates.append(
-                UbkgCandidate(
-                    code="77386006",
-                    display="Pregnant",
-                    ontology="SNOMED CT",
-                    confidence=0.6,
-                )
-            )
-        return candidates[:limit]
 
     def clear_cache(self) -> None:
         """Clear the search cache."""
@@ -246,13 +188,6 @@ def propose_field_mapping(criterion_text: str) -> List[FieldMappingSuggestion]:
 
     Raises:
         ValueError: If the criterion text is empty.
-
-    Examples:
-        >>> propose_field_mapping("Age >= 75 years")
-        []
-
-    Notes:
-        This rule-based mapper targets common screening patterns.
     """
     if not criterion_text.strip():
         raise ValueError("criterion_text is required")

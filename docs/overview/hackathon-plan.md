@@ -1,6 +1,6 @@
 # MedGemma Hackathon – Concise Operational Plan
 
-**Goal:** Deliver a hackathon‑ready MedGemma HITL demo that extracts atomic inclusion/exclusion criteria from trial protocols, grounds them to SNOMED via UBKG, and maps criteria to field/relation/value (e.g., `demographics.age > 75`), with a clear ElixirTrials integration story.
+**Goal:** Deliver a hackathon‑ready MedGemma HITL demo that extracts atomic inclusion/exclusion criteria from trial protocols, grounds them to SNOMED via the UMLS API, and maps criteria to field/relation/value (e.g., `demographics.age > 75`), with a clear ElixirTrials integration story.
 
 ## 1. Project Brief
 
@@ -8,7 +8,7 @@
 - Clinical trial protocols are unstructured; screening is slow and error‑prone.
 - We build an AI‑assisted system that:
   - Extracts **atomic inclusion/exclusion criteria** from protocols.
-  - Maps them to **SNOMED** (via UBKG REST API).
+  - Maps them to **SNOMED** (via the UMLS REST API).
   - Maps criteria to **field + relation + value** for EMR screening (e.g., `demographics.age > 75`).
   - Lets a **nurse reviewer** correct mappings through a simple HITL UI.
 - Target **time savings:** ~65–70% nurse time per protocol vs. manual review.  
@@ -46,7 +46,7 @@
 
 - Ingest **public ClinicalTrials.gov protocols** (200–300).
 - Extract **atomic inclusion/exclusion criteria**.
-- Ground criteria to **SNOMED** via UBKG REST API (no external dependencies beyond public APIs).
+- Ground criteria to **SNOMED** via the UMLS REST API (no external dependencies beyond public APIs).
 - Map criteria to **field + relation + value** for EMR screening (field‑value mapping).
 - **HITL backend**:
   - Save criteria, suggested codes, and nurse edits.
@@ -82,7 +82,7 @@
 
 3. **Grounding**
    - Endpoint: `POST /v1/criteria/{id}/ground`
-   - UBKG REST API (terminology lookup) + MedGemma (LoRA Task B) → ranked SNOMED codes + field/relation/value mapping.
+  - UMLS REST API (terminology lookup) + MedGemma (LoRA Task B) → ranked SNOMED codes + field/relation/value mapping.
 
 4. **HITL Review**
    - Nurse UI fetches:
@@ -108,7 +108,7 @@ Base URL: `/v1`
 - `PATCH /v1/criteria/{criterionId}`
   - Edit criterion text/type/etc.
 - `POST /v1/criteria/{criterionId}/ground`
-  - Get SNOMED candidates via UBKG REST API + field/relation/value mapping.
+  - Get SNOMED candidates via the UMLS REST API + field/relation/value mapping.
 - `POST /v1/hitl/feedback`
   - Log nurse actions (accept/remove/add code etc).
 
@@ -120,56 +120,52 @@ Base URL: `/v1`
 |------------------|----------------------------------------|
 | Backend API      | FastAPI (Python)                      |
 | Model Inference  | MedGemma 1.5–4B‑IT + LoRA (8‑bit)     |
-| Terminology      | UBKG REST API (no custom wrapper)     |
+| Terminology      | UMLS REST API (no custom wrapper)     |
 | DB               | PostgreSQL (protocols, criteria, edits) |
 | HITL UI          | Gradio or minimal Cauldron‑style view |
 | Hardware         | DGX Spark‑class GPU workstation       |
 
-### 3.4 UBKG Integration
+### 3.4 UMLS Integration
 
-**Why UBKG:**
-- Pre‑built, production‑grade knowledge graph combining UMLS + external ontologies.
-- REST API + Neo4j options.
-- Zero licensing overhead for hackathon (public/research access).
-- Multi‑terminology support (SNOMED, LOINC, RxNorm, ICD‑10) built‑in.
+**Why UMLS:**
+- Official NLM terminology services with SNOMED coverage.
+- Simple REST API with API key authentication.
+- Public/research access with license acceptance.
+- Multi‑terminology support; we restrict to SNOMEDCT_US for grounding.
 
 **Usage Pattern:**
 ```python
-# Lookup term in UBKG
-POST https://ubkg-api.xconsortia.org/search
-{
-  "query": "stage III melanoma",
-  "ontology": "SNOMED",
-  "limit": 5
-}
+# Lookup term in UMLS
+GET https://uts-ws.nlm.nih.gov/rest/search/current?string=stage%20III%20melanoma&sabs=SNOMEDCT_US&returnIdType=code&pageSize=5&apiKey=YOUR_API_KEY
 
-# Response includes SNOMED codes + definitions + related terms
+# Response includes SNOMED codes + preferred names
 {
-  "results": [
-    {
-      "code": "372244006",
-      "display": "Malignant melanoma, stage III",
-      "ontology": "SNOMED CT",
-      "confidence": 0.92
-    }
-  ]
+  "result": {
+    "results": [
+      {
+        "ui": "372244006",
+        "name": "Malignant melanoma, stage III",
+        "rootSource": "SNOMEDCT_US"
+      }
+    ]
+  }
 }
 ```
 
 **Implementation:**
-- Simple HTTP client in `backend/ubkg_client.py`.
-- Optional local caching (Redis or in‑memory) for frequent lookups.
-- Fallback to pre‑cached SNOMED subset if API unavailable.
+- Simple HTTP client in `grounding_service/umls_client.py`.
+- Required `UMLS_API_KEY` (env var).
+- Optional in‑memory caching for frequent lookups.
 
 ---
 
 ## 4. Sprints & Daily Execution
 
-### 4.1 Week 1 – Data & UBKG Integration (Jan 15–21)
+### 4.1 Week 1 – Data & UMLS Integration (Jan 15–21)
 
 **Goals:**
 - Have protocols in DB.
-- UBKG API client working + cached.
+- UMLS API client working + cached.
 - Minimal extraction pipeline running (base model).
 
 **Tasks:**
@@ -180,24 +176,23 @@ POST https://ubkg-api.xconsortia.org/search
   - Define DB schema:
     - `protocols`, `documents`, `criteria`, `groundings`, `hitl_edits`.
 
-- **UBKG Integration**
-  - Implement `backend/ubkg_client.py`:
-    - HTTP client to UBKG REST API.
-    - Query term → get SNOMED candidates.
+- **UMLS Integration**
+  - Implement `grounding_service/umls_client.py`:
+    - HTTP client to UMLS REST API.
+    - Query term → get SNOMEDCT_US candidates.
     - Simple in‑memory cache (TTL configurable).
-    - Fallback: load local SNOMED subset (CSV from UBKG downloads).
   - CLI smoke test: terms like "stage III melanoma", "ECOG PS 0–1".
 
 - **Baseline Extraction**
   - Implement rough parsing of I/E sections into candidate criteria (regex/sentence splitting).
   - Run base MedGemma (no LoRA) for:
     - Type classification (inclusion/exclusion).
-    - Draft SNOMED suggestions via UBKG.
+    - Draft SNOMED suggestions via UMLS.
     - Draft field/relation/value mapping suggestions.
 
 **Decision / Risk:**
 - By **end of Week 1**:
-  - If UBKG API rate limits hit → use local SNOMED subset file only.
+  - If UMLS API rate limits hit → reduce pageSize and rely on caching.
 
 ---
 
@@ -223,7 +218,7 @@ POST https://ubkg-api.xconsortia.org/search
     - `POST /hitl/feedback`.
 
 - **Annotation Workflow**
-  - Pre‑label criteria using base MedGemma + UBKG:
+  - Pre‑label criteria using base MedGemma + UMLS:
     - Save as `criteria_prelabeled.jsonl`.
   - Define gold label schema (criterion text, type, SNOMED codes, field/relation/value, evidence spans).
   - Target: **~1,000 validated criteria** (spanning ~120 protocols).
@@ -256,7 +251,7 @@ POST https://ubkg-api.xconsortia.org/search
     - 3 epochs, batch size 4 (grad accum 4), lr `2e‑4`.
   - Task B (Grounding):
     - Separate LoRA adapter, same config.
-    - Training data from nurse‑validated mapping + UBKG candidates.
+    - Training data from nurse‑validated mapping + UMLS candidates.
   - Use 8‑bit QLoRA on DGX Spark; save adapters in `models/`.
 
 - **Backend Hardening**
@@ -326,21 +321,21 @@ POST https://ubkg-api.xconsortia.org/search
       backend/
         main.py
         models/
-        ubkg_client.py
+        umls_client.py
         tests/
       notebooks/
       data/ (small sample only)
       docs/
         api_spec.yaml
         architecture.md
-        ubkg_notes.md
+        umls_notes.md
       docker-compose.yml
       README.md
     ```
   - README:
     - One‑command run.
     - Hardware assumptions.
-    - UBKG API & UMLS licensing notes.
+    - UMLS API licensing notes.
     - "Demo only – not for clinical use" disclaimer.
 
 - **Video (3–5 min)**
@@ -357,10 +352,9 @@ POST https://ubkg-api.xconsortia.org/search
 ### 5.1 UMLS Approval Already Secured
 ✅ No NLM license delay; proceed directly with full deployment.
 
-### 5.2 UBKG as Single Source of Truth
-- Use UBKG REST API for all terminology lookups (SNOMED, LOINC, RxNorm, ICD‑10).
+### 5.2 UMLS as Single Source of Truth
+- Use the UMLS REST API for all terminology lookups (SNOMED, LOINC, RxNorm, ICD‑10).
 - No custom wrapper needed; simple HTTP client + optional caching.
-- Fallback: pre‑download SNOMED subset as CSV from UBKG downloads.
 
 ### 5.3 Data Privacy
 - All protocols and edits stay in‑prem during hackathon.
