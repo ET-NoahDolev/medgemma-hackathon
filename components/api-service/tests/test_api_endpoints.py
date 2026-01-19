@@ -13,6 +13,7 @@ from tests.constants import (
     FIELD_MAPPING_FIELD,
     PROTOCOL_TITLE,
     SNOMED_CODE,
+    SNOMED_ONTOLOGY,
 )
 
 
@@ -96,6 +97,7 @@ def test_ground_criterion_returns_candidates(
     payload = response.json()
     assert payload["criterion_id"] == criterion_id
     assert payload["candidates"][0]["code"] == SNOMED_CODE
+    assert payload["candidates"][0]["ontology"] == SNOMED_ONTOLOGY
     assert payload["field_mapping"]["field"] == FIELD_MAPPING_FIELD
 
 

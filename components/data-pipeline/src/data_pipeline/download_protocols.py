@@ -5,7 +5,6 @@ import logging
 import re
 from dataclasses import asdict, dataclass
 from pathlib import Path
-from typing import List
 
 import httpx
 from pypdf import PdfReader
@@ -60,7 +59,7 @@ DEFAULT_MANIFEST_PATH = (
 logger = logging.getLogger(__name__)
 
 
-def fetch_from_clinicaltrials(query: str, limit: int = 50) -> List[ProtocolRecord]:
+def fetch_from_clinicaltrials(query: str, limit: int = 50) -> list[ProtocolRecord]:
     """Fetch protocols from ClinicalTrials.gov API v2.
 
     Args:
@@ -84,7 +83,7 @@ def fetch_from_clinicaltrials(query: str, limit: int = 50) -> List[ProtocolRecor
         "format": "json",
     }
 
-    records: List[ProtocolRecord] = []
+    records: list[ProtocolRecord] = []
     next_token: str | None = None
     while len(records) < limit:
         if next_token:
@@ -151,7 +150,8 @@ def _extract_registry_id(url: str) -> tuple[str | None, str | None]:
     return None, None
 
 
-def _iter_manifest_entries(manifest_path: Path) -> list[dict[str, object]]:
+def read_manifest_entries(manifest_path: Path) -> list[dict[str, object]]:
+    """Read manifest entries from a JSONL file."""
     entries: list[dict[str, object]] = []
     with manifest_path.open(encoding="utf-8") as handle:
         for line in handle:
@@ -221,7 +221,7 @@ def _build_record_from_entry(entry: dict[str, object]) -> ProtocolRecord | None:
 
 def ingest_local_protocols(
     manifest_path: Path = DEFAULT_MANIFEST_PATH, limit: int = 50
-) -> List[ProtocolRecord]:
+) -> list[ProtocolRecord]:
     """Load protocol PDFs referenced in a manifest and extract document text."""
     if limit <= 0:
         raise ValueError("limit must be positive")
@@ -229,7 +229,7 @@ def ingest_local_protocols(
         raise FileNotFoundError(f"Manifest not found: {manifest_path}")
 
     records: list[ProtocolRecord] = []
-    for entry in _iter_manifest_entries(manifest_path):
+    for entry in read_manifest_entries(manifest_path):
         if len(records) >= limit:
             break
         record = _build_record_from_entry(entry)
@@ -239,7 +239,7 @@ def ingest_local_protocols(
 
 
 def emit_records(
-    records: List[ProtocolRecord], output_path: Path | None = None
+    records: list[ProtocolRecord], output_path: Path | None = None
 ) -> None:
     """Write protocol records to JSONL file.
 

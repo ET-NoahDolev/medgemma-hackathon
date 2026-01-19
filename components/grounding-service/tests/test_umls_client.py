@@ -1,5 +1,6 @@
 from unittest.mock import MagicMock, patch
 
+import httpx
 import pytest
 
 from grounding_service.umls_client import SnomedCandidate, UmlsClient
@@ -30,12 +31,14 @@ class TestUmlsClientSearch:
         self,
         mock_umls_success: dict[str, object],
     ) -> None:
-        with patch("httpx.get") as mock_get:
-            mock_get.return_value = MagicMock(
+        with patch("httpx.Client") as mock_client_cls:
+            mock_client = MagicMock()
+            mock_client.get.return_value = MagicMock(
                 json=lambda: mock_umls_success,
                 status_code=200,
                 raise_for_status=lambda: None,
             )
+            mock_client_cls.return_value = mock_client
             client = UmlsClient(api_key="test-key")
             candidates = client.search_snomed("melanoma")
 
@@ -46,12 +49,14 @@ class TestUmlsClientSearch:
         self,
         mock_umls_success: dict[str, object],
     ) -> None:
-        with patch("httpx.get") as mock_get:
-            mock_get.return_value = MagicMock(
+        with patch("httpx.Client") as mock_client_cls:
+            mock_client = MagicMock()
+            mock_client.get.return_value = MagicMock(
                 json=lambda: mock_umls_success,
                 status_code=200,
                 raise_for_status=lambda: None,
             )
+            mock_client_cls.return_value = mock_client
             client = UmlsClient(api_key="test-key")
             candidates = client.search_snomed("melanoma")
 
@@ -63,17 +68,19 @@ class TestUmlsClientSearch:
         self,
         mock_umls_success: dict[str, object],
     ) -> None:
-        with patch("httpx.get") as mock_get:
-            mock_get.return_value = MagicMock(
+        with patch("httpx.Client") as mock_client_cls:
+            mock_client = MagicMock()
+            mock_client.get.return_value = MagicMock(
                 json=lambda: mock_umls_success,
                 status_code=200,
                 raise_for_status=lambda: None,
             )
+            mock_client_cls.return_value = mock_client
             client = UmlsClient(api_key="test-key")
             client.search_snomed("melanoma")
             client.search_snomed("melanoma")
 
-        assert mock_get.call_count == 1
+        assert mock_client.get.call_count == 1
 
     def test_search_snomed_empty_query_raises(self) -> None:
         client = UmlsClient(api_key="test-key")
@@ -81,28 +88,34 @@ class TestUmlsClientSearch:
             client.search_snomed("")
 
     def test_search_snomed_missing_api_key_raises(self) -> None:
-        client = UmlsClient(api_key=None)
         with pytest.raises(ValueError, match="UMLS_API_KEY is required"):
-            client.search_snomed("melanoma")
+            UmlsClient(api_key=None)
 
     def test_search_snomed_respects_limit(
         self,
         mock_umls_success: dict[str, object],
     ) -> None:
-        with patch("httpx.get") as mock_get:
-            mock_get.return_value = MagicMock(
+        with patch("httpx.Client") as mock_client_cls:
+            mock_client = MagicMock()
+            mock_client.get.return_value = MagicMock(
                 json=lambda: mock_umls_success,
                 status_code=200,
                 raise_for_status=lambda: None,
             )
+            mock_client_cls.return_value = mock_client
             client = UmlsClient(api_key="test-key")
             candidates = client.search_snomed("melanoma", limit=1)
 
         assert len(candidates) == 1
 
     def test_search_snomed_returns_empty_on_timeout(self) -> None:
-        with patch("httpx.get") as mock_get:
-            mock_get.side_effect = Exception("Timeout")
+        with patch("httpx.Client") as mock_client_cls:
+            mock_client = MagicMock()
+            mock_client.get.side_effect = httpx.RequestError(
+                "Timeout",
+                request=MagicMock(),
+            )
+            mock_client_cls.return_value = mock_client
             client = UmlsClient(api_key="test-key")
             candidates = client.search_snomed("melanoma")
 

@@ -22,6 +22,7 @@ class FakeExtractedCriterion:
 class FakeGroundingCandidate:
     code: str
     display: str
+    ontology: str
     confidence: float
 
 
@@ -61,6 +62,7 @@ def fake_services(monkeypatch: pytest.MonkeyPatch) -> FakeServicesState:
             FakeGroundingCandidate(
                 code=constants.SNOMED_CODE,
                 display="Age (finding)",
+                ontology=constants.SNOMED_ONTOLOGY,
                 confidence=0.88,
             )
         ],

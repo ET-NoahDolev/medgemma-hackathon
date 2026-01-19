@@ -6,7 +6,7 @@ import logging
 import os
 import re
 from dataclasses import dataclass
-from typing import List, Sequence
+from typing import Sequence
 
 import httpx
 
@@ -66,9 +66,12 @@ class UmlsClient:
             if env_timeout
             else (timeout if timeout is not None else 10.0)
         )
+        if not self.api_key:
+            raise ValueError("UMLS_API_KEY is required")
+        self._http = httpx.Client(timeout=self.timeout)
         self._cache: dict[str, list[SnomedCandidate]] = {}
 
-    def search_snomed(self, query: str, limit: int = 5) -> List[SnomedCandidate]:
+    def search_snomed(self, query: str, limit: int = 5) -> list[SnomedCandidate]:
         """Search SNOMED concepts via UMLS.
 
         Args:
@@ -83,8 +86,6 @@ class UmlsClient:
         """
         if not query.strip():
             raise ValueError("query is required")
-        if not self.api_key:
-            raise ValueError("UMLS_API_KEY is required")
 
         cache_key = f"{query.lower()}:{limit}"
         cached = self._cache.get(cache_key)
@@ -95,10 +96,10 @@ class UmlsClient:
         self._cache[cache_key] = candidates
         return candidates
 
-    def _fetch_from_api(self, query: str, limit: int) -> List[SnomedCandidate]:
+    def _fetch_from_api(self, query: str, limit: int) -> list[SnomedCandidate]:
         """Execute HTTP request to UMLS API."""
         try:
-            response = httpx.get(
+            response = self._http.get(
                 f"{self.base_url.rstrip('/')}/search/current",
                 params={
                     "string": query,
@@ -107,19 +108,21 @@ class UmlsClient:
                     "pageSize": limit,
                     "apiKey": self.api_key,
                 },
-                timeout=self.timeout,
             )
             response.raise_for_status()
             return self._parse_response(response.json(), limit)
-        except Exception as exc:
-            logger.warning("UMLS API error: %s", exc)
+        except httpx.HTTPStatusError as exc:
+            logger.warning("UMLS API HTTP error: %s", exc)
+            return []
+        except httpx.RequestError as exc:
+            logger.warning("UMLS API request error: %s", exc)
             return []
 
     def _parse_response(
         self,
         data: dict[str, object],
         limit: int,
-    ) -> List[SnomedCandidate]:
+    ) -> list[SnomedCandidate]:
         """Parse UMLS API response into candidates."""
         result = data.get("result", {})
         if not isinstance(result, dict):
@@ -128,7 +131,7 @@ class UmlsClient:
         if not isinstance(results, Sequence):
             return []
 
-        candidates: List[SnomedCandidate] = []
+        candidates: list[SnomedCandidate] = []
         for item in results[:limit]:
             if not isinstance(item, dict):
                 continue
@@ -144,6 +147,10 @@ class UmlsClient:
                 )
             )
         return candidates
+
+    def close(self) -> None:
+        """Close the HTTP client and release resources."""
+        self._http.close()
 
     def clear_cache(self) -> None:
         """Clear the search cache."""
@@ -185,7 +192,7 @@ FIELD_PATTERNS: list[tuple[re.Pattern[str], str, tuple[int, ...]]] = [
 ]
 
 
-def propose_field_mapping(criterion_text: str) -> List[FieldMappingSuggestion]:
+def propose_field_mapping(criterion_text: str) -> list[FieldMappingSuggestion]:
     """Propose field/relation/value mappings for a criterion.
 
     Args:
@@ -200,7 +207,7 @@ def propose_field_mapping(criterion_text: str) -> List[FieldMappingSuggestion]:
     if not criterion_text.strip():
         raise ValueError("criterion_text is required")
 
-    suggestions: List[FieldMappingSuggestion] = []
+    suggestions: list[FieldMappingSuggestion] = []
     range_fields_added: set[str] = set()
 
     for pattern, field, groups in FIELD_PATTERNS:

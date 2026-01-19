@@ -5,7 +5,7 @@ from __future__ import annotations
 import os
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
-from typing import List, Optional
+from typing import List
 
 from extraction_service import (  # type: ignore[import-untyped]
     pipeline as extraction_pipeline,
@@ -76,8 +76,8 @@ class ExtractionResponse(BaseModel):
 class CriterionUpdateRequest(BaseModel):
     """Payload for updating a criterion."""
 
-    text: Optional[str] = None
-    criterion_type: Optional[str] = None
+    text: str | None = None
+    criterion_type: str | None = None
 
 
 class CriterionUpdateResponse(BaseModel):
@@ -93,6 +93,7 @@ class GroundingCandidateResponse(BaseModel):
 
     code: str
     display: str
+    ontology: str
     confidence: float
 
 
@@ -110,7 +111,7 @@ class GroundingResponse(BaseModel):
 
     criterion_id: str
     candidates: List[GroundingCandidateResponse]
-    field_mapping: Optional[FieldMappingResponse]
+    field_mapping: FieldMappingResponse | None
 
 
 class HitlFeedbackRequest(BaseModel):
@@ -118,7 +119,7 @@ class HitlFeedbackRequest(BaseModel):
 
     criterion_id: str
     action: str
-    note: Optional[str] = None
+    note: str | None = None
 
 
 def _reset_state() -> None:
@@ -177,7 +178,7 @@ def list_criteria(
 @app.patch("/v1/criteria/{criterion_id}")
 def update_criterion(
     criterion_id: str,
-    payload: Optional[CriterionUpdateRequest] = Body(default=None),
+    payload: CriterionUpdateRequest | None = Body(default=None),
     storage: Storage = Depends(get_storage),
 ) -> CriterionUpdateResponse:
     """Update a single criterion or its metadata."""
@@ -231,6 +232,7 @@ def ground_criterion(
         GroundingCandidateResponse(
             code=candidate.code,
             display=candidate.display,
+            ontology=candidate.ontology,
             confidence=candidate.confidence,
         )
         for candidate in candidates

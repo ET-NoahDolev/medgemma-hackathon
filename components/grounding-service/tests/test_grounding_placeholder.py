@@ -52,12 +52,14 @@ def test_search_snomed_returns_list() -> None:
         }
     }
 
-    with patch("httpx.get") as mock_get:
-        mock_get.return_value = MagicMock(
+    with patch("httpx.Client") as mock_client_cls:
+        mock_client = MagicMock()
+        mock_client.get.return_value = MagicMock(
             json=lambda: mock_response,
             status_code=200,
             raise_for_status=lambda: None,
         )
+        mock_client_cls.return_value = mock_client
         client = umls_client.UmlsClient(api_key="test-key")
         results = client.search_snomed("stage III melanoma")
 

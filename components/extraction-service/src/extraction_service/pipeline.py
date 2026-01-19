@@ -2,7 +2,7 @@
 
 import re
 from dataclasses import dataclass
-from typing import Dict, List
+from typing import Dict
 
 
 @dataclass
@@ -32,7 +32,7 @@ class Criterion:
     confidence: float
 
 
-def extract_criteria(document_text: str) -> List[Criterion]:
+def extract_criteria(document_text: str) -> list[Criterion]:
     """Extract atomic inclusion/exclusion criteria from protocol text.
 
     Args:
@@ -56,7 +56,7 @@ def extract_criteria(document_text: str) -> List[Criterion]:
         raise ValueError("document_text is required")
 
     sections = detect_sections(document_text)
-    criteria: List[Criterion] = []
+    criteria: list[Criterion] = []
 
     for section_type, section_text in sections.items():
         sentences = split_into_candidate_sentences(section_text)
@@ -74,7 +74,7 @@ def extract_criteria(document_text: str) -> List[Criterion]:
     return criteria
 
 
-def split_into_candidate_sentences(text: str) -> List[str]:
+def split_into_candidate_sentences(text: str) -> list[str]:
     """Split text into candidate criterion sentences.
 
     Args:
@@ -92,7 +92,7 @@ def split_into_candidate_sentences(text: str) -> List[str]:
         return _split_inline_criteria(text)
 
     lines = text.split("\n")
-    candidates: List[str] = []
+    candidates: list[str] = []
     for line in lines:
         cleaned = _normalize_candidate(BULLET_PATTERN.sub("", line))
         if not cleaned:
@@ -103,11 +103,11 @@ def split_into_candidate_sentences(text: str) -> List[str]:
     return candidates
 
 
-def _split_inline_criteria(text: str) -> List[str]:
+def _split_inline_criteria(text: str) -> list[str]:
     """Split inline Inclusion/Exclusion sentences into criteria."""
     normalized = text.replace("\n", " ").strip()
     raw_sentences = [segment.strip() for segment in normalized.split(".")]
-    candidates: List[str] = []
+    candidates: list[str] = []
     for sentence in raw_sentences:
         if not sentence:
             continue
