@@ -1,15 +1,19 @@
-import { useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { GlassButton } from '@/components/ui/glass-button';
 import { Card, CardContent } from '@/components/ui/card';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Textarea } from '@/components/ui/textarea';
 import { ConfidenceChip } from '@/components/common/ConfidenceChip';
 import { Badge } from '@/components/ui/badge';
 import { CriteriaEditPanel } from '@/features/protocols/components/CriteriaEditPanel';
-import { AddCriteriaPanel } from '@/features/protocols/components/AddCriteriaPanel';
 import { SourceMaterialsPanel } from '@/features/protocols/components/SourceMaterialsPanel';
-import { mockCriteria, type Criterion } from '@/mocks/criteria';
+import { useCriteria } from '@/hooks/useCriteria';
+import { useSubmitFeedback } from '@/hooks/useSubmitFeedback';
+import { useUpdateCriterion } from '@/hooks/useUpdateCriterion';
+import { useUploadProtocol } from '@/hooks/useUploadProtocol';
+import { useProtocol } from '@/hooks/useProtocol';
+import { MappingDisplay } from '@/features/mapping/components/MappingDisplay';
+import { EditMappingModal } from '@/features/mapping/components/EditMappingModal';
 import {
   Upload,
   FileText,
@@ -17,7 +21,6 @@ import {
   Edit2,
   Sparkles,
   Info,
-  Plus,
   FolderOpen,
   ArrowLeft,
 } from 'lucide-react';
@@ -38,42 +41,116 @@ interface ProtocolScreenProps {
   onBack?: () => void;
 }
 
-export function ProtocolScreen({ protocol, onBack }: ProtocolScreenProps) {
-  // Check if this is a new protocol (no criteria uploaded yet)
-  const isNewProtocol =
-    protocol && protocol.criteriaCount?.inclusion === 0 && protocol.criteriaCount?.exclusion === 0;
+interface Criterion {
+  id: string;
+  type: 'inclusion' | 'exclusion';
+  text: string;
+  confidence: number;
+  status: 'ai-suggested' | 'approved' | 'edited';
+  evidenceSnippet?: string;
+  snomedCodes?: string[];
+  fieldMapping?: {
+    field: string;
+    relation: string;
+    value: string;
+  } | null;
+}
 
-  const [uploaded, setUploaded] = useState(!isNewProtocol); // New protocols start with no upload
-  const [criteria, setCriteria] = useState<Criterion[]>(isNewProtocol ? [] : mockCriteria);
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const [editText, setEditText] = useState('');
+export function ProtocolScreen({ protocol, onBack }: ProtocolScreenProps) {
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+
+  const isNewProtocol =
+    !protocol || (protocol.criteriaCount?.inclusion === 0 && protocol.criteriaCount?.exclusion === 0);
+
+  const [activeProtocolId, setActiveProtocolId] = useState<string | null>(protocol?.id ?? null);
+  const [activeProtocolTitle, setActiveProtocolTitle] = useState<string>(
+    protocol?.name ?? 'New Protocol'
+  );
+  const [uploaded, setUploaded] = useState(!isNewProtocol);
+  const [criteria, setCriteria] = useState<Criterion[]>([]);
   const [editPanelOpen, setEditPanelOpen] = useState(false);
   const [selectedCriterion, setSelectedCriterion] = useState<Criterion | null>(null);
-  const [addCriteriaPanelOpen, setAddCriteriaPanelOpen] = useState(false);
   const [sourceMaterialsPanelOpen, setSourceMaterialsPanelOpen] = useState(false);
-  const [availableSourceDocs, setAvailableSourceDocs] = useState<
-    Array<{
-      id: string;
-      name: string;
-      content: string;
-      type?: 'protocol' | 'ecrf' | 'other';
-    }>
-  >([]);
+
+  const { data: criteriaData, isLoading, error, refetch } = useCriteria(activeProtocolId);
+  const {
+    data: protocolData,
+    isLoading: isProtocolLoading,
+    error: protocolError,
+  } = useProtocol(activeProtocolId);
+  const uploadProtocol = useUploadProtocol();
+  const submitFeedback = useSubmitFeedback();
+  const updateCriterion = useUpdateCriterion();
+
+  const sourceDocuments = useMemo(() => {
+    if (!protocolData?.document_text) return [];
+    return [
+      {
+        id: protocolData.protocol_id,
+        name: protocolData.title || activeProtocolTitle,
+        content: protocolData.document_text,
+        type: 'protocol' as const,
+      },
+    ];
+  }, [activeProtocolTitle, protocolData]);
+
+  const apiMappedCriteria: Criterion[] = useMemo(() => {
+    const apiCriteria = criteriaData?.criteria ?? [];
+    return apiCriteria.map(c => ({
+      id: c.id,
+      type: (c.criterion_type as 'inclusion' | 'exclusion') ?? 'inclusion',
+      text: c.text,
+      confidence: c.confidence,
+      status: 'ai-suggested' as const,
+      evidenceSnippet: undefined,
+    }));
+  }, [criteriaData]);
+
+  useEffect(() => {
+    if (protocolData?.title) {
+      // eslint-disable-next-line
+      setActiveProtocolTitle(protocolData.title);
+    }
+  }, [protocolData?.title]);
+
+  // Keep existing local edits/statuses, but refresh text from API.
+  useEffect(() => {
+    if (!uploaded) return;
+    if (!activeProtocolId) return;
+
+    // eslint-disable-next-line
+    setCriteria(prev => {
+      const prevById = new Map(prev.map(c => [c.id, c]));
+      return apiMappedCriteria.map(c => {
+        const prior = prevById.get(c.id);
+        if (!prior) return c;
+        return {
+          ...c,
+          status: prior.status,
+          evidenceSnippet: prior.evidenceSnippet,
+        };
+      });
+    });
+  }, [activeProtocolId, apiMappedCriteria, uploaded]);
+
+  // If extraction is still running, poll until criteria appear.
+  useEffect(() => {
+    if (!uploaded) return;
+    if (!activeProtocolId) return;
+    if (isLoading) return;
+    if (error) return;
+    if ((criteriaData?.criteria?.length ?? 0) > 0) return;
+
+    const interval = window.setInterval(() => {
+      void refetch();
+    }, 1500);
+
+    return () => window.clearInterval(interval);
+  }, [activeProtocolId, criteriaData?.criteria?.length, error, isLoading, refetch, uploaded]);
 
   const handleApprove = (id: string) => {
+    submitFeedback.mutate({ criterion_id: id, action: 'accept' });
     setCriteria(prev => prev.map(c => (c.id === id ? { ...c, status: 'approved' as const } : c)));
-  };
-
-  const handleSaveEdit = () => {
-    if (editingId) {
-      setCriteria(prev =>
-        prev.map(c =>
-          c.id === editingId ? { ...c, text: editText, status: 'edited' as const } : c
-        )
-      );
-      setEditingId(null);
-      setEditText('');
-    }
   };
 
   const handleOpenEditPanel = (criterion: Criterion) => {
@@ -83,16 +160,21 @@ export function ProtocolScreen({ protocol, onBack }: ProtocolScreenProps) {
 
   const handleSaveEditPanel = (updates: { text: string; type: string; rationale?: string }) => {
     if (selectedCriterion) {
+      const nextType =
+        updates.type === 'not-applicable' ? selectedCriterion.type : (updates.type as Criterion['type']);
+
+      updateCriterion.mutate({
+        criterionId: selectedCriterion.id,
+        updates: {
+          text: updates.text,
+          criterion_type: nextType,
+        },
+      });
+
       setCriteria(prev =>
         prev.map(c =>
           c.id === selectedCriterion.id
-            ? {
-                ...c,
-                text: updates.text,
-                type: updates.type === 'not-applicable' ? c.type : updates.type,
-                status:
-                  updates.type === 'not-applicable' ? ('edited' as const) : ('edited' as const),
-              }
+            ? { ...c, text: updates.text, type: nextType, status: 'edited' as const }
             : c
         )
       );
@@ -104,93 +186,48 @@ export function ProtocolScreen({ protocol, onBack }: ProtocolScreenProps) {
     }
   };
 
-  const handleDeleteCriterion = (rationale: string) => {
-    if (selectedCriterion) {
-      setCriteria(prev => prev.filter(c => c.id !== selectedCriterion.id));
-
-      toast.success('Criterion removed', {
-        description: `${selectedCriterion.id} removed: ${rationale}`,
-      });
-    }
-  };
-
-  const handleAddCriterion = (newCriterion: {
-    text: string;
-    type: 'inclusion' | 'exclusion';
-    sourceText: string;
-    fieldMappings?: Array<{ field: string; value: string }>;
-  }) => {
-    const existingIds = criteria
-      .filter(c => c.type === newCriterion.type)
-      .map(c => parseInt(c.id.substring(1)))
-      .filter(n => !isNaN(n));
-
-    const nextId = existingIds.length > 0 ? Math.max(...existingIds) + 1 : 1;
-    const id = newCriterion.type === 'inclusion' ? `I${nextId}` : `E${nextId}`;
-
-    const criterion: Criterion = {
-      id,
-      type: newCriterion.type,
-      text: newCriterion.text,
-      confidence: 0.85, // Manual entry gets reasonable confidence
-      status: 'ai-suggested',
-      evidenceSnippet: newCriterion.sourceText,
-    };
-
-    setCriteria(prev => [...prev, criterion]);
-
-    const mappingInfo =
-      newCriterion.fieldMappings && newCriterion.fieldMappings.length > 0
-        ? ` with ${newCriterion.fieldMappings.length} field mapping(s)`
-        : '';
-
-    toast.success('Criterion added', {
-      description: `${id} has been added for review${mappingInfo}`,
-    });
-  };
-
-  const handleSelectSourceDocument = (doc: { id: string; name: string; type: string }) => {
-    // Add the document to available sources if not already there
-    setAvailableSourceDocs(prev => {
-      const exists = prev.find(d => d.id === doc.id);
-      if (exists) return prev;
-      return [
-        ...prev,
-        {
-          id: doc.id,
-          name: doc.name,
-          content: doc.content,
-          type: doc.type,
-        },
-      ];
-    });
-    setSourceMaterialsPanelOpen(false);
-    setAddCriteriaPanelOpen(true);
-  };
-
   const approvedCount = criteria.filter(c => c.status === 'approved').length;
   const needsReviewCount = criteria.filter(c => c.status === 'ai-suggested').length;
 
-  const handleFileUpload = () => {
-    // Simulate file upload and AI extraction
+  const handleSelectFileClick = () => {
+    fileInputRef.current?.click();
+  };
+
+  const handleFileSelected = async (file: File | null) => {
+    if (!file) return;
+
     toast.promise(
-      new Promise(resolve => {
-        setTimeout(() => {
-          setUploaded(true);
-          // Simulate AI extraction of criteria after upload
-          setCriteria(mockCriteria);
-          resolve({ name: 'Success' });
-        }, 1500);
+      uploadProtocol.mutateAsync({ file, autoExtract: true }).then(resp => {
+        setActiveProtocolId(resp.protocol_id);
+        setActiveProtocolTitle(resp.title);
+        setUploaded(true);
+        setCriteria([]);
+        setSelectedCriterion(null);
+        return resp;
       }),
       {
-        loading: 'Processing protocol document...',
-        success: _data => 'Extracted 6 criteria for review',
-        error: 'Failed to process document',
+        loading: 'Uploading and processing protocol PDF...',
+        success: _data => 'Upload accepted. Extracting criteria...',
+        error: 'Failed to upload protocol',
       }
     );
   };
 
+  // State for mapping modal
+  const [mappingModalOpen, setMappingModalOpen] = useState(false);
+
+  const handleOpenMappingModal = (criterion: Criterion) => {
+    setSelectedCriterion(criterion);
+    setMappingModalOpen(true);
+  };
+
+  const handleSaveMapping = () => {
+    // Refresh to show new mappings
+    refetch();
+  };
+
   if (!uploaded) {
+    // ... (unchanged upload view)
     return (
       <div className="flex flex-col h-full">
         {/* Header for new protocol */}
@@ -214,7 +251,7 @@ export function ProtocolScreen({ protocol, onBack }: ProtocolScreenProps) {
                   </Button>
                 )}
                 <FileText className="w-6 h-6 text-teal-600" />
-                <h1 className="text-gray-900">{protocol ? protocol.name : 'New Protocol'}</h1>
+                <h1 className="text-gray-900">{activeProtocolTitle}</h1>
               </div>
               <p className="text-gray-600" style={{ fontSize: '14px' }}>
                 Upload protocol documents to extract inclusion/exclusion criteria
@@ -246,7 +283,14 @@ export function ProtocolScreen({ protocol, onBack }: ProtocolScreenProps) {
                 Drag and drop your protocol PDF or eCRF file to extract inclusion/exclusion criteria
                 using AI
               </p>
-              <Button onClick={handleFileUpload}>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="application/pdf"
+                className="hidden"
+                onChange={e => void handleFileSelected(e.target.files?.item(0) ?? null)}
+              />
+              <Button onClick={handleSelectFileClick} disabled={uploadProtocol.isPending}>
                 <Upload className="w-4 h-4 mr-2" />
                 Select File
               </Button>
@@ -293,13 +337,12 @@ export function ProtocolScreen({ protocol, onBack }: ProtocolScreenProps) {
               )}
               <FileText className="w-6 h-6 text-teal-600" />
               <h1 className="font-semibold text-gray-900">
-                {protocol ? protocol.name : 'Protocol Ingestion'}
+                {protocol?.name ?? activeProtocolTitle}
               </h1>
             </div>
             <p className="text-sm text-gray-600">
-              {protocol
-                ? `Version ${protocol.version} • Extracted ${criteria.length} criteria`
-                : `CRC-SCREEN-2024-Protocol-v3.2.pdf • Extracted ${criteria.length} criteria`}
+              {protocol?.version ? `Version ${protocol.version} • ` : ''}
+              Extracted {criteria.length} criteria
             </p>
             <div className="flex gap-4 mt-3 text-sm">
               <div className="flex items-center gap-2">
@@ -314,13 +357,13 @@ export function ProtocolScreen({ protocol, onBack }: ProtocolScreenProps) {
           </div>
 
           <div className="flex gap-2">
-            <Button variant="outline" onClick={() => setSourceMaterialsPanelOpen(true)}>
+            <Button
+              variant="outline"
+              onClick={() => setSourceMaterialsPanelOpen(true)}
+              disabled={sourceDocuments.length === 0 || isProtocolLoading}
+            >
               <FolderOpen className="w-4 h-4 mr-2" />
               Source Materials
-            </Button>
-            <Button variant="outline" onClick={() => setAddCriteriaPanelOpen(true)}>
-              <Plus className="w-4 h-4 mr-2" />
-              Add Criterion
             </Button>
             <GlassButton variant="primary">Finalize & Deploy</GlassButton>
           </div>
@@ -333,274 +376,150 @@ export function ProtocolScreen({ protocol, onBack }: ProtocolScreenProps) {
             and approve or edit as needed. Glass-box tooltips show evidence and confidence scores.
           </AlertDescription>
         </Alert>
+
+        {(error || protocolError) && (
+          <Alert className="mt-4 border-red-300 bg-red-50">
+            <Info className="h-4 w-4 text-red-600" />
+            <AlertDescription className="text-red-800">
+              Error loading data: {error?.message ?? protocolError?.message}
+            </AlertDescription>
+          </Alert>
+        )}
       </div>
 
       {/* Criteria List */}
       <ScrollArea className="flex-1 bg-transparent">
         <div className="p-6 max-w-5xl mx-auto">
-          {/* Inclusion Criteria */}
-          <div className="mb-8">
-            <div className="flex items-center gap-2 mb-4">
-              <h2 className="font-semibold text-gray-900">Inclusion Criteria</h2>
-              <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">
-                {criteria.filter(c => c.type === 'inclusion').length} criteria
-              </Badge>
+          {isLoading && criteria.length === 0 && (
+            <div className="flex items-center justify-center py-12 text-gray-600">
+              Loading criteria...
             </div>
+          )}
 
-            <div className="space-y-3">
-              {criteria
-                .filter(c => c.type === 'inclusion')
-                .map(criterion => (
-                  <Card
-                    key={criterion.id}
-                    className={
-                      criterion.status === 'ai-suggested'
-                        ? 'border-orange-300 bg-orange-50'
-                        : criterion.status === 'edited'
-                          ? 'border-blue-300 bg-blue-50'
-                          : ''
-                    }
-                  >
-                    <CardContent className="pt-4 pb-4">
-                      <div className="flex items-start gap-4">
-                        <div className="flex-shrink-0">
-                          <span className="inline-flex items-center justify-center w-8 h-8 bg-green-100 text-green-700 rounded-md text-sm font-medium">
-                            {criterion.id}
-                          </span>
-                        </div>
+          {/* Helper to render list */}
+          {[
+            { type: 'inclusion', label: 'Inclusion Criteria', badgeClass: 'bg-green-50 text-green-700 border-green-200', numClass: 'bg-green-100 text-green-700' },
+            { type: 'exclusion', label: 'Exclusion Criteria', badgeClass: 'bg-red-50 text-red-700 border-red-200', numClass: 'bg-red-100 text-red-700' }
+          ].map(section => (
+            <div key={section.type} className="mb-8 last:mb-0">
+              <div className="flex items-center gap-2 mb-4">
+                <h2 className="font-semibold text-gray-900">{section.label}</h2>
+                <Badge variant="outline" className={section.badgeClass}>
+                  {criteria.filter(c => c.type === section.type).length} criteria
+                </Badge>
+              </div>
 
-                        <div className="flex-1 min-w-0">
-                          {editingId === criterion.id ? (
-                            <div className="space-y-3">
-                              <Textarea
-                                value={editText}
-                                onChange={e => setEditText(e.target.value)}
-                                rows={3}
-                                className="text-sm"
+              <div className="space-y-3">
+                {criteria
+                  .filter(c => c.type === section.type)
+                  .map(criterion => (
+                    <Card
+                      key={criterion.id}
+                      className={
+                        criterion.status === 'ai-suggested'
+                          ? 'border-orange-300 bg-orange-50'
+                          : criterion.status === 'edited'
+                            ? 'border-blue-300 bg-blue-50'
+                            : ''
+                      }
+                    >
+                      <CardContent className="pt-4 pb-4">
+                        <div className="flex items-start gap-4">
+                          <div className="flex-shrink-0">
+                            <span className={`inline-flex items-center justify-center w-8 h-8 rounded-md text-sm font-medium ${section.numClass}`}>
+                              {criterion.id}
+                            </span>
+                          </div>
+
+                          <div className="flex-1 min-w-0">
+                            <>
+                              <p className="text-sm text-gray-900 leading-relaxed">{criterion.text}</p>
+
+                              <MappingDisplay
+                                snomedCodes={criterion.snomedCodes}
+                                fieldMapping={criterion.fieldMapping}
                               />
-                              <div className="flex gap-2">
-                                <Button size="sm" onClick={handleSaveEdit}>
-                                  Save Changes
-                                </Button>
+
+                              <div className="mt-2 flex items-center gap-4">
+                                {criterion.evidenceSnippet && (
+                                  <TooltipProvider>
+                                    <Tooltip>
+                                      <TooltipTrigger asChild>
+                                        <div className="text-xs text-gray-600 flex items-center gap-1 cursor-help">
+                                          <FileText className="w-3 h-3" />
+                                          <span className="underline decoration-dotted">
+                                            View source evidence
+                                          </span>
+                                        </div>
+                                      </TooltipTrigger>
+                                      <TooltipContent className="max-w-md bg-white border border-gray-200 shadow-lg p-3">
+                                        <p className="text-xs text-gray-700">
+                                          {criterion.evidenceSnippet}
+                                        </p>
+                                      </TooltipContent>
+                                    </Tooltip>
+                                  </TooltipProvider>
+                                )}
                                 <Button
-                                  size="sm"
-                                  variant="outline"
-                                  onClick={() => {
-                                    setEditingId(null);
-                                    setEditText('');
-                                  }}
+                                  variant="link"
+                                  className="h-auto p-0 text-xs text-teal-600 h-auto"
+                                  onClick={() => handleOpenMappingModal(criterion)}
                                 >
-                                  Cancel
+                                  {criterion.snomedCodes?.length || criterion.fieldMapping ? 'Edit Mapping' : 'Add Mapping'}
                                 </Button>
                               </div>
-                            </div>
-                          ) : (
-                            <>
-                              <p className="text-sm text-gray-900 leading-relaxed">
-                                {criterion.text}
-                              </p>
-
-                              {criterion.evidenceSnippet && (
-                                <TooltipProvider>
-                                  <Tooltip>
-                                    <TooltipTrigger asChild>
-                                      <div className="mt-2 text-xs text-gray-600 flex items-center gap-1 cursor-help">
-                                        <FileText className="w-3 h-3" />
-                                        <span className="underline decoration-dotted">
-                                          View source evidence
-                                        </span>
-                                      </div>
-                                    </TooltipTrigger>
-                                    <TooltipContent className="max-w-md bg-white border border-gray-200 shadow-lg p-3">
-                                      <p className="text-xs text-gray-700">
-                                        {criterion.evidenceSnippet}
-                                      </p>
-                                    </TooltipContent>
-                                  </Tooltip>
-                                </TooltipProvider>
-                              )}
                             </>
-                          )}
-                        </div>
+                          </div>
 
-                        <div className="flex items-center gap-2">
-                          <ConfidenceChip
-                            confidence={criterion.confidence}
-                            dataSource="Protocol PDF Section 4.1"
-                          />
+                          <div className="flex items-center gap-2">
+                            <ConfidenceChip
+                              confidence={criterion.confidence}
+                              dataSource="Protocol"
+                            />
 
-                          {criterion.status === 'ai-suggested' && (
-                            <>
-                              <Button size="sm" onClick={() => handleApprove(criterion.id)}>
-                                <CheckCircle2 className="w-3 h-3 mr-1" />
-                                Approve
-                              </Button>
-                            </>
-                          )}
-
-                          {criterion.status === 'approved' && (
-                            <Badge className="bg-green-100 text-green-700 border-green-300">
-                              <CheckCircle2 className="w-3 h-3 mr-1" />
-                              Approved
-                            </Badge>
-                          )}
-
-                          {criterion.status === 'edited' && (
-                            <Badge className="bg-blue-100 text-blue-700 border-blue-300">
-                              <Edit2 className="w-3 h-3 mr-1" />
-                              Edited
-                            </Badge>
-                          )}
-
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => handleOpenEditPanel(criterion)}
-                          >
-                            <Edit2 className="w-3 h-3 mr-1" />
-                            Edit
-                          </Button>
-                        </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-                ))}
-            </div>
-          </div>
-
-          {/* Exclusion Criteria */}
-          <div>
-            <div className="flex items-center gap-2 mb-4">
-              <h2 className="font-semibold text-gray-900">Exclusion Criteria</h2>
-              <Badge variant="outline" className="bg-red-50 text-red-700 border-red-200">
-                {criteria.filter(c => c.type === 'exclusion').length} criteria
-              </Badge>
-            </div>
-
-            <div className="space-y-3">
-              {criteria
-                .filter(c => c.type === 'exclusion')
-                .map(criterion => (
-                  <Card
-                    key={criterion.id}
-                    className={
-                      criterion.status === 'ai-suggested'
-                        ? 'border-orange-300 bg-orange-50'
-                        : criterion.status === 'edited'
-                          ? 'border-blue-300 bg-blue-50'
-                          : ''
-                    }
-                  >
-                    <CardContent className="pt-4 pb-4">
-                      <div className="flex items-start gap-4">
-                        <div className="flex-shrink-0">
-                          <span className="inline-flex items-center justify-center w-8 h-8 bg-red-100 text-red-700 rounded-md text-sm font-medium">
-                            {criterion.id}
-                          </span>
-                        </div>
-
-                        <div className="flex-1 min-w-0">
-                          {editingId === criterion.id ? (
-                            <div className="space-y-3">
-                              <Textarea
-                                value={editText}
-                                onChange={e => setEditText(e.target.value)}
-                                rows={3}
-                                className="text-sm"
-                              />
-                              <div className="flex gap-2">
-                                <Button size="sm" onClick={handleSaveEdit}>
-                                  Save Changes
+                            {criterion.status === 'ai-suggested' && (
+                              <>
+                                <Button size="sm" onClick={() => handleApprove(criterion.id)}>
+                                  <CheckCircle2 className="w-3 h-3 mr-1" />
+                                  Approve
                                 </Button>
-                                <Button
-                                  size="sm"
-                                  variant="outline"
-                                  onClick={() => {
-                                    setEditingId(null);
-                                    setEditText('');
-                                  }}
-                                >
-                                  Cancel
-                                </Button>
-                              </div>
-                            </div>
-                          ) : (
-                            <>
-                              <p className="text-sm text-gray-900 leading-relaxed">
-                                {criterion.text}
-                              </p>
+                              </>
+                            )}
 
-                              {criterion.evidenceSnippet && (
-                                <TooltipProvider>
-                                  <Tooltip>
-                                    <TooltipTrigger asChild>
-                                      <div className="mt-2 text-xs text-gray-600 flex items-center gap-1 cursor-help">
-                                        <FileText className="w-3 h-3" />
-                                        <span className="underline decoration-dotted">
-                                          View source evidence
-                                        </span>
-                                      </div>
-                                    </TooltipTrigger>
-                                    <TooltipContent className="max-w-md bg-white border border-gray-200 shadow-lg p-3">
-                                      <p className="text-xs text-gray-700">
-                                        {criterion.evidenceSnippet}
-                                      </p>
-                                    </TooltipContent>
-                                  </Tooltip>
-                                </TooltipProvider>
-                              )}
-                            </>
-                          )}
-                        </div>
-
-                        <div className="flex items-center gap-2">
-                          <ConfidenceChip
-                            confidence={criterion.confidence}
-                            dataSource="Protocol PDF Section 4.2"
-                          />
-
-                          {criterion.status === 'ai-suggested' && (
-                            <>
-                              <Button size="sm" onClick={() => handleApprove(criterion.id)}>
+                            {criterion.status === 'approved' && (
+                              <Badge className="bg-green-100 text-green-700 border-green-300">
                                 <CheckCircle2 className="w-3 h-3 mr-1" />
-                                Approve
-                              </Button>
-                            </>
-                          )}
+                                Approved
+                              </Badge>
+                            )}
 
-                          {criterion.status === 'approved' && (
-                            <Badge className="bg-green-100 text-green-700 border-green-300">
-                              <CheckCircle2 className="w-3 h-3 mr-1" />
-                              Approved
-                            </Badge>
-                          )}
+                            {criterion.status === 'edited' && (
+                              <Badge className="bg-blue-100 text-blue-700 border-blue-300">
+                                <Edit2 className="w-3 h-3 mr-1" />
+                                Edited
+                              </Badge>
+                            )}
 
-                          {criterion.status === 'edited' && (
-                            <Badge className="bg-blue-100 text-blue-700 border-blue-300">
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => handleOpenEditPanel(criterion)}
+                            >
                               <Edit2 className="w-3 h-3 mr-1" />
-                              Edited
-                            </Badge>
-                          )}
-
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => handleOpenEditPanel(criterion)}
-                          >
-                            <Edit2 className="w-3 h-3 mr-1" />
-                            Edit
-                          </Button>
+                              Edit
+                            </Button>
+                          </div>
                         </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-                ))}
+                      </CardContent>
+                    </Card>
+                  ))}
+              </div>
             </div>
-          </div>
+          ))}
         </div>
       </ScrollArea>
 
-      {/* Edit Panel */}
+      {/* Edit Panel (Text) */}
       {selectedCriterion && (
         <CriteriaEditPanel
           open={editPanelOpen}
@@ -614,23 +533,29 @@ export function ProtocolScreen({ protocol, onBack }: ProtocolScreenProps) {
             sourceText: selectedCriterion.evidenceSnippet,
           }}
           onSave={handleSaveEditPanel}
-          onDelete={handleDeleteCriterion}
         />
       )}
 
-      {/* Add Criteria Panel */}
-      <AddCriteriaPanel
-        open={addCriteriaPanelOpen}
-        onOpenChange={setAddCriteriaPanelOpen}
-        sourceDocuments={availableSourceDocs.length > 0 ? availableSourceDocs : undefined}
-        onSave={handleAddCriterion}
-      />
+      {/* Edit Panel (Mapping) */}
+      {selectedCriterion && (
+        <EditMappingModal
+          open={mappingModalOpen}
+          onOpenChange={setMappingModalOpen}
+          criterion={{
+            id: selectedCriterion.id,
+            text: selectedCriterion.text,
+            snomedCodes: selectedCriterion.snomedCodes,
+            fieldMapping: selectedCriterion.fieldMapping,
+          }}
+          onSave={handleSaveMapping}
+        />
+      )}
 
       {/* Source Materials Panel */}
       <SourceMaterialsPanel
         open={sourceMaterialsPanelOpen}
         onOpenChange={setSourceMaterialsPanelOpen}
-        onSelectDocument={handleSelectSourceDocument}
+        documents={sourceDocuments}
       />
     </div>
   );
