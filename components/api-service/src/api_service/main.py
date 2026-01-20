@@ -10,11 +10,11 @@ from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum
 from pathlib import Path
-from typing import List, Optional
+from typing import List
 
 from anyio import to_thread
 from data_pipeline.download_protocols import extract_text_from_pdf
-from dotenv import load_dotenv
+from dotenv import find_dotenv, load_dotenv
 from extraction_service import pipeline as extraction_pipeline
 from fastapi import Body, Depends, FastAPI, File, HTTPException, UploadFile
 from grounding_service import umls_client
@@ -24,29 +24,12 @@ from api_service.dependencies import get_storage
 from api_service.storage import Criterion as StorageCriterion
 from api_service.storage import Storage, init_db, reset_storage
 
+# Load .env from repo root (find_dotenv walks up to find it)
+load_dotenv(find_dotenv())
+
 DEFAULT_MAX_UPLOAD_SIZE_BYTES = 20 * 1024 * 1024
 # Expose for backward compatibility with tests
 MAX_UPLOAD_SIZE_BYTES = DEFAULT_MAX_UPLOAD_SIZE_BYTES
-
-# Load environment variables from project root .env if present (safe discovery)
-def _find_project_root(start: Path) -> Optional[Path]:
-    """Find project root by walking up and checking for trusted markers."""
-    root_anchor = start.anchor
-    for parent in [start, *start.parents]:
-        if (parent / "pyproject.toml").exists() or (parent / ".git").exists():
-            return parent
-        if (parent / ".env").exists():
-            return parent
-        if str(parent) == root_anchor:  # reached filesystem root
-            break
-    return None
-
-
-_root = _find_project_root(Path(__file__).resolve())
-if _root is not None:
-    _env = _root / ".env"
-    if _env.exists():
-        load_dotenv(_env)
 
 
 @dataclass(frozen=True)
