@@ -994,8 +994,8 @@
 <article class="md-content__inner md-typeset">
 <h1 id="grounding-flow">Grounding Flow</h1>
 <div class="mermaid">flowchart LR
-  criterion[CriterionText] --&gt; ubkg[UBKGSearch]
-  ubkg --&gt; candidates[SNOMEDCandidates]
+  criterion[CriterionText] --&gt; umls[UMLSSearch]
+  umls --&gt; candidates[SNOMEDCandidates]
   candidates --&gt; rank[ModelRanking]
   rank --&gt; review[HITLReview]
   criterion --&gt; fieldmap[FieldRelationValueMapping]

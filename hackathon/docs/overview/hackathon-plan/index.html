@@ -747,10 +747,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#34-ubkg-integration" class="md-nav__link">
+  <a href="#34-umls-integration" class="md-nav__link">
     <span class="md-ellipsis">
       
-        3.4 UBKG Integration
+        3.4 UMLS Integration
       
     </span>
   </a>
@@ -775,10 +775,10 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#41-week-1-data-ubkg-integration-jan-1521" class="md-nav__link">
+  <a href="#41-week-1-data-umls-integration-jan-1521" class="md-nav__link">
     <span class="md-ellipsis">
       
-        4.1 Week 1 – Data &amp; UBKG Integration (Jan 15–21)
+        4.1 Week 1 – Data &amp; UMLS Integration (Jan 15–21)
       
     </span>
   </a>
@@ -847,10 +847,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#52-ubkg-as-single-source-of-truth" class="md-nav__link">
+  <a href="#52-umls-as-single-source-of-truth" class="md-nav__link">
     <span class="md-ellipsis">
       
-        5.2 UBKG as Single Source of Truth
+        5.2 UMLS as Single Source of Truth
       
     </span>
   </a>
@@ -2766,10 +2766,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#34-ubkg-integration" class="md-nav__link">
+  <a href="#34-umls-integration" class="md-nav__link">
     <span class="md-ellipsis">
       
-        3.4 UBKG Integration
+        3.4 UMLS Integration
       
     </span>
   </a>
@@ -2794,10 +2794,10 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#41-week-1-data-ubkg-integration-jan-1521" class="md-nav__link">
+  <a href="#41-week-1-data-umls-integration-jan-1521" class="md-nav__link">
     <span class="md-ellipsis">
       
-        4.1 Week 1 – Data &amp; UBKG Integration (Jan 15–21)
+        4.1 Week 1 – Data &amp; UMLS Integration (Jan 15–21)
       
     </span>
   </a>
@@ -2866,10 +2866,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#52-ubkg-as-single-source-of-truth" class="md-nav__link">
+  <a href="#52-umls-as-single-source-of-truth" class="md-nav__link">
     <span class="md-ellipsis">
       
-        5.2 UBKG as Single Source of Truth
+        5.2 UMLS as Single Source of Truth
       
     </span>
   </a>
@@ -3002,14 +3002,14 @@
 
 
 <h1 id="medgemma-hackathon-concise-operational-plan">MedGemma Hackathon – Concise Operational Plan</h1>
-<p><strong>Goal:</strong> Deliver a hackathon‑ready MedGemma HITL demo that extracts atomic inclusion/exclusion criteria from trial protocols, grounds them to SNOMED via UBKG, and maps criteria to field/relation/value (e.g., <code>demographics.age &gt; 75</code>), with a clear ElixirTrials integration story.</p>
+<p><strong>Goal:</strong> Deliver a hackathon‑ready MedGemma HITL demo that extracts atomic inclusion/exclusion criteria from trial protocols, grounds them to SNOMED via the UMLS API, and maps criteria to field/relation/value (e.g., <code>demographics.age &gt; 75</code>), with a clear ElixirTrials integration story.</p>
 <h2 id="1-project-brief">1. Project Brief</h2>
 <h3 id="11-problem-impact">1.1 Problem &amp; Impact</h3>
 <ul>
 <li>Clinical trial protocols are unstructured; screening is slow and error‑prone.</li>
 <li>We build an AI‑assisted system that:</li>
 <li>Extracts <strong>atomic inclusion/exclusion criteria</strong> from protocols.</li>
-<li>Maps them to <strong>SNOMED</strong> (via UBKG REST API).</li>
+<li>Maps them to <strong>SNOMED</strong> (via the UMLS REST API).</li>
 <li>Maps criteria to <strong>field + relation + value</strong> for EMR screening (e.g., <code>demographics.age &gt; 75</code>).</li>
 <li>Lets a <strong>nurse reviewer</strong> correct mappings through a simple HITL UI.</li>
 <li>Target <strong>time savings:</strong> ~65–70% nurse time per protocol vs. manual review.  </li>
@@ -3048,7 +3048,7 @@
 <ul>
 <li>Ingest <strong>public ClinicalTrials.gov protocols</strong> (200–300).</li>
 <li>Extract <strong>atomic inclusion/exclusion criteria</strong>.</li>
-<li>Ground criteria to <strong>SNOMED</strong> via UBKG REST API (no external dependencies beyond public APIs).</li>
+<li>Ground criteria to <strong>SNOMED</strong> via the UMLS REST API (no external dependencies beyond public APIs).</li>
 <li>Map criteria to <strong>field + relation + value</strong> for EMR screening (field‑value mapping).</li>
 <li><strong>HITL backend</strong>:</li>
 <li>Save criteria, suggested codes, and nurse edits.</li>
@@ -3089,7 +3089,7 @@
 </li>
 <li>Endpoint: <code>POST /v1/criteria/{id}/ground</code></li>
 <li>
-<p>UBKG REST API (terminology lookup) + MedGemma (LoRA Task B) → ranked SNOMED codes + field/relation/value mapping.</p>
+<p>UMLS REST API (terminology lookup) + MedGemma (LoRA Task B) → ranked SNOMED codes + field/relation/value mapping.</p>
 </li>
 <li>
 <p><strong>HITL Review</strong></p>
@@ -3121,7 +3121,7 @@
 <li><code>PATCH /v1/criteria/{criterionId}</code></li>
 <li>Edit criterion text/type/etc.</li>
 <li><code>POST /v1/criteria/{criterionId}/ground</code></li>
-<li>Get SNOMED candidates via UBKG REST API + field/relation/value mapping.</li>
+<li>Get SNOMED candidates via the UMLS REST API + field/relation/value mapping.</li>
 <li><code>POST /v1/hitl/feedback</code></li>
 <li>Log nurse actions (accept/remove/add code etc).</li>
 </ul>
@@ -3145,7 +3145,7 @@
 </tr>
 <tr>
 <td>Terminology</td>
-<td>UBKG REST API (no custom wrapper)</td>
+<td>UMLS REST API (no custom wrapper)</td>
 </tr>
 <tr>
 <td>DB</td>
@@ -3161,43 +3161,39 @@
 </tr>
 </tbody>
 </table>
-<h3 id="34-ubkg-integration">3.4 UBKG Integration</h3>
-<p><strong>Why UBKG:</strong>
-- Pre‑built, production‑grade knowledge graph combining UMLS + external ontologies.
-- REST API + Neo4j options.
-- Zero licensing overhead for hackathon (public/research access).
-- Multi‑terminology support (SNOMED, LOINC, RxNorm, ICD‑10) built‑in.</p>
+<h3 id="34-umls-integration">3.4 UMLS Integration</h3>
+<p><strong>Why UMLS:</strong>
+- Official NLM terminology services with SNOMED coverage.
+- Simple REST API with API key authentication.
+- Public/research access with license acceptance.
+- Multi‑terminology support; we restrict to SNOMEDCT_US for grounding.</p>
 <p><strong>Usage Pattern:</strong></p>
-<pre><code class="language-python"># Lookup term in UBKG
-POST https://ubkg-api.xconsortia.org/search
-{
-  &quot;query&quot;: &quot;stage III melanoma&quot;,
-  &quot;ontology&quot;: &quot;SNOMED&quot;,
-  &quot;limit&quot;: 5
-}
+<pre><code class="language-python"># Lookup term in UMLS
+GET https://uts-ws.nlm.nih.gov/rest/search/current?string=stage%20III%20melanoma&amp;sabs=SNOMEDCT_US&amp;returnIdType=code&amp;pageSize=5&amp;apiKey=YOUR_API_KEY
 
-# Response includes SNOMED codes + definitions + related terms
+# Response includes SNOMED codes + preferred names
 {
-  &quot;results&quot;: [
-    {
-      &quot;code&quot;: &quot;372244006&quot;,
-      &quot;display&quot;: &quot;Malignant melanoma, stage III&quot;,
-      &quot;ontology&quot;: &quot;SNOMED CT&quot;,
-      &quot;confidence&quot;: 0.92
-    }
-  ]
+  &quot;result&quot;: {
+    &quot;results&quot;: [
+      {
+        &quot;ui&quot;: &quot;372244006&quot;,
+        &quot;name&quot;: &quot;Malignant melanoma, stage III&quot;,
+        &quot;rootSource&quot;: &quot;SNOMEDCT_US&quot;
+      }
+    ]
+  }
 }
 </code></pre>
 <p><strong>Implementation:</strong>
-- Simple HTTP client in <code>backend/ubkg_client.py</code>.
-- Optional local caching (Redis or in‑memory) for frequent lookups.
-- Fallback to pre‑cached SNOMED subset if API unavailable.</p>
+- Simple HTTP client in <code>grounding_service/umls_client.py</code>.
+- Required <code>UMLS_API_KEY</code> (env var).
+- Optional in‑memory caching for frequent lookups.</p>
 <hr />
 <h2 id="4-sprints-daily-execution">4. Sprints &amp; Daily Execution</h2>
-<h3 id="41-week-1-data-ubkg-integration-jan-1521">4.1 Week 1 – Data &amp; UBKG Integration (Jan 15–21)</h3>
+<h3 id="41-week-1-data-umls-integration-jan-1521">4.1 Week 1 – Data &amp; UMLS Integration (Jan 15–21)</h3>
 <p><strong>Goals:</strong>
 - Have protocols in DB.
-- UBKG API client working + cached.
+- UMLS API client working + cached.
 - Minimal extraction pipeline running (base model).</p>
 <p><strong>Tasks:</strong></p>
 <ul>
@@ -3211,13 +3207,12 @@ POST https://ubkg-api.xconsortia.org/search
 </ul>
 </li>
 <li>
-<p><strong>UBKG Integration</strong></p>
+<p><strong>UMLS Integration</strong></p>
 </li>
-<li>Implement <code>backend/ubkg_client.py</code>:<ul>
-<li>HTTP client to UBKG REST API.</li>
-<li>Query term → get SNOMED candidates.</li>
+<li>Implement <code>grounding_service/umls_client.py</code>:<ul>
+<li>HTTP client to UMLS REST API.</li>
+<li>Query term → get SNOMEDCT_US candidates.</li>
 <li>Simple in‑memory cache (TTL configurable).</li>
-<li>Fallback: load local SNOMED subset (CSV from UBKG downloads).</li>
 </ul>
 </li>
 <li>
@@ -3229,14 +3224,14 @@ POST https://ubkg-api.xconsortia.org/search
 <li>Implement rough parsing of I/E sections into candidate criteria (regex/sentence splitting).</li>
 <li>Run base MedGemma (no LoRA) for:<ul>
 <li>Type classification (inclusion/exclusion).</li>
-<li>Draft SNOMED suggestions via UBKG.</li>
+<li>Draft SNOMED suggestions via UMLS.</li>
 <li>Draft field/relation/value mapping suggestions.</li>
 </ul>
 </li>
 </ul>
 <p><strong>Decision / Risk:</strong>
 - By <strong>end of Week 1</strong>:
-  - If UBKG API rate limits hit → use local SNOMED subset file only.</p>
+  - If UMLS API rate limits hit → reduce pageSize and rely on caching.</p>
 <hr />
 <h3 id="42-week-2-hitl-labeling-jan-2228">4.2 Week 2 – HITL &amp; Labeling (Jan 22–28)</h3>
 <p><strong>Goals:</strong>
@@ -3265,7 +3260,7 @@ POST https://ubkg-api.xconsortia.org/search
 <li>
 <p><strong>Annotation Workflow</strong></p>
 </li>
-<li>Pre‑label criteria using base MedGemma + UBKG:<ul>
+<li>Pre‑label criteria using base MedGemma + UMLS:<ul>
 <li>Save as <code>criteria_prelabeled.jsonl</code>.</li>
 </ul>
 </li>
@@ -3303,7 +3298,7 @@ POST https://ubkg-api.xconsortia.org/search
 </li>
 <li>Task B (Grounding):<ul>
 <li>Separate LoRA adapter, same config.</li>
-<li>Training data from nurse‑validated mapping + UBKG candidates.</li>
+<li>Training data from nurse‑validated mapping + UMLS candidates.</li>
 </ul>
 </li>
 <li>
@@ -3398,14 +3393,14 @@ POST https://ubkg-api.xconsortia.org/search
       backend/
         main.py
         models/
-        ubkg_client.py
+        umls_client.py
         tests/
       notebooks/
       data/ (small sample only)
       docs/
         api_spec.yaml
         architecture.md
-        ubkg_notes.md
+        umls_notes.md
       docker-compose.yml
       README.md</code></li>
 <li>
@@ -3413,7 +3408,7 @@ POST https://ubkg-api.xconsortia.org/search
 <ul>
 <li>One‑command run.</li>
 <li>Hardware assumptions.</li>
-<li>UBKG API &amp; UMLS licensing notes.</li>
+<li>UMLS API licensing notes.</li>
 <li>"Demo only – not for clinical use" disclaimer.</li>
 </ul>
 </li>
@@ -3432,11 +3427,10 @@ POST https://ubkg-api.xconsortia.org/search
 <h2 id="5-key-implementation-notes">5. Key Implementation Notes</h2>
 <h3 id="51-umls-approval-already-secured">5.1 UMLS Approval Already Secured</h3>
 <p>✅ No NLM license delay; proceed directly with full deployment.</p>
-<h3 id="52-ubkg-as-single-source-of-truth">5.2 UBKG as Single Source of Truth</h3>
+<h3 id="52-umls-as-single-source-of-truth">5.2 UMLS as Single Source of Truth</h3>
 <ul>
-<li>Use UBKG REST API for all terminology lookups (SNOMED, LOINC, RxNorm, ICD‑10).</li>
+<li>Use the UMLS REST API for all terminology lookups (SNOMED, LOINC, RxNorm, ICD‑10).</li>
 <li>No custom wrapper needed; simple HTTP client + optional caching.</li>
-<li>Fallback: pre‑download SNOMED subset as CSV from UBKG downloads.</li>
 </ul>
 <h3 id="53-data-privacy">5.3 Data Privacy</h3>
 <ul>

@@ -995,7 +995,7 @@
 <h1 id="hitl-flow">HITL Flow</h1>
 <div class="mermaid">flowchart LR
   protocol[ProtocolUpload] --&gt; extract[CriteriaExtraction]
-  extract --&gt; ground[UBKGGrounding + FieldMapping]
+  extract --&gt; ground[UMLSGrounding + FieldMapping]
   ground --&gt; review[HITLReview]
   review --&gt; feedback[FeedbackLog]
   feedback --&gt; retrain[LoRAUpdate]

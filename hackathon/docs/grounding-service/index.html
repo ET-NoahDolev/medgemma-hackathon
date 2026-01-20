@@ -1574,10 +1574,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#configuration-planned" class="md-nav__link">
+  <a href="#configuration" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Configuration (planned)
+        Configuration
       
     </span>
   </a>
@@ -2424,10 +2424,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#configuration-planned" class="md-nav__link">
+  <a href="#configuration" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Configuration (planned)
+        Configuration
       
     </span>
   </a>
@@ -2455,31 +2455,32 @@
 
 
 <h1 id="grounding-service">grounding-service</h1>
-<p>UBKG REST client and grounding helpers for Task B. Retrieves SNOMED candidates and field/relation/value mappings for each criterion.</p>
+<p>UMLS REST client and grounding helpers for Task B. Retrieves SNOMED candidates and field/relation/value mappings for each criterion.</p>
 <h2 id="responsibilities">Responsibilities</h2>
 <ul>
-<li>Query UBKG for SNOMED candidates.</li>
+<li>Query UMLS for SNOMED candidates.</li>
 <li>Propose field/relation/value mappings for screening.</li>
 <li>Return ranked candidates with display names and confidence scores.</li>
 </ul>
 <h2 id="key-module">Key Module</h2>
 <ul>
-<li><code>grounding_service/ubkg_client.py</code></li>
+<li><code>grounding_service/umls_client.py</code></li>
 </ul>
 <h2 id="example-usage">Example Usage</h2>
-<pre><code class="language-python">from grounding_service.ubkg_client import UbkgClient
+<pre><code class="language-python">from grounding_service.umls_client import UmlsClient
 
-client = UbkgClient()
+client = UmlsClient(api_key=&quot;your-umls-api-key&quot;)
 results = client.search_snomed(&quot;stage III melanoma&quot;)
 print(results)
 </code></pre>
 <h2 id="tests">Tests</h2>
 <pre><code class="language-bash">make check-all
 </code></pre>
-<h2 id="configuration-planned">Configuration (planned)</h2>
+<h2 id="configuration">Configuration</h2>
 <ul>
-<li><code>UBKG_BASE_URL</code> (default: <code>https://ubkg-api.xconsortia.org</code>)</li>
-<li><code>UBKG_TIMEOUT_SECONDS</code></li>
+<li><code>UMLS_API_KEY</code> (required)</li>
+<li><code>UMLS_BASE_URL</code> (default: <code>https://uts-ws.nlm.nih.gov/rest</code>)</li>
+<li><code>UMLS_TIMEOUT_SECONDS</code></li>
 </ul>
 
 

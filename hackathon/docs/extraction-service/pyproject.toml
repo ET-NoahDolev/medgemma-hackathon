@@ -5,6 +5,7 @@ description = "extraction-service component"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
+    "shared",
 ]
 
 [dependency-groups]
@@ -28,11 +29,15 @@ lint.pydocstyle.convention = "google"
 strict = true
 exclude = ["venv", ".venv", "docs"]
 plugins = []
+mypy_path = ["../shared/src"]
 
 [tool.pytest.ini_options]
-pythonpath = ["src"]
+pythonpath = ["src", "../shared/src"]
 testpaths = ["tests"]
 addopts = "--cov=extraction_service --cov-branch --cov-report=term-missing"
 
 [tool.uv]
 cache-dir = "./.uv_cache"
+
+[tool.uv.sources]
+shared = { workspace = true }

@@ -2509,7 +2509,9 @@ uv run uvicorn api_service.main:app --reload
 <ul>
 <li><code>DATABASE_URL</code> for persistence.</li>
 <li><code>EXTRACTION_SERVICE_URL</code> for extraction orchestration.</li>
-<li><code>GROUNDING_SERVICE_URL</code> for UBKG grounding.</li>
+<li><code>GROUNDING_SERVICE_URL</code> for UMLS grounding.</li>
+<li><code>UMLS_API_KEY</code> (or <code>GROUNDING_SERVICE_UMLS_API_KEY</code>) required for UMLS lookups.</li>
+<li><code>API_SERVICE_MAX_UPLOAD_BYTES</code> to cap PDF uploads (default: 20971520 bytes).</li>
 </ul>
 
 

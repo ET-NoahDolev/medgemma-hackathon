@@ -56,7 +56,7 @@ def snomed_top1_accuracy(predicted: List[str], gold: List[str]) -> float:
 
     Notes:
         This stub will be replaced by a metric implementation aligned with
-        UBKG candidate ranking outputs.
+        UMLS candidate ranking outputs.
     """
     if not predicted or not gold:
         raise ValueError("predicted and gold must be non-empty")

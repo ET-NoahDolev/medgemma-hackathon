@@ -1078,7 +1078,7 @@
   dataPipeline --&gt; apiService
   apiService --&gt; extractionService
   apiService --&gt; groundingService
-  groundingService --&gt; ubkgApi
+  groundingService --&gt; umlsApi
   hitlUi --&gt; apiService
   apiService --&gt; database
 </div>
@@ -1108,7 +1108,7 @@
 </tr>
 <tr>
 <td><code>grounding-service</code></td>
-<td>UBKG REST lookup for SNOMED candidates + field/relation/value mapping suggestions.</td>
+<td>UMLS REST lookup for SNOMED candidates + field/relation/value mapping suggestions.</td>
 </tr>
 <tr>
 <td><code>data-pipeline</code></td>

@@ -22,7 +22,7 @@ class ExtractedCriterion(TypingProtocol):
     confidence: float
 
 
-class Protocol(SQLModel, table=True):  # type: ignore[call-arg]
+class Protocol(SQLModel, table=True):
     """Protocol record persisted for API requests."""
 
     id: str = Field(primary_key=True)
@@ -32,9 +32,11 @@ class Protocol(SQLModel, table=True):  # type: ignore[call-arg]
     condition: str | None = None
     phase: str | None = None
     source: str | None = None
+    registry_id: str | None = None
+    registry_type: str | None = None
 
 
-class Criterion(SQLModel, table=True):  # type: ignore[call-arg]
+class Criterion(SQLModel, table=True):
     """Criterion record persisted for API requests."""
 
     id: str = Field(primary_key=True)
@@ -45,9 +47,12 @@ class Criterion(SQLModel, table=True):  # type: ignore[call-arg]
     snomed_codes: list[str] = Field(
         default_factory=list, sa_column=Column(JSON, nullable=False)
     )
+    evidence_spans: list[dict[str, object]] = Field(
+        default_factory=list, sa_column=Column(JSON, nullable=False)
+    )
 
 
-class HitlEdit(SQLModel, table=True):  # type: ignore[call-arg]
+class HitlEdit(SQLModel, table=True):
     """HITL edit record for tracking reviewer changes."""
 
     id: str = Field(primary_key=True)
@@ -61,7 +66,7 @@ class HitlEdit(SQLModel, table=True):  # type: ignore[call-arg]
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 
-class IdCounter(SQLModel, table=True):  # type: ignore[call-arg]
+class IdCounter(SQLModel, table=True):
     """Simple counter table for stable prefixed identifiers."""
 
     key: str = Field(primary_key=True)
@@ -74,14 +79,18 @@ DEFAULT_DB_PATH = (
 
 
 def _database_url() -> str:
-    return os.getenv("API_SERVICE_DB_URL", f"sqlite:///{DEFAULT_DB_PATH}")
+    return (
+        os.getenv("DATABASE_URL")
+        or os.getenv("API_SERVICE_DB_URL")
+        or f"sqlite:///{DEFAULT_DB_PATH}"
+    )
 
 
 @lru_cache
 def get_engine() -> Engine:
     """Create or return the cached database engine."""
     db_path = DEFAULT_DB_PATH
-    if "API_SERVICE_DB_URL" not in os.environ:
+    if "DATABASE_URL" not in os.environ and "API_SERVICE_DB_URL" not in os.environ:
         db_path.parent.mkdir(parents=True, exist_ok=True)
     return create_engine(
         _database_url(),
@@ -135,6 +144,8 @@ class Storage:
         condition: str | None = None,
         phase: str | None = None,
         source: str | None = None,
+        registry_id: str | None = None,
+        registry_type: str | None = None,
     ) -> Protocol:
         """Persist a protocol record and return it."""
         with Session(self._engine) as session:
@@ -147,6 +158,8 @@ class Storage:
                 condition=_norm_opt(condition),
                 phase=_norm_opt(phase),
                 source=_norm_opt(source),
+                registry_id=_norm_opt(registry_id),
+                registry_type=_norm_opt(registry_type),
             )
             session.add(protocol)
             session.commit()

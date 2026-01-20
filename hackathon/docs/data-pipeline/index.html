@@ -1025,6 +1025,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#load-into-the-api-database" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Load Into the API Database
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#planned-outputs" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2424,6 +2435,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#load-into-the-api-database" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Load Into the API Database
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#planned-outputs" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2474,9 +2496,30 @@ python scripts/download_protocol_sources.py --sources dac jmir --max-per-source 
 <h2 id="entry-point">Entry Point</h2>
 <ul>
 <li><code>data_pipeline/download_protocols.py</code></li>
+<li><code>data_pipeline/loader.py</code></li>
 </ul>
 <h2 id="running-the-stub">Running the Stub</h2>
-<pre><code class="language-bash">uv run python -m data_pipeline.download_protocols
+<pre><code class="language-bash"># Ensure PDFs and manifest exist first
+python scripts/download_protocol_sources.py --max-per-source 10
+
+# Ingest downloaded PDFs
+uv run python -m data_pipeline.download_protocols --manifest-path data/protocols/manifest.jsonl
+</code></pre>
+<h2 id="load-into-the-api-database">Load Into the API Database</h2>
+<p>Use the loader to import extracted PDFs into the API database.</p>
+<pre><code class="language-bash"># Single PDF
+uv run python -m data_pipeline.loader --pdf data/protocols/example.pdf --api-url http://localhost:8000
+
+# Bulk from manifest
+uv run python -m data_pipeline.loader --manifest data/protocols/manifest.jsonl --limit 50
+
+# Without auto-extraction
+uv run python -m data_pipeline.loader --pdf data/protocols/example.pdf --no-extract
+</code></pre>
+<p>The API also exposes a PDF upload endpoint:</p>
+<pre><code class="language-bash">curl -X POST http://localhost:8000/v1/protocols/upload \
+  -F &quot;file=@data/protocols/example.pdf&quot; \
+  -F &quot;auto_extract=true&quot;
 </code></pre>
 <h2 id="planned-outputs">Planned Outputs</h2>
 <ul>
