@@ -8,8 +8,9 @@ from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from datetime import datetime
+from enum import Enum
 from pathlib import Path
-from typing import List
+from typing import List, Optional
 
 from anyio import to_thread
 from data_pipeline.download_protocols import extract_text_from_pdf
@@ -27,12 +28,25 @@ DEFAULT_MAX_UPLOAD_SIZE_BYTES = 20 * 1024 * 1024
 # Expose for backward compatibility with tests
 MAX_UPLOAD_SIZE_BYTES = DEFAULT_MAX_UPLOAD_SIZE_BYTES
 
-# Load environment variables from repo root .env (if present) safely.
-_here = Path(__file__).resolve()
-_repo_root = _here.parents[4] if len(_here.parents) >= 5 else _here.parents[-1]
-_env_path = _repo_root / ".env"
-if _env_path.exists():
-    load_dotenv(_env_path)
+# Load environment variables from project root .env if present (safe discovery)
+def _find_project_root(start: Path) -> Optional[Path]:
+    """Find project root by walking up and checking for trusted markers."""
+    root_anchor = start.anchor
+    for parent in [start, *start.parents]:
+        if (parent / "pyproject.toml").exists() or (parent / ".git").exists():
+            return parent
+        if (parent / ".env").exists():
+            return parent
+        if str(parent) == root_anchor:  # reached filesystem root
+            break
+    return None
+
+
+_root = _find_project_root(Path(__file__).resolve())
+if _root is not None:
+    _env = _root / ".env"
+    if _env.exists():
+        load_dotenv(_env)
 
 
 @dataclass(frozen=True)
@@ -163,11 +177,23 @@ class GroundingResponse(BaseModel):
     field_mapping: FieldMappingResponse | None
 
 
+class HitlAction(str, Enum):
+    """HITL action types."""
+
+    accept = "accept"
+    reject = "reject"
+    edit = "edit"
+    add_code = "add_code"
+    remove_code = "remove_code"
+    add_mapping = "add_mapping"
+    remove_mapping = "remove_mapping"
+
+
 class HitlFeedbackRequest(BaseModel):
     """Payload for HITL feedback actions."""
 
     criterion_id: str
-    action: str
+    action: HitlAction
     snomed_code_added: str | None = None
     snomed_code_removed: str | None = None
     field_mapping_added: str | None = None
@@ -180,7 +206,7 @@ class HitlEditResponse(BaseModel):
 
     id: str
     criterion_id: str
-    action: str
+    action: HitlAction
     snomed_code_added: str | None
     snomed_code_removed: str | None
     field_mapping_added: str | None
@@ -328,6 +354,9 @@ def list_protocols(
     storage: Storage = Depends(get_storage),
 ) -> ProtocolListResponse:
     """List all protocols with pagination."""
+    if skip < 0 or limit <= 0 or limit > 100:
+        raise HTTPException(status_code=400, detail="Invalid pagination parameters")
+
     protocols, total = storage.list_protocols(skip=skip, limit=limit)
     return ProtocolListResponse(
         protocols=[
@@ -356,7 +385,7 @@ def get_protocol(
     if protocol is None:
         raise HTTPException(status_code=404, detail="Protocol not found")
 
-    criteria_count = len(storage.list_criteria(protocol_id))
+    criteria_count = storage.count_criteria(protocol_id)
 
     return ProtocolDetailResponse(
         protocol_id=protocol.id,
@@ -481,39 +510,34 @@ def hitl_feedback(
     """Record HITL feedback for criteria, SNOMED candidates, and field mappings."""
     if payload is None:
         raise HTTPException(status_code=400, detail="Missing feedback payload")
-    allowed_actions = {
-        "accept",
-        "reject",
-        "edit",
-        "add_code",
-        "remove_code",
-        "add_mapping",
-        "remove_mapping",
-    }
-    if payload.action not in allowed_actions:
-        raise HTTPException(
-            status_code=400, detail=f"Invalid action: {payload.action}"
-        )
-    if payload.action == "add_code" and not payload.snomed_code_added:
+
+    # Ensure criterion exists
+    criterion = storage.get_criterion(payload.criterion_id)
+    if criterion is None:
+        raise HTTPException(status_code=404, detail="Criterion not found")
+    if payload.action == HitlAction.add_code and not payload.snomed_code_added:
         raise HTTPException(
             status_code=400, detail="snomed_code_added is required for add_code"
         )
-    if payload.action == "remove_code" and not payload.snomed_code_removed:
+    if payload.action == HitlAction.remove_code and not payload.snomed_code_removed:
         raise HTTPException(
             status_code=400, detail="snomed_code_removed is required for remove_code"
         )
-    if payload.action == "add_mapping" and not payload.field_mapping_added:
+    if payload.action == HitlAction.add_mapping and not payload.field_mapping_added:
         raise HTTPException(
             status_code=400, detail="field_mapping_added is required for add_mapping"
         )
-    if payload.action == "remove_mapping" and not payload.field_mapping_removed:
+    if (
+        payload.action == HitlAction.remove_mapping
+        and not payload.field_mapping_removed
+    ):
         raise HTTPException(
             status_code=400,
             detail="field_mapping_removed is required for remove_mapping",
         )
     storage.create_hitl_edit(
         criterion_id=payload.criterion_id,
-        action=payload.action,
+        action=payload.action.value,
         snomed_code_added=payload.snomed_code_added,
         snomed_code_removed=payload.snomed_code_removed,
         field_mapping_added=payload.field_mapping_added,
@@ -541,7 +565,7 @@ def list_criterion_edits(
             HitlEditResponse(
                 id=edit.id,
                 criterion_id=edit.criterion_id,
-                action=edit.action,
+                action=HitlAction(edit.action),
                 snomed_code_added=edit.snomed_code_added,
                 snomed_code_removed=edit.snomed_code_removed,
                 field_mapping_added=edit.field_mapping_added,

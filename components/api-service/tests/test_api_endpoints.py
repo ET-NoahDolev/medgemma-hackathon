@@ -148,9 +148,19 @@ def test_hitl_feedback_returns_recorded(
     client: TestClient,
     fake_services: FakeServicesState,
 ) -> None:
+    create_response = client.post(
+        "/v1/protocols",
+        json={"title": PROTOCOL_TITLE, "document_text": DOCUMENT_TEXT},
+    )
+    protocol_id = create_response.json()["protocol_id"]
+    client.post(f"/v1/protocols/{protocol_id}/extract")
+
+    list_response = client.get(f"/v1/protocols/{protocol_id}/criteria")
+    criterion_id = list_response.json()["criteria"][0]["id"]
+
     response = client.post(
         "/v1/hitl/feedback",
-        json={"criterion_id": "crit-1", "action": "accept"},
+        json={"criterion_id": criterion_id, "action": "accept"},
     )
 
     assert response.status_code == 200

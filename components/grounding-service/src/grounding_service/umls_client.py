@@ -21,6 +21,7 @@ from typing import Sequence, cast
 
 import diskcache  # type: ignore[import-untyped]
 import httpx
+from platformdirs import user_cache_dir
 from tenacity import (
     retry,
     retry_if_exception_type,
@@ -97,16 +98,12 @@ class UmlsClient:
             raise ValueError("UMLS_API_KEY is required")
         self._http = httpx.Client(timeout=self.timeout)
         cache_dir = os.getenv("UMLS_CACHE_DIR")
-        default_cache = Path(__file__).resolve().parent / ".cache" / "umls"
+        default_cache = Path(user_cache_dir("grounding-service", "gemma")) / "umls"
         cache_path = Path(cache_dir) if cache_dir else default_cache
         cache_path.mkdir(parents=True, exist_ok=True)
-        try:
-            os.chmod(cache_path, 0o700)
-        except Exception:
-            # Best-effort; some FS may not support chmod
-            pass
         self._cache_dir = str(cache_path)
         self._cache_ttl = self._parse_cache_ttl(os.getenv("UMLS_CACHE_TTL_SECONDS"))
+        self._cache = diskcache.Cache(self._cache_dir)
 
     def __enter__(self) -> "UmlsClient":
         """Enter context manager scope."""
@@ -133,15 +130,14 @@ class UmlsClient:
             raise ValueError("query is required")
 
         cache_key = f"snomed:{query.lower()}:{limit}"
-        with diskcache.Cache(self._cache_dir) as cache:
-            cached = cast(list[SnomedCandidate] | None, cache.get(cache_key))
-            if cached is not None:
-                return cached
+        cached = cast(list[SnomedCandidate] | None, self._cache.get(cache_key))
+        if cached is not None:
+            return cached
 
-            candidates = self._fetch_from_api(query, limit)
-            if self._cache_ttl:
-                cache.set(cache_key, candidates, expire=self._cache_ttl)
-            return candidates
+        candidates = self._fetch_from_api(query, limit)
+        if self._cache_ttl:
+            self._cache.set(cache_key, candidates, expire=self._cache_ttl)
+        return candidates
 
     def _fetch_from_api(self, query: str, limit: int) -> list[SnomedCandidate]:
         """Execute HTTP request to UMLS API with retry on transient errors."""
@@ -218,6 +214,10 @@ class UmlsClient:
     def close(self) -> None:
         """Close the HTTP client and release resources."""
         self._http.close()
+        try:
+            self._cache.close()
+        except Exception:
+            pass
 
     def __del__(self) -> None:  # pragma: no cover
         """Fallback cleanup if not used as context manager."""
@@ -228,8 +228,7 @@ class UmlsClient:
 
     def clear_cache(self) -> None:
         """Clear the search cache."""
-        with diskcache.Cache(self._cache_dir) as cache:
-            cache.clear()
+        self._cache.clear()
 
     @staticmethod
     def _parse_cache_ttl(value: str | None) -> int:

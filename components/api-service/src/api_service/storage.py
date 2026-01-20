@@ -12,7 +12,7 @@ from typing import Protocol as TypingProtocol
 from shared.models import Protocol as SharedProtocol
 from sqlalchemy import JSON, Column, delete, func
 from sqlalchemy.engine import Engine
-from sqlmodel import Field, Session, SQLModel, create_engine, select
+from sqlmodel import Field, Session, SQLModel, col, create_engine, select
 
 
 class ExtractedCriterion(TypingProtocol):
@@ -210,6 +210,16 @@ class Storage:
             )
             return list(session.exec(statement))
 
+    def count_criteria(self, protocol_id: str) -> int:
+        """Return count of criteria for a protocol without loading all rows."""
+        with Session(self._engine) as session:
+            result = session.exec(
+                select(func.count(col(Criterion.id))).where(
+                    cast(Any, Criterion.protocol_id) == protocol_id
+                )
+            ).one()
+            return int(result)
+
     def replace_criteria(
         self, *, protocol_id: str, extracted: Iterable[ExtractedCriterion]
     ) -> list[Criterion]:
@@ -307,10 +317,10 @@ class Storage:
     ) -> tuple[list[Protocol], int]:
         """List protocols with pagination."""
         with Session(self._engine) as session:
-            total = session.exec(select(func.count(Protocol.id))).one()  # type: ignore[arg-type]
+            total = session.exec(select(func.count(col(Protocol.id)))).one()
             statement = select(Protocol).offset(skip).limit(limit).order_by(Protocol.id)
             protocols = list(session.exec(statement))
-            return protocols, total
+            return protocols, int(total)
 
     def create_hitl_edit(
         self,

@@ -28,6 +28,7 @@ dependencies = [
     "sqlmodel>=0.0.31",
     "python-dotenv>=1.2.1",
     "diskcache>=5.6.3",
+    "platformdirs>=4.5.1",
 ]
 
 [dependency-groups]
@@ -84,6 +85,17 @@ ignore_missing_imports = true
 
 [[tool.mypy.overrides]]
 module = ["pypdf", "pypdf.*"]
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = [
+    "data_pipeline",
+    "data_pipeline.download_protocols",
+    "extraction_service",
+    "extraction_service.pipeline",
+    "shared",
+    "shared.models",
+]
 ignore_missing_imports = true
 
 [tool.pytest.ini_options]
