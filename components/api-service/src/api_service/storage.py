@@ -79,14 +79,18 @@ DEFAULT_DB_PATH = (
 
 
 def _database_url() -> str:
-    return os.getenv("API_SERVICE_DB_URL", f"sqlite:///{DEFAULT_DB_PATH}")
+    return (
+        os.getenv("DATABASE_URL")
+        or os.getenv("API_SERVICE_DB_URL")
+        or f"sqlite:///{DEFAULT_DB_PATH}"
+    )
 
 
 @lru_cache
 def get_engine() -> Engine:
     """Create or return the cached database engine."""
     db_path = DEFAULT_DB_PATH
-    if "API_SERVICE_DB_URL" not in os.environ:
+    if "DATABASE_URL" not in os.environ and "API_SERVICE_DB_URL" not in os.environ:
         db_path.parent.mkdir(parents=True, exist_ok=True)
     return create_engine(
         _database_url(),

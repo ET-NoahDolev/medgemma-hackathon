@@ -1,15 +1,17 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import Any, cast
 
 import pytest
 from fastapi.testclient import TestClient
 
-from api_service import main as api_main
+import api_service.main as api_main
 from api_service.main import app
 from api_service.storage import reset_storage
 from tests import constants
 
+api_main_any = cast(Any, api_main)
 
 @dataclass
 class FakeExtractedCriterion:
@@ -111,11 +113,11 @@ def fake_services(monkeypatch: pytest.MonkeyPatch) -> FakeServicesState:
         return state.field_mappings
 
     monkeypatch.setattr(
-        api_main.extraction_pipeline, "extract_criteria", _extract_criteria
+        api_main_any.extraction_pipeline, "extract_criteria", _extract_criteria
     )
-    monkeypatch.setattr(api_main.umls_client, "UmlsClient", FakeUmlsClient)
+    monkeypatch.setattr(api_main_any.umls_client, "UmlsClient", FakeUmlsClient)
     monkeypatch.setattr(
-        api_main.umls_client, "propose_field_mapping", _propose_field_mapping
+        api_main_any.umls_client, "propose_field_mapping", _propose_field_mapping
     )
 
     return state

@@ -9,6 +9,7 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import List
 
+from anyio import to_thread
 from data_pipeline.download_protocols import extract_text_from_pdf
 from extraction_service import pipeline as extraction_pipeline
 from fastapi import Body, Depends, FastAPI, File, HTTPException, UploadFile
@@ -33,6 +34,23 @@ async def lifespan(app_instance: FastAPI) -> AsyncIterator[None]:
 
 
 app = FastAPI(title="Gemma Hackathon API", version="0.1.0", lifespan=lifespan)
+DEFAULT_MAX_UPLOAD_SIZE_BYTES = 20 * 1024 * 1024
+
+
+def _max_upload_size_bytes() -> int:
+    raw_value = os.getenv("API_SERVICE_MAX_UPLOAD_BYTES")
+    if not raw_value:
+        return DEFAULT_MAX_UPLOAD_SIZE_BYTES
+    try:
+        parsed = int(raw_value)
+    except ValueError:
+        return DEFAULT_MAX_UPLOAD_SIZE_BYTES
+    if parsed <= 0:
+        return DEFAULT_MAX_UPLOAD_SIZE_BYTES
+    return parsed
+
+
+MAX_UPLOAD_SIZE_BYTES = _max_upload_size_bytes()
 
 
 class ProtocolCreateRequest(BaseModel):
@@ -147,16 +165,32 @@ async def upload_protocol(
 ) -> ProtocolResponse:
     """Upload a PDF protocol file and create a protocol record."""
     filename = file.filename or ""
-    if not filename.lower().endswith(".pdf"):
-        raise HTTPException(status_code=400, detail="Only PDF files are supported")
+    if file.content_type != "application/pdf" or not filename.lower().endswith(".pdf"):
+        raise HTTPException(
+            status_code=415, detail="Unsupported media type; only PDF is allowed"
+        )
 
+    bytes_read = 0
     with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as tmp:
-        content = await file.read()
-        tmp.write(content)
         tmp_path = Path(tmp.name)
+        while True:
+            chunk = await file.read(1024 * 1024)
+            if not chunk:
+                break
+            bytes_read += len(chunk)
+            if bytes_read > MAX_UPLOAD_SIZE_BYTES:
+                tmp_path.unlink(missing_ok=True)
+                raise HTTPException(status_code=413, detail="File too large")
+            tmp.write(chunk)
+
+    with tmp_path.open("rb") as handle:
+        header = handle.read(4)
+    if header != b"%PDF":
+        tmp_path.unlink(missing_ok=True)
+        raise HTTPException(status_code=400, detail="Invalid PDF file")
 
     try:
-        document_text = extract_text_from_pdf(tmp_path)
+        document_text = await to_thread.run_sync(extract_text_from_pdf, tmp_path)
     finally:
         tmp_path.unlink(missing_ok=True)
 
@@ -169,7 +203,9 @@ async def upload_protocol(
     protocol = storage.create_protocol(title=title, document_text=document_text)
 
     if auto_extract:
-        extracted = extraction_pipeline.extract_criteria(protocol.document_text)
+        extracted = await to_thread.run_sync(
+            extraction_pipeline.extract_criteria, protocol.document_text
+        )
         storage.replace_criteria(protocol_id=protocol.id, extracted=extracted)
 
     return ProtocolResponse(protocol_id=protocol.id, title=protocol.title)

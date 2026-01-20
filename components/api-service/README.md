@@ -44,3 +44,4 @@ make check-all
 - `EXTRACTION_SERVICE_URL` for extraction orchestration.
 - `GROUNDING_SERVICE_URL` for UMLS grounding.
 - `UMLS_API_KEY` (or `GROUNDING_SERVICE_UMLS_API_KEY`) required for UMLS lookups.
+- `API_SERVICE_MAX_UPLOAD_BYTES` to cap PDF uploads (default: 20971520 bytes).

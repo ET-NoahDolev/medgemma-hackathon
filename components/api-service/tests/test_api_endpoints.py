@@ -1,10 +1,12 @@
 import asyncio
+import io
 
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from tests.conftest import FakeExtractedCriterion
+from api_service import main as api_main
+from tests.conftest import FakeExtractedCriterion, FakeServicesState
 from tests.constants import (
     CRITERION_CONFIDENCE,
     CRITERION_TYPE,
@@ -19,16 +21,57 @@ from tests.constants import (
 
 def test_create_protocol_validation_error(
     client: TestClient,
-    fake_services: object,
+    fake_services: FakeServicesState,
 ) -> None:
     response = client.post("/v1/protocols", json={"title": PROTOCOL_TITLE})
 
     assert response.status_code == 422
 
 
+def test_upload_rejects_non_pdf_content_type(
+    client: TestClient,
+    fake_services: FakeServicesState,
+) -> None:
+    content = io.BytesIO(b"%PDF-1.4\n")
+    response = client.post(
+        "/v1/protocols/upload",
+        files={"file": ("protocol.pdf", content, "text/plain")},
+    )
+
+    assert response.status_code == 415
+
+
+def test_upload_rejects_invalid_pdf_signature(
+    client: TestClient,
+    fake_services: FakeServicesState,
+) -> None:
+    content = io.BytesIO(b"NOPE not a pdf")
+    response = client.post(
+        "/v1/protocols/upload",
+        files={"file": ("protocol.pdf", content, "application/pdf")},
+    )
+
+    assert response.status_code == 400
+
+
+def test_upload_rejects_oversized_file(
+    client: TestClient,
+    fake_services: FakeServicesState,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(api_main, "MAX_UPLOAD_SIZE_BYTES", 10)
+    content = io.BytesIO(b"%PDF" + b"x" * 20)
+    response = client.post(
+        "/v1/protocols/upload",
+        files={"file": ("protocol.pdf", content, "application/pdf")},
+    )
+
+    assert response.status_code == 413
+
+
 def test_extract_criteria_populates_list(
     client: TestClient,
-    fake_services: object,
+    fake_services: FakeServicesState,
 ) -> None:
     create_response = client.post(
         "/v1/protocols",
@@ -56,7 +99,7 @@ def test_extract_criteria_populates_list(
 
 def test_update_criterion_returns_updated_value(
     client: TestClient,
-    fake_services: object,
+    fake_services: FakeServicesState,
 ) -> None:
     create_response = client.post(
         "/v1/protocols",
@@ -79,7 +122,7 @@ def test_update_criterion_returns_updated_value(
 
 def test_ground_criterion_returns_candidates(
     client: TestClient,
-    fake_services: object,
+    fake_services: FakeServicesState,
 ) -> None:
     create_response = client.post(
         "/v1/protocols",
@@ -103,7 +146,7 @@ def test_ground_criterion_returns_candidates(
 
 def test_hitl_feedback_returns_recorded(
     client: TestClient,
-    fake_services: object,
+    fake_services: FakeServicesState,
 ) -> None:
     response = client.post(
         "/v1/hitl/feedback",
@@ -116,7 +159,7 @@ def test_hitl_feedback_returns_recorded(
 
 def test_extract_replaces_existing_criteria(
     client: TestClient,
-    fake_services: object,
+    fake_services: FakeServicesState,
 ) -> None:
     create_response = client.post(
         "/v1/protocols",
@@ -155,7 +198,7 @@ def test_extract_replaces_existing_criteria(
 
 def test_ground_criterion_handles_no_mapping(
     client: TestClient,
-    fake_services: object,
+    fake_services: FakeServicesState,
 ) -> None:
     create_response = client.post(
         "/v1/protocols",
@@ -178,7 +221,7 @@ def test_ground_criterion_handles_no_mapping(
 
 def test_ground_criterion_returns_empty_candidates(
     client: TestClient,
-    fake_services: object,
+    fake_services: FakeServicesState,
 ) -> None:
     create_response = client.post(
         "/v1/protocols",
