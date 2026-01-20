@@ -4,6 +4,7 @@ import react from '@vitejs/plugin-react-swc';
 import path from 'path';
 
 export default defineConfig(({ mode }) => {
+  void mode;
   const rawBasePath = process.env.BASE_PATH ?? '/demo-app/';
   const trimmedBasePath = rawBasePath.trim();
   const withLeadingSlash = trimmedBasePath

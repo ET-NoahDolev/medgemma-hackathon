@@ -1,15 +1,18 @@
-import { useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { GlassButton } from '@/components/ui/glass-button';
 import { Card, CardContent } from '@/components/ui/card';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Textarea } from '@/components/ui/textarea';
 import { ConfidenceChip } from '@/components/common/ConfidenceChip';
 import { Badge } from '@/components/ui/badge';
 import { CriteriaEditPanel } from '@/features/protocols/components/CriteriaEditPanel';
 import { AddCriteriaPanel } from '@/features/protocols/components/AddCriteriaPanel';
 import { SourceMaterialsPanel } from '@/features/protocols/components/SourceMaterialsPanel';
-import { mockCriteria, type Criterion } from '@/mocks/criteria';
+import { type Criterion } from '@/mocks/criteria';
+import { useCriteria } from '@/hooks/useCriteria';
+import { useSubmitFeedback } from '@/hooks/useSubmitFeedback';
+import { useUpdateCriterion } from '@/hooks/useUpdateCriterion';
+import { useUploadProtocol } from '@/hooks/useUploadProtocol';
 import {
   Upload,
   FileText,
@@ -39,14 +42,18 @@ interface ProtocolScreenProps {
 }
 
 export function ProtocolScreen({ protocol, onBack }: ProtocolScreenProps) {
-  // Check if this is a new protocol (no criteria uploaded yet)
-  const isNewProtocol =
-    protocol && protocol.criteriaCount?.inclusion === 0 && protocol.criteriaCount?.exclusion === 0;
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
 
-  const [uploaded, setUploaded] = useState(!isNewProtocol); // New protocols start with no upload
-  const [criteria, setCriteria] = useState<Criterion[]>(isNewProtocol ? [] : mockCriteria);
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const [editText, setEditText] = useState('');
+  const isNewProtocol =
+    !protocol || (protocol.criteriaCount?.inclusion === 0 && protocol.criteriaCount?.exclusion === 0);
+
+  const [activeProtocolId, setActiveProtocolId] = useState<string | null>(protocol?.id ?? null);
+  const [activeProtocolTitle, setActiveProtocolTitle] = useState<string>(
+    protocol?.name ?? 'New Protocol'
+  );
+  const [uploaded, setUploaded] = useState(!isNewProtocol);
+  const [criteria, setCriteria] = useState<Criterion[]>([]);
+  const [deletedIds, setDeletedIds] = useState<string[]>([]);
   const [editPanelOpen, setEditPanelOpen] = useState(false);
   const [selectedCriterion, setSelectedCriterion] = useState<Criterion | null>(null);
   const [addCriteriaPanelOpen, setAddCriteriaPanelOpen] = useState(false);
@@ -60,20 +67,69 @@ export function ProtocolScreen({ protocol, onBack }: ProtocolScreenProps) {
     }>
   >([]);
 
-  const handleApprove = (id: string) => {
-    setCriteria(prev => prev.map(c => (c.id === id ? { ...c, status: 'approved' as const } : c)));
-  };
+  const { data: criteriaData, isLoading, error, refetch } = useCriteria(activeProtocolId);
+  const uploadProtocol = useUploadProtocol();
+  const submitFeedback = useSubmitFeedback();
+  const updateCriterion = useUpdateCriterion();
 
-  const handleSaveEdit = () => {
-    if (editingId) {
-      setCriteria(prev =>
-        prev.map(c =>
-          c.id === editingId ? { ...c, text: editText, status: 'edited' as const } : c
-        )
-      );
-      setEditingId(null);
-      setEditText('');
-    }
+  const apiMappedCriteria: Criterion[] = useMemo(() => {
+    const apiCriteria = criteriaData?.criteria ?? [];
+    const mapped: Criterion[] = apiCriteria
+      .filter(c => !deletedIds.includes(c.id))
+      .map(c => ({
+        id: c.id,
+        type: (c.criterion_type as 'inclusion' | 'exclusion') ?? 'inclusion',
+        text: c.text,
+        confidence: c.confidence,
+        status: 'ai-suggested' as const,
+        evidenceSnippet: undefined,
+      }));
+    return mapped;
+  }, [criteriaData, deletedIds]);
+
+  // Keep existing local edits/statuses, but refresh text from API.
+  useEffect(() => {
+    if (!uploaded) return;
+    if (!activeProtocolId) return;
+
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setCriteria(prev => {
+      const prevById = new Map(prev.map(c => [c.id, c]));
+      const mergedFromApi = apiMappedCriteria.map(c => {
+        const prior = prevById.get(c.id);
+        if (!prior) return c;
+        return {
+          ...c,
+          status: prior.status,
+          evidenceSnippet: prior.evidenceSnippet,
+        };
+      });
+
+      // Preserve locally-added criteria (not present in API) and not deleted.
+      const apiIds = new Set(apiMappedCriteria.map(c => c.id));
+      const localOnly = prev.filter(c => !apiIds.has(c.id) && !deletedIds.includes(c.id));
+      return [...mergedFromApi, ...localOnly];
+    });
+  }, [activeProtocolId, apiMappedCriteria, deletedIds, uploaded]);
+
+  // If extraction is still running, poll until criteria appear.
+  useEffect(() => {
+    if (!uploaded) return;
+    if (!activeProtocolId) return;
+    if (isLoading) return;
+    if (error) return;
+    if ((criteriaData?.criteria?.length ?? 0) > 0) return;
+
+    const interval = window.setInterval(() => {
+      void refetch();
+    }, 1500);
+
+    return () => window.clearInterval(interval);
+  }, [activeProtocolId, criteriaData?.criteria?.length, error, isLoading, refetch, uploaded]);
+
+  const handleApprove = (id: string) => {
+    submitFeedback.mutate({ criterion_id: id, action: 'accept' });
+    setCriteria(prev => prev.map(c => (c.id === id ? { ...c, status: 'approved' as const } : c)));
   };
 
   const handleOpenEditPanel = (criterion: Criterion) => {
@@ -83,16 +139,21 @@ export function ProtocolScreen({ protocol, onBack }: ProtocolScreenProps) {
 
   const handleSaveEditPanel = (updates: { text: string; type: string; rationale?: string }) => {
     if (selectedCriterion) {
+      const nextType =
+        updates.type === 'not-applicable' ? selectedCriterion.type : (updates.type as Criterion['type']);
+
+      updateCriterion.mutate({
+        criterionId: selectedCriterion.id,
+        updates: {
+          text: updates.text,
+          criterion_type: nextType,
+        },
+      });
+
       setCriteria(prev =>
         prev.map(c =>
           c.id === selectedCriterion.id
-            ? {
-                ...c,
-                text: updates.text,
-                type: updates.type === 'not-applicable' ? c.type : updates.type,
-                status:
-                  updates.type === 'not-applicable' ? ('edited' as const) : ('edited' as const),
-              }
+            ? { ...c, text: updates.text, type: nextType, status: 'edited' as const }
             : c
         )
       );
@@ -106,6 +167,7 @@ export function ProtocolScreen({ protocol, onBack }: ProtocolScreenProps) {
 
   const handleDeleteCriterion = (rationale: string) => {
     if (selectedCriterion) {
+      setDeletedIds(prev => (prev.includes(selectedCriterion.id) ? prev : [...prev, selectedCriterion.id]));
       setCriteria(prev => prev.filter(c => c.id !== selectedCriterion.id));
 
       toast.success('Criterion removed', {
@@ -171,21 +233,27 @@ export function ProtocolScreen({ protocol, onBack }: ProtocolScreenProps) {
   const approvedCount = criteria.filter(c => c.status === 'approved').length;
   const needsReviewCount = criteria.filter(c => c.status === 'ai-suggested').length;
 
-  const handleFileUpload = () => {
-    // Simulate file upload and AI extraction
+  const handleSelectFileClick = () => {
+    fileInputRef.current?.click();
+  };
+
+  const handleFileSelected = async (file: File | null) => {
+    if (!file) return;
+
     toast.promise(
-      new Promise(resolve => {
-        setTimeout(() => {
-          setUploaded(true);
-          // Simulate AI extraction of criteria after upload
-          setCriteria(mockCriteria);
-          resolve({ name: 'Success' });
-        }, 1500);
+      uploadProtocol.mutateAsync({ file, autoExtract: true }).then(resp => {
+        setActiveProtocolId(resp.protocol_id);
+        setActiveProtocolTitle(resp.title);
+        setUploaded(true);
+        setCriteria([]);
+        setDeletedIds([]);
+        setSelectedCriterion(null);
+        return resp;
       }),
       {
-        loading: 'Processing protocol document...',
-        success: _data => 'Extracted 6 criteria for review',
-        error: 'Failed to process document',
+        loading: 'Uploading and processing protocol PDF...',
+        success: _data => 'Upload accepted. Extracting criteria...',
+        error: 'Failed to upload protocol',
       }
     );
   };
@@ -214,7 +282,7 @@ export function ProtocolScreen({ protocol, onBack }: ProtocolScreenProps) {
                   </Button>
                 )}
                 <FileText className="w-6 h-6 text-teal-600" />
-                <h1 className="text-gray-900">{protocol ? protocol.name : 'New Protocol'}</h1>
+                <h1 className="text-gray-900">{activeProtocolTitle}</h1>
               </div>
               <p className="text-gray-600" style={{ fontSize: '14px' }}>
                 Upload protocol documents to extract inclusion/exclusion criteria
@@ -246,7 +314,14 @@ export function ProtocolScreen({ protocol, onBack }: ProtocolScreenProps) {
                 Drag and drop your protocol PDF or eCRF file to extract inclusion/exclusion criteria
                 using AI
               </p>
-              <Button onClick={handleFileUpload}>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="application/pdf"
+                className="hidden"
+                onChange={e => void handleFileSelected(e.target.files?.item(0) ?? null)}
+              />
+              <Button onClick={handleSelectFileClick} disabled={uploadProtocol.isPending}>
                 <Upload className="w-4 h-4 mr-2" />
                 Select File
               </Button>
@@ -293,13 +368,12 @@ export function ProtocolScreen({ protocol, onBack }: ProtocolScreenProps) {
               )}
               <FileText className="w-6 h-6 text-teal-600" />
               <h1 className="font-semibold text-gray-900">
-                {protocol ? protocol.name : 'Protocol Ingestion'}
+                {protocol?.name ?? activeProtocolTitle}
               </h1>
             </div>
             <p className="text-sm text-gray-600">
-              {protocol
-                ? `Version ${protocol.version} • Extracted ${criteria.length} criteria`
-                : `CRC-SCREEN-2024-Protocol-v3.2.pdf • Extracted ${criteria.length} criteria`}
+              {protocol?.version ? `Version ${protocol.version} • ` : ''}
+              Extracted {criteria.length} criteria
             </p>
             <div className="flex gap-4 mt-3 text-sm">
               <div className="flex items-center gap-2">
@@ -333,11 +407,25 @@ export function ProtocolScreen({ protocol, onBack }: ProtocolScreenProps) {
             and approve or edit as needed. Glass-box tooltips show evidence and confidence scores.
           </AlertDescription>
         </Alert>
+
+        {error && (
+          <Alert className="mt-4 border-red-300 bg-red-50">
+            <Info className="h-4 w-4 text-red-600" />
+            <AlertDescription className="text-red-800">
+              Error loading criteria: {error.message}
+            </AlertDescription>
+          </Alert>
+        )}
       </div>
 
       {/* Criteria List */}
       <ScrollArea className="flex-1 bg-transparent">
         <div className="p-6 max-w-5xl mx-auto">
+          {isLoading && criteria.length === 0 && (
+            <div className="flex items-center justify-center py-12 text-gray-600">
+              Loading criteria...
+            </div>
+          )}
           {/* Inclusion Criteria */}
           <div className="mb-8">
             <div className="flex items-center gap-2 mb-4">
@@ -370,57 +458,29 @@ export function ProtocolScreen({ protocol, onBack }: ProtocolScreenProps) {
                         </div>
 
                         <div className="flex-1 min-w-0">
-                          {editingId === criterion.id ? (
-                            <div className="space-y-3">
-                              <Textarea
-                                value={editText}
-                                onChange={e => setEditText(e.target.value)}
-                                rows={3}
-                                className="text-sm"
-                              />
-                              <div className="flex gap-2">
-                                <Button size="sm" onClick={handleSaveEdit}>
-                                  Save Changes
-                                </Button>
-                                <Button
-                                  size="sm"
-                                  variant="outline"
-                                  onClick={() => {
-                                    setEditingId(null);
-                                    setEditText('');
-                                  }}
-                                >
-                                  Cancel
-                                </Button>
-                              </div>
-                            </div>
-                          ) : (
-                            <>
-                              <p className="text-sm text-gray-900 leading-relaxed">
-                                {criterion.text}
-                              </p>
+                          <>
+                            <p className="text-sm text-gray-900 leading-relaxed">{criterion.text}</p>
 
-                              {criterion.evidenceSnippet && (
-                                <TooltipProvider>
-                                  <Tooltip>
-                                    <TooltipTrigger asChild>
-                                      <div className="mt-2 text-xs text-gray-600 flex items-center gap-1 cursor-help">
-                                        <FileText className="w-3 h-3" />
-                                        <span className="underline decoration-dotted">
-                                          View source evidence
-                                        </span>
-                                      </div>
-                                    </TooltipTrigger>
-                                    <TooltipContent className="max-w-md bg-white border border-gray-200 shadow-lg p-3">
-                                      <p className="text-xs text-gray-700">
-                                        {criterion.evidenceSnippet}
-                                      </p>
-                                    </TooltipContent>
-                                  </Tooltip>
-                                </TooltipProvider>
-                              )}
-                            </>
-                          )}
+                            {criterion.evidenceSnippet && (
+                              <TooltipProvider>
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <div className="mt-2 text-xs text-gray-600 flex items-center gap-1 cursor-help">
+                                      <FileText className="w-3 h-3" />
+                                      <span className="underline decoration-dotted">
+                                        View source evidence
+                                      </span>
+                                    </div>
+                                  </TooltipTrigger>
+                                  <TooltipContent className="max-w-md bg-white border border-gray-200 shadow-lg p-3">
+                                    <p className="text-xs text-gray-700">
+                                      {criterion.evidenceSnippet}
+                                    </p>
+                                  </TooltipContent>
+                                </Tooltip>
+                              </TooltipProvider>
+                            )}
+                          </>
                         </div>
 
                         <div className="flex items-center gap-2">
@@ -500,57 +560,29 @@ export function ProtocolScreen({ protocol, onBack }: ProtocolScreenProps) {
                         </div>
 
                         <div className="flex-1 min-w-0">
-                          {editingId === criterion.id ? (
-                            <div className="space-y-3">
-                              <Textarea
-                                value={editText}
-                                onChange={e => setEditText(e.target.value)}
-                                rows={3}
-                                className="text-sm"
-                              />
-                              <div className="flex gap-2">
-                                <Button size="sm" onClick={handleSaveEdit}>
-                                  Save Changes
-                                </Button>
-                                <Button
-                                  size="sm"
-                                  variant="outline"
-                                  onClick={() => {
-                                    setEditingId(null);
-                                    setEditText('');
-                                  }}
-                                >
-                                  Cancel
-                                </Button>
-                              </div>
-                            </div>
-                          ) : (
-                            <>
-                              <p className="text-sm text-gray-900 leading-relaxed">
-                                {criterion.text}
-                              </p>
+                          <>
+                            <p className="text-sm text-gray-900 leading-relaxed">{criterion.text}</p>
 
-                              {criterion.evidenceSnippet && (
-                                <TooltipProvider>
-                                  <Tooltip>
-                                    <TooltipTrigger asChild>
-                                      <div className="mt-2 text-xs text-gray-600 flex items-center gap-1 cursor-help">
-                                        <FileText className="w-3 h-3" />
-                                        <span className="underline decoration-dotted">
-                                          View source evidence
-                                        </span>
-                                      </div>
-                                    </TooltipTrigger>
-                                    <TooltipContent className="max-w-md bg-white border border-gray-200 shadow-lg p-3">
-                                      <p className="text-xs text-gray-700">
-                                        {criterion.evidenceSnippet}
-                                      </p>
-                                    </TooltipContent>
-                                  </Tooltip>
-                                </TooltipProvider>
-                              )}
-                            </>
-                          )}
+                            {criterion.evidenceSnippet && (
+                              <TooltipProvider>
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <div className="mt-2 text-xs text-gray-600 flex items-center gap-1 cursor-help">
+                                      <FileText className="w-3 h-3" />
+                                      <span className="underline decoration-dotted">
+                                        View source evidence
+                                      </span>
+                                    </div>
+                                  </TooltipTrigger>
+                                  <TooltipContent className="max-w-md bg-white border border-gray-200 shadow-lg p-3">
+                                    <p className="text-xs text-gray-700">
+                                      {criterion.evidenceSnippet}
+                                    </p>
+                                  </TooltipContent>
+                                </Tooltip>
+                              </TooltipProvider>
+                            )}
+                          </>
                         </div>
 
                         <div className="flex items-center gap-2">

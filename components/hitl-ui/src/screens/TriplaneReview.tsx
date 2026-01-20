@@ -224,6 +224,7 @@ export function TriplaneReview({
   // Update criteria when API data loads
   useEffect(() => {
     if (apiCriteria.length > 0 && apiCriteria !== mockCriteria) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setCriteria(apiCriteria);
       if (!selectedCriterion || !apiCriteria.find(c => c.id === selectedCriterion.id)) {
         setSelectedCriterion(apiCriteria[0]);
