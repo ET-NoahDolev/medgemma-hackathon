@@ -25,6 +25,7 @@ from fastapi import (
     HTTPException,
     UploadFile,
 )
+from fastapi.middleware.cors import CORSMiddleware
 from grounding_service import umls_client
 from pydantic import BaseModel
 
@@ -83,6 +84,23 @@ def _get_umls_api_key() -> str:
 
 
 app = FastAPI(title="Gemma Hackathon API", version="0.1.0", lifespan=lifespan)
+
+# CORS (UI integration)
+# Defaults support local Vite dev servers. Override with comma-separated origins in env.
+_cors_origins_env = os.getenv("CORS_ALLOW_ORIGINS", "").strip()
+allow_origins = (
+    [o.strip() for o in _cors_origins_env.split(",") if o.strip()]
+    if _cors_origins_env
+    else ["http://localhost:5173", "http://localhost:3000"]
+)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=allow_origins,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 
 class ProtocolCreateRequest(BaseModel):
