@@ -50,6 +50,11 @@ def client(monkeypatch: pytest.MonkeyPatch) -> TestClient:
     return TestClient(app)
 
 
+@pytest.fixture(autouse=True)
+def allow_storage_reset(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("ALLOW_STORAGE_RESET", "1")
+
+
 @pytest.fixture()
 def fake_services(monkeypatch: pytest.MonkeyPatch) -> FakeServicesState:
     state = FakeServicesState(

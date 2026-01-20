@@ -1,8 +1,17 @@
+from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
 
 from grounding_service import umls_client
+
+
+@pytest.fixture(autouse=True)
+def isolated_cache(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    """Use isolated temporary cache directory for each test."""
+    cache_dir = tmp_path / "umls_cache"
+    cache_dir.mkdir(exist_ok=True)
+    monkeypatch.setenv("UMLS_CACHE_DIR", str(cache_dir))
 
 
 def test_snomed_candidate_dataclass() -> None:
@@ -34,9 +43,8 @@ def test_field_mapping_suggestion_dataclass() -> None:
 
 
 def test_umls_client_default_base_url() -> None:
-    client = umls_client.UmlsClient(api_key="test-key")
-
-    assert client.base_url == "https://uts-ws.nlm.nih.gov/rest"
+    with umls_client.UmlsClient(api_key="test-key") as client:
+        assert client.base_url == "https://uts-ws.nlm.nih.gov/rest"
 
 
 def test_search_snomed_returns_list() -> None:
@@ -60,8 +68,8 @@ def test_search_snomed_returns_list() -> None:
             raise_for_status=lambda: None,
         )
         mock_client_cls.return_value = mock_client
-        client = umls_client.UmlsClient(api_key="test-key")
-        results = client.search_snomed("stage III melanoma")
+        with umls_client.UmlsClient(api_key="test-key") as client:
+            results = client.search_snomed("stage III melanoma")
 
     assert isinstance(results, list)
     assert results[0].code == "372244006"
@@ -77,7 +85,6 @@ def test_propose_field_mapping_returns_list() -> None:
 
 
 def test_search_snomed_raises_on_empty_query() -> None:
-    client = umls_client.UmlsClient(api_key="test-key")
-
-    with pytest.raises(ValueError):
-        client.search_snomed("")
+    with umls_client.UmlsClient(api_key="test-key") as client:
+        with pytest.raises(ValueError):
+            client.search_snomed("")

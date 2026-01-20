@@ -7,19 +7,33 @@ import tempfile
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
+from datetime import datetime
+from enum import Enum
 from pathlib import Path
 from typing import List
 
 from anyio import to_thread
 from data_pipeline.download_protocols import extract_text_from_pdf
+from dotenv import find_dotenv, load_dotenv
 from extraction_service import pipeline as extraction_pipeline
-from fastapi import Body, Depends, FastAPI, File, HTTPException, UploadFile
+from fastapi import (
+    BackgroundTasks,
+    Body,
+    Depends,
+    FastAPI,
+    File,
+    HTTPException,
+    UploadFile,
+)
 from grounding_service import umls_client
 from pydantic import BaseModel
 
 from api_service.dependencies import get_storage
 from api_service.storage import Criterion as StorageCriterion
 from api_service.storage import Storage, init_db, reset_storage
+
+# Load .env from repo root (find_dotenv walks up to find it)
+load_dotenv(find_dotenv())
 
 DEFAULT_MAX_UPLOAD_SIZE_BYTES = 20 * 1024 * 1024
 # Expose for backward compatibility with tests
@@ -76,6 +90,9 @@ class ProtocolCreateRequest(BaseModel):
 
     title: str
     document_text: str
+    nct_id: str | None = None
+    condition: str | None = None
+    phase: str | None = None
 
 
 class ProtocolResponse(BaseModel):
@@ -143,6 +160,18 @@ class FieldMappingResponse(BaseModel):
     confidence: float
 
 
+class FieldMappingSuggestionRequest(BaseModel):
+    """Request payload for field mapping suggestions."""
+
+    criterion_text: str
+
+
+class FieldMappingSuggestionResponse(BaseModel):
+    """Response payload for field mapping suggestions."""
+
+    suggestions: List[FieldMappingResponse]
+
+
 class GroundingResponse(BaseModel):
     """Response payload for grounding a criterion."""
 
@@ -151,12 +180,80 @@ class GroundingResponse(BaseModel):
     field_mapping: FieldMappingResponse | None
 
 
+class HitlAction(str, Enum):
+    """HITL action types."""
+
+    accept = "accept"
+    reject = "reject"
+    edit = "edit"
+    add_code = "add_code"
+    remove_code = "remove_code"
+    add_mapping = "add_mapping"
+    remove_mapping = "remove_mapping"
+
+
 class HitlFeedbackRequest(BaseModel):
     """Payload for HITL feedback actions."""
 
     criterion_id: str
-    action: str
+    action: HitlAction
+    snomed_code_added: str | None = None
+    snomed_code_removed: str | None = None
+    field_mapping_added: str | None = None
+    field_mapping_removed: str | None = None
     note: str | None = None
+
+
+class HitlEditResponse(BaseModel):
+    """Response for a single HITL edit."""
+
+    id: str
+    criterion_id: str
+    action: HitlAction
+    snomed_code_added: str | None
+    snomed_code_removed: str | None
+    field_mapping_added: str | None
+    field_mapping_removed: str | None
+    note: str | None
+    created_at: datetime
+
+
+class HitlEditsListResponse(BaseModel):
+    """Response for listing HITL edits."""
+
+    criterion_id: str
+    edits: List[HitlEditResponse]
+
+
+class ProtocolListItem(BaseModel):
+    """Protocol summary for list view."""
+
+    protocol_id: str
+    title: str
+    nct_id: str | None = None
+    condition: str | None = None
+    phase: str | None = None
+
+
+class ProtocolListResponse(BaseModel):
+    """Response for listing protocols."""
+
+    protocols: List[ProtocolListItem]
+    total: int
+    skip: int
+    limit: int
+
+
+class ProtocolDetailResponse(BaseModel):
+    """Response for protocol detail view."""
+
+    protocol_id: str
+    title: str
+    document_text: str
+    nct_id: str | None = None
+    condition: str | None = None
+    phase: str | None = None
+    criteria_count: int
 
 
 def _reset_state() -> None:
@@ -170,18 +267,33 @@ def create_protocol(
 ) -> ProtocolResponse:
     """Create a protocol record and initial document entry."""
     protocol = storage.create_protocol(
-        title=payload.title, document_text=payload.document_text
+        title=payload.title,
+        document_text=payload.document_text,
+        nct_id=payload.nct_id,
+        condition=payload.condition,
+        phase=payload.phase,
     )
     return ProtocolResponse(protocol_id=protocol.id, title=protocol.title)
+
+
+def _run_extraction(protocol_id: str, document_text: str, storage: Storage) -> None:
+    """Run extraction in background task."""
+    extracted = extraction_pipeline.extract_criteria(document_text)
+    storage.replace_criteria(protocol_id=protocol_id, extracted=extracted)
 
 
 @app.post("/v1/protocols/upload")
 async def upload_protocol(
     file: UploadFile = File(...),
     auto_extract: bool = True,
+    background_tasks: BackgroundTasks = BackgroundTasks(),
     storage: Storage = Depends(get_storage),
 ) -> ProtocolResponse:
-    """Upload a PDF protocol file and create a protocol record."""
+    """Upload a PDF protocol file and create a protocol record.
+
+    If auto_extract is True, extraction runs asynchronously in the background
+    after the response is returned to avoid request timeouts for large PDFs.
+    """
     filename = file.filename or ""
     if file.content_type != "application/pdf" or not filename.lower().endswith(".pdf"):
         raise HTTPException(
@@ -221,10 +333,10 @@ async def upload_protocol(
     protocol = storage.create_protocol(title=title, document_text=document_text)
 
     if auto_extract:
-        extracted = await to_thread.run_sync(
-            extraction_pipeline.extract_criteria, protocol.document_text
+        # Run extraction in background to avoid blocking the response
+        background_tasks.add_task(
+            _run_extraction, protocol.id, protocol.document_text, storage
         )
-        storage.replace_criteria(protocol_id=protocol.id, extracted=extracted)
 
     return ProtocolResponse(protocol_id=protocol.id, title=protocol.title)
 
@@ -232,20 +344,76 @@ async def upload_protocol(
 @app.post("/v1/protocols/{protocol_id}/extract")
 def extract_criteria(
     protocol_id: str,
+    background_tasks: BackgroundTasks = BackgroundTasks(),
     storage: Storage = Depends(get_storage),
 ) -> ExtractionResponse:
-    """Trigger extraction of atomic criteria for a protocol."""
+    """Trigger extraction of atomic criteria for a protocol.
+
+    Extraction runs asynchronously in the background after the response is returned
+    to avoid request timeouts for long documents.
+    """
     protocol = storage.get_protocol(protocol_id)
     if protocol is None:
         raise HTTPException(status_code=404, detail="Protocol not found")
 
-    extracted = extraction_pipeline.extract_criteria(protocol.document_text)
-    stored = storage.replace_criteria(
-        protocol_id=protocol_id,
-        extracted=extracted,
+    # Run extraction in background to avoid blocking the response
+    background_tasks.add_task(
+        _run_extraction, protocol_id, protocol.document_text, storage
     )
+
     return ExtractionResponse(
-        protocol_id=protocol_id, status="completed", criteria_count=len(stored)
+        protocol_id=protocol_id, status="processing", criteria_count=0
+    )
+
+
+@app.get("/v1/protocols")
+def list_protocols(
+    skip: int = 0,
+    limit: int = 20,
+    storage: Storage = Depends(get_storage),
+) -> ProtocolListResponse:
+    """List all protocols with pagination."""
+    if skip < 0 or limit <= 0 or limit > 100:
+        raise HTTPException(status_code=400, detail="Invalid pagination parameters")
+
+    protocols, total = storage.list_protocols(skip=skip, limit=limit)
+    return ProtocolListResponse(
+        protocols=[
+            ProtocolListItem(
+                protocol_id=protocol.id,
+                title=protocol.title,
+                nct_id=protocol.nct_id,
+                condition=protocol.condition,
+                phase=protocol.phase,
+            )
+            for protocol in protocols
+        ],
+        total=total,
+        skip=skip,
+        limit=limit,
+    )
+
+
+@app.get("/v1/protocols/{protocol_id}")
+def get_protocol(
+    protocol_id: str,
+    storage: Storage = Depends(get_storage),
+) -> ProtocolDetailResponse:
+    """Get protocol details."""
+    protocol = storage.get_protocol(protocol_id)
+    if protocol is None:
+        raise HTTPException(status_code=404, detail="Protocol not found")
+
+    criteria_count = storage.count_criteria(protocol_id)
+
+    return ProtocolDetailResponse(
+        protocol_id=protocol.id,
+        title=protocol.title,
+        document_text=protocol.document_text,
+        nct_id=protocol.nct_id,
+        condition=protocol.condition,
+        phase=protocol.phase,
+        criteria_count=criteria_count,
     )
 
 
@@ -286,6 +454,36 @@ def update_criterion(
         status="updated",
         criterion=_criterion_to_response(criterion),
     )
+
+
+@app.post("/v1/criteria/suggest-mapping")
+def suggest_field_mapping(
+    payload: FieldMappingSuggestionRequest,
+) -> FieldMappingSuggestionResponse:
+    """Suggest field mappings for a criterion text.
+
+    This endpoint uses the same logic as the grounding service to propose
+    field/relation/value mappings, allowing frontend components to get
+    suggestions without duplicating the regex logic.
+    """
+    if not payload.criterion_text.strip():
+        raise HTTPException(
+            status_code=400, detail="criterion_text cannot be empty"
+        )
+
+    field_mappings = umls_client.propose_field_mapping(payload.criterion_text)
+
+    suggestions = [
+        FieldMappingResponse(
+            field=mapping.field,
+            relation=mapping.relation,
+            value=mapping.value,
+            confidence=mapping.confidence,
+        )
+        for mapping in field_mappings
+    ]
+
+    return FieldMappingSuggestionResponse(suggestions=suggestions)
 
 
 @app.post("/v1/criteria/{criterion_id}/ground")
@@ -359,6 +557,71 @@ def hitl_feedback(
     storage: Storage = Depends(get_storage),
 ) -> dict[str, str]:
     """Record HITL feedback for criteria, SNOMED candidates, and field mappings."""
-    _ = storage
-    _ = payload
+    if payload is None:
+        raise HTTPException(status_code=400, detail="Missing feedback payload")
+
+    # Ensure criterion exists
+    criterion = storage.get_criterion(payload.criterion_id)
+    if criterion is None:
+        raise HTTPException(status_code=404, detail="Criterion not found")
+    if payload.action == HitlAction.add_code and not payload.snomed_code_added:
+        raise HTTPException(
+            status_code=400, detail="snomed_code_added is required for add_code"
+        )
+    if payload.action == HitlAction.remove_code and not payload.snomed_code_removed:
+        raise HTTPException(
+            status_code=400, detail="snomed_code_removed is required for remove_code"
+        )
+    if payload.action == HitlAction.add_mapping and not payload.field_mapping_added:
+        raise HTTPException(
+            status_code=400, detail="field_mapping_added is required for add_mapping"
+        )
+    if (
+        payload.action == HitlAction.remove_mapping
+        and not payload.field_mapping_removed
+    ):
+        raise HTTPException(
+            status_code=400,
+            detail="field_mapping_removed is required for remove_mapping",
+        )
+    storage.create_hitl_edit(
+        criterion_id=payload.criterion_id,
+        action=payload.action.value,
+        snomed_code_added=payload.snomed_code_added,
+        snomed_code_removed=payload.snomed_code_removed,
+        field_mapping_added=payload.field_mapping_added,
+        field_mapping_removed=payload.field_mapping_removed,
+        note=payload.note,
+    )
+
+    if payload.snomed_code_added:
+        storage.add_snomed_code(payload.criterion_id, payload.snomed_code_added)
+    if payload.snomed_code_removed:
+        storage.remove_snomed_code(payload.criterion_id, payload.snomed_code_removed)
     return {"status": "recorded"}
+
+
+@app.get("/v1/criteria/{criterion_id}/edits")
+def list_criterion_edits(
+    criterion_id: str,
+    storage: Storage = Depends(get_storage),
+) -> HitlEditsListResponse:
+    """List all HITL edits for a criterion."""
+    edits = storage.list_hitl_edits(criterion_id)
+    return HitlEditsListResponse(
+        criterion_id=criterion_id,
+        edits=[
+            HitlEditResponse(
+                id=edit.id,
+                criterion_id=edit.criterion_id,
+                action=HitlAction(edit.action),
+                snomed_code_added=edit.snomed_code_added,
+                snomed_code_removed=edit.snomed_code_removed,
+                field_mapping_added=edit.field_mapping_added,
+                field_mapping_removed=edit.field_mapping_removed,
+                note=edit.note,
+                created_at=edit.created_at,
+            )
+            for edit in edits
+        ],
+    )
