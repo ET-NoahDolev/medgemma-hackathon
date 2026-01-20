@@ -8,13 +8,30 @@ import re
 from collections.abc import Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass
-from typing import Sequence
+from pathlib import Path
+from typing import Sequence, cast
 
+import diskcache  # type: ignore[import-untyped]
 import httpx
+from tenacity import (
+    retry,
+    retry_if_exception_type,
+    stop_after_attempt,
+    wait_exponential,
+)
 
 logger = logging.getLogger(__name__)
 
 UMLS_DEFAULT_URL = "https://uts-ws.nlm.nih.gov/rest"
+
+
+class _ServerError(Exception):
+    """Raised on 5xx errors to trigger tenacity retry."""
+
+    def __init__(self, status_code: int, body: str) -> None:
+        self.status_code = status_code
+        self.body = body
+        super().__init__(f"Server error {status_code}: {body[:100]}")
 
 
 @dataclass
@@ -71,7 +88,10 @@ class UmlsClient:
         if not self.api_key:
             raise ValueError("UMLS_API_KEY is required")
         self._http = httpx.Client(timeout=self.timeout)
-        self._cache: dict[str, list[SnomedCandidate]] = {}
+        cache_dir = os.getenv("UMLS_CACHE_DIR")
+        default_cache = Path(__file__).resolve().parent / ".cache" / "umls"
+        self._cache_dir = str(cache_dir or default_cache)
+        self._cache_ttl = self._parse_cache_ttl(os.getenv("UMLS_CACHE_TTL_SECONDS"))
 
     def __enter__(self) -> "UmlsClient":
         """Enter context manager scope."""
@@ -97,36 +117,58 @@ class UmlsClient:
         if not query.strip():
             raise ValueError("query is required")
 
-        cache_key = f"{query.lower()}:{limit}"
-        cached = self._cache.get(cache_key)
-        if cached is not None:
-            return cached
+        cache_key = f"snomed:{query.lower()}:{limit}"
+        with diskcache.Cache(self._cache_dir) as cache:
+            cached = cast(list[SnomedCandidate] | None, cache.get(cache_key))
+            if cached is not None:
+                return cached
 
-        candidates = self._fetch_from_api(query, limit)
-        self._cache[cache_key] = candidates
-        return candidates
+            candidates = self._fetch_from_api(query, limit)
+            if self._cache_ttl:
+                cache.set(cache_key, candidates, expire=self._cache_ttl)
+            return candidates
 
     def _fetch_from_api(self, query: str, limit: int) -> list[SnomedCandidate]:
-        """Execute HTTP request to UMLS API."""
+        """Execute HTTP request to UMLS API with retry on transient errors."""
+        url = f"{self.base_url.rstrip('/')}/search/current"
+        params: dict[str, str | int] = {
+            "string": query,
+            "sabs": "SNOMEDCT_US",
+            "returnIdType": "code",
+            "pageSize": limit,
+            "apiKey": self.api_key or "",
+        }
+
         try:
-            response = self._http.get(
-                f"{self.base_url.rstrip('/')}/search/current",
-                params={
-                    "string": query,
-                    "sabs": "SNOMEDCT_US",
-                    "returnIdType": "code",
-                    "pageSize": limit,
-                    "apiKey": self.api_key,
-                },
-            )
-            response.raise_for_status()
-            return self._parse_response(response.json(), limit)
+            data = self._request_with_retry(url, params)
+            return self._parse_response(data, limit)
         except httpx.HTTPStatusError as exc:
             logger.warning("UMLS API HTTP error: %s", exc)
             return []
         except httpx.RequestError as exc:
             logger.warning("UMLS API request error: %s", exc)
             return []
+
+    @retry(
+        retry=retry_if_exception_type((httpx.RequestError, _ServerError)),
+        stop=stop_after_attempt(3),
+        wait=wait_exponential(multiplier=0.5, min=0.5, max=2),
+        reraise=True,
+    )
+    def _request_with_retry(
+        self, url: str, params: dict[str, str | int]
+    ) -> dict[str, object]:
+        """Make HTTP request with tenacity retry on transient errors."""
+        response = self._http.get(url, params=params)
+        if response.status_code >= 500:
+            logger.warning(
+                "UMLS API %d error, will retry: %s",
+                response.status_code,
+                response.text[:100],
+            )
+            raise _ServerError(response.status_code, response.text)
+        response.raise_for_status()
+        return response.json()  # type: ignore[no-any-return]
 
     def _parse_response(
         self,
@@ -164,7 +206,18 @@ class UmlsClient:
 
     def clear_cache(self) -> None:
         """Clear the search cache."""
-        self._cache.clear()
+        with diskcache.Cache(self._cache_dir) as cache:
+            cache.clear()
+
+    @staticmethod
+    def _parse_cache_ttl(value: str | None) -> int:
+        if not value:
+            return 7 * 24 * 60 * 60
+        try:
+            ttl = int(value)
+        except ValueError:
+            return 7 * 24 * 60 * 60
+        return ttl if ttl > 0 else 7 * 24 * 60 * 60
 
 
 @contextmanager

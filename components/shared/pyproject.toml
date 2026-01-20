@@ -32,7 +32,21 @@ plugins = []
 [tool.pytest.ini_options]
 pythonpath = ["src"]
 testpaths = ["tests"]
-addopts = "--cov=shared --cov-branch --cov-report=term-missing"
+addopts = "--cov=shared --cov-branch --cov-report=term-missing --cov-config=pyproject.toml"
+
+[tool.coverage.run]
+source = ["src"]
+omit = ["tests/*", "venv/*", ".venv/*"]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "raise AssertionError",
+    "raise NotImplementedError",
+    "if __name__ == .__main__.:",
+    "if TYPE_CHECKING:",
+]
 
 [tool.uv]
 cache-dir = "./.uv_cache"

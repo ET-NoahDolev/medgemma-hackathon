@@ -12,6 +12,7 @@ from typing import List
 
 from anyio import to_thread
 from data_pipeline.download_protocols import extract_text_from_pdf
+from dotenv import load_dotenv
 from extraction_service import pipeline as extraction_pipeline
 from fastapi import Body, Depends, FastAPI, File, HTTPException, UploadFile
 from grounding_service import umls_client
@@ -24,6 +25,9 @@ from api_service.storage import Storage, init_db, reset_storage
 DEFAULT_MAX_UPLOAD_SIZE_BYTES = 20 * 1024 * 1024
 # Expose for backward compatibility with tests
 MAX_UPLOAD_SIZE_BYTES = DEFAULT_MAX_UPLOAD_SIZE_BYTES
+
+# Load environment variables from repo root .env (if present).
+load_dotenv(Path(__file__).resolve().parents[4] / ".env")
 
 
 @dataclass(frozen=True)
@@ -76,6 +80,9 @@ class ProtocolCreateRequest(BaseModel):
 
     title: str
     document_text: str
+    nct_id: str | None = None
+    condition: str | None = None
+    phase: str | None = None
 
 
 class ProtocolResponse(BaseModel):
@@ -156,7 +163,63 @@ class HitlFeedbackRequest(BaseModel):
 
     criterion_id: str
     action: str
+    snomed_code_added: str | None = None
+    snomed_code_removed: str | None = None
+    field_mapping_added: str | None = None
+    field_mapping_removed: str | None = None
     note: str | None = None
+
+
+class HitlEditResponse(BaseModel):
+    """Response for a single HITL edit."""
+
+    id: str
+    criterion_id: str
+    action: str
+    snomed_code_added: str | None
+    snomed_code_removed: str | None
+    field_mapping_added: str | None
+    field_mapping_removed: str | None
+    note: str | None
+    created_at: str
+
+
+class HitlEditsListResponse(BaseModel):
+    """Response for listing HITL edits."""
+
+    criterion_id: str
+    edits: List[HitlEditResponse]
+
+
+class ProtocolListItem(BaseModel):
+    """Protocol summary for list view."""
+
+    protocol_id: str
+    title: str
+    nct_id: str | None = None
+    condition: str | None = None
+    phase: str | None = None
+
+
+class ProtocolListResponse(BaseModel):
+    """Response for listing protocols."""
+
+    protocols: List[ProtocolListItem]
+    total: int
+    skip: int
+    limit: int
+
+
+class ProtocolDetailResponse(BaseModel):
+    """Response for protocol detail view."""
+
+    protocol_id: str
+    title: str
+    document_text: str
+    nct_id: str | None = None
+    condition: str | None = None
+    phase: str | None = None
+    criteria_count: int
 
 
 def _reset_state() -> None:
@@ -170,7 +233,11 @@ def create_protocol(
 ) -> ProtocolResponse:
     """Create a protocol record and initial document entry."""
     protocol = storage.create_protocol(
-        title=payload.title, document_text=payload.document_text
+        title=payload.title,
+        document_text=payload.document_text,
+        nct_id=payload.nct_id,
+        condition=payload.condition,
+        phase=payload.phase,
     )
     return ProtocolResponse(protocol_id=protocol.id, title=protocol.title)
 
@@ -246,6 +313,54 @@ def extract_criteria(
     )
     return ExtractionResponse(
         protocol_id=protocol_id, status="completed", criteria_count=len(stored)
+    )
+
+
+@app.get("/v1/protocols")
+def list_protocols(
+    skip: int = 0,
+    limit: int = 20,
+    storage: Storage = Depends(get_storage),
+) -> ProtocolListResponse:
+    """List all protocols with pagination."""
+    protocols, total = storage.list_protocols(skip=skip, limit=limit)
+    return ProtocolListResponse(
+        protocols=[
+            ProtocolListItem(
+                protocol_id=protocol.id,
+                title=protocol.title,
+                nct_id=protocol.nct_id,
+                condition=protocol.condition,
+                phase=protocol.phase,
+            )
+            for protocol in protocols
+        ],
+        total=total,
+        skip=skip,
+        limit=limit,
+    )
+
+
+@app.get("/v1/protocols/{protocol_id}")
+def get_protocol(
+    protocol_id: str,
+    storage: Storage = Depends(get_storage),
+) -> ProtocolDetailResponse:
+    """Get protocol details."""
+    protocol = storage.get_protocol(protocol_id)
+    if protocol is None:
+        raise HTTPException(status_code=404, detail="Protocol not found")
+
+    criteria_count = len(storage.list_criteria(protocol_id))
+
+    return ProtocolDetailResponse(
+        protocol_id=protocol.id,
+        title=protocol.title,
+        document_text=protocol.document_text,
+        nct_id=protocol.nct_id,
+        condition=protocol.condition,
+        phase=protocol.phase,
+        criteria_count=criteria_count,
     )
 
 
@@ -359,6 +474,46 @@ def hitl_feedback(
     storage: Storage = Depends(get_storage),
 ) -> dict[str, str]:
     """Record HITL feedback for criteria, SNOMED candidates, and field mappings."""
-    _ = storage
-    _ = payload
+    if payload is None:
+        raise HTTPException(status_code=400, detail="Missing feedback payload")
+    storage.create_hitl_edit(
+        criterion_id=payload.criterion_id,
+        action=payload.action,
+        snomed_code_added=payload.snomed_code_added,
+        snomed_code_removed=payload.snomed_code_removed,
+        field_mapping_added=payload.field_mapping_added,
+        field_mapping_removed=payload.field_mapping_removed,
+        note=payload.note,
+    )
+
+    if payload.snomed_code_added:
+        storage.add_snomed_code(payload.criterion_id, payload.snomed_code_added)
+    if payload.snomed_code_removed:
+        storage.remove_snomed_code(payload.criterion_id, payload.snomed_code_removed)
     return {"status": "recorded"}
+
+
+@app.get("/v1/criteria/{criterion_id}/edits")
+def list_criterion_edits(
+    criterion_id: str,
+    storage: Storage = Depends(get_storage),
+) -> HitlEditsListResponse:
+    """List all HITL edits for a criterion."""
+    edits = storage.list_hitl_edits(criterion_id)
+    return HitlEditsListResponse(
+        criterion_id=criterion_id,
+        edits=[
+            HitlEditResponse(
+                id=edit.id,
+                criterion_id=edit.criterion_id,
+                action=edit.action,
+                snomed_code_added=edit.snomed_code_added,
+                snomed_code_removed=edit.snomed_code_removed,
+                field_mapping_added=edit.field_mapping_added,
+                field_mapping_removed=edit.field_mapping_removed,
+                note=edit.note,
+                created_at=edit.created_at.isoformat(),
+            )
+            for edit in edits
+        ],
+    )
