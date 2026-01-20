@@ -48,6 +48,7 @@ export function CriteriaEditPanel({
   const [rationale, setRationale] = useState('');
 
   useEffect(() => {
+    // eslint-disable-next-line
     setEditedType(criterion.type);
     setEditedText(criterion.text);
     setRationale('');

@@ -12,6 +12,8 @@ import { useSubmitFeedback } from '@/hooks/useSubmitFeedback';
 import { useUpdateCriterion } from '@/hooks/useUpdateCriterion';
 import { useUploadProtocol } from '@/hooks/useUploadProtocol';
 import { useProtocol } from '@/hooks/useProtocol';
+import { MappingDisplay } from '@/features/mapping/components/MappingDisplay';
+import { EditMappingModal } from '@/features/mapping/components/EditMappingModal';
 import {
   Upload,
   FileText,
@@ -46,6 +48,12 @@ interface Criterion {
   confidence: number;
   status: 'ai-suggested' | 'approved' | 'edited';
   evidenceSnippet?: string;
+  snomedCodes?: string[];
+  fieldMapping?: {
+    field: string;
+    relation: string;
+    value: string;
+  } | null;
 }
 
 export function ProtocolScreen({ protocol, onBack }: ProtocolScreenProps) {
@@ -100,6 +108,7 @@ export function ProtocolScreen({ protocol, onBack }: ProtocolScreenProps) {
 
   useEffect(() => {
     if (protocolData?.title) {
+      // eslint-disable-next-line
       setActiveProtocolTitle(protocolData.title);
     }
   }, [protocolData?.title]);
@@ -109,6 +118,7 @@ export function ProtocolScreen({ protocol, onBack }: ProtocolScreenProps) {
     if (!uploaded) return;
     if (!activeProtocolId) return;
 
+    // eslint-disable-next-line
     setCriteria(prev => {
       const prevById = new Map(prev.map(c => [c.id, c]));
       return apiMappedCriteria.map(c => {
@@ -203,7 +213,21 @@ export function ProtocolScreen({ protocol, onBack }: ProtocolScreenProps) {
     );
   };
 
+  // State for mapping modal
+  const [mappingModalOpen, setMappingModalOpen] = useState(false);
+
+  const handleOpenMappingModal = (criterion: Criterion) => {
+    setSelectedCriterion(criterion);
+    setMappingModalOpen(true);
+  };
+
+  const handleSaveMapping = () => {
+    // Refresh to show new mappings
+    refetch();
+  };
+
   if (!uploaded) {
+    // ... (unchanged upload view)
     return (
       <div className="flex flex-col h-full">
         {/* Header for new protocol */}
@@ -371,213 +395,131 @@ export function ProtocolScreen({ protocol, onBack }: ProtocolScreenProps) {
               Loading criteria...
             </div>
           )}
-          {/* Inclusion Criteria */}
-          <div className="mb-8">
-            <div className="flex items-center gap-2 mb-4">
-              <h2 className="font-semibold text-gray-900">Inclusion Criteria</h2>
-              <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">
-                {criteria.filter(c => c.type === 'inclusion').length} criteria
-              </Badge>
-            </div>
 
-            <div className="space-y-3">
-              {criteria
-                .filter(c => c.type === 'inclusion')
-                .map(criterion => (
-                  <Card
-                    key={criterion.id}
-                    className={
-                      criterion.status === 'ai-suggested'
-                        ? 'border-orange-300 bg-orange-50'
-                        : criterion.status === 'edited'
-                          ? 'border-blue-300 bg-blue-50'
-                          : ''
-                    }
-                  >
-                    <CardContent className="pt-4 pb-4">
-                      <div className="flex items-start gap-4">
-                        <div className="flex-shrink-0">
-                          <span className="inline-flex items-center justify-center w-8 h-8 bg-green-100 text-green-700 rounded-md text-sm font-medium">
-                            {criterion.id}
-                          </span>
-                        </div>
+          {/* Helper to render list */}
+          {[
+            { type: 'inclusion', label: 'Inclusion Criteria', badgeClass: 'bg-green-50 text-green-700 border-green-200', numClass: 'bg-green-100 text-green-700' },
+            { type: 'exclusion', label: 'Exclusion Criteria', badgeClass: 'bg-red-50 text-red-700 border-red-200', numClass: 'bg-red-100 text-red-700' }
+          ].map(section => (
+            <div key={section.type} className="mb-8 last:mb-0">
+              <div className="flex items-center gap-2 mb-4">
+                <h2 className="font-semibold text-gray-900">{section.label}</h2>
+                <Badge variant="outline" className={section.badgeClass}>
+                  {criteria.filter(c => c.type === section.type).length} criteria
+                </Badge>
+              </div>
 
-                        <div className="flex-1 min-w-0">
-                          <>
-                            <p className="text-sm text-gray-900 leading-relaxed">{criterion.text}</p>
+              <div className="space-y-3">
+                {criteria
+                  .filter(c => c.type === section.type)
+                  .map(criterion => (
+                    <Card
+                      key={criterion.id}
+                      className={
+                        criterion.status === 'ai-suggested'
+                          ? 'border-orange-300 bg-orange-50'
+                          : criterion.status === 'edited'
+                            ? 'border-blue-300 bg-blue-50'
+                            : ''
+                      }
+                    >
+                      <CardContent className="pt-4 pb-4">
+                        <div className="flex items-start gap-4">
+                          <div className="flex-shrink-0">
+                            <span className={`inline-flex items-center justify-center w-8 h-8 rounded-md text-sm font-medium ${section.numClass}`}>
+                              {criterion.id}
+                            </span>
+                          </div>
 
-                            {criterion.evidenceSnippet && (
-                              <TooltipProvider>
-                                <Tooltip>
-                                  <TooltipTrigger asChild>
-                                    <div className="mt-2 text-xs text-gray-600 flex items-center gap-1 cursor-help">
-                                      <FileText className="w-3 h-3" />
-                                      <span className="underline decoration-dotted">
-                                        View source evidence
-                                      </span>
-                                    </div>
-                                  </TooltipTrigger>
-                                  <TooltipContent className="max-w-md bg-white border border-gray-200 shadow-lg p-3">
-                                    <p className="text-xs text-gray-700">
-                                      {criterion.evidenceSnippet}
-                                    </p>
-                                  </TooltipContent>
-                                </Tooltip>
-                              </TooltipProvider>
-                            )}
-                          </>
-                        </div>
-
-                        <div className="flex items-center gap-2">
-                          <ConfidenceChip
-                            confidence={criterion.confidence}
-                            dataSource="Protocol PDF Section 4.1"
-                          />
-
-                          {criterion.status === 'ai-suggested' && (
+                          <div className="flex-1 min-w-0">
                             <>
-                              <Button size="sm" onClick={() => handleApprove(criterion.id)}>
-                                <CheckCircle2 className="w-3 h-3 mr-1" />
-                                Approve
-                              </Button>
+                              <p className="text-sm text-gray-900 leading-relaxed">{criterion.text}</p>
+
+                              <MappingDisplay
+                                snomedCodes={criterion.snomedCodes}
+                                fieldMapping={criterion.fieldMapping}
+                              />
+
+                              <div className="mt-2 flex items-center gap-4">
+                                {criterion.evidenceSnippet && (
+                                  <TooltipProvider>
+                                    <Tooltip>
+                                      <TooltipTrigger asChild>
+                                        <div className="text-xs text-gray-600 flex items-center gap-1 cursor-help">
+                                          <FileText className="w-3 h-3" />
+                                          <span className="underline decoration-dotted">
+                                            View source evidence
+                                          </span>
+                                        </div>
+                                      </TooltipTrigger>
+                                      <TooltipContent className="max-w-md bg-white border border-gray-200 shadow-lg p-3">
+                                        <p className="text-xs text-gray-700">
+                                          {criterion.evidenceSnippet}
+                                        </p>
+                                      </TooltipContent>
+                                    </Tooltip>
+                                  </TooltipProvider>
+                                )}
+                                <Button
+                                  variant="link"
+                                  className="h-auto p-0 text-xs text-teal-600 h-auto"
+                                  onClick={() => handleOpenMappingModal(criterion)}
+                                >
+                                  {criterion.snomedCodes?.length || criterion.fieldMapping ? 'Edit Mapping' : 'Add Mapping'}
+                                </Button>
+                              </div>
                             </>
-                          )}
+                          </div>
 
-                          {criterion.status === 'approved' && (
-                            <Badge className="bg-green-100 text-green-700 border-green-300">
-                              <CheckCircle2 className="w-3 h-3 mr-1" />
-                              Approved
-                            </Badge>
-                          )}
+                          <div className="flex items-center gap-2">
+                            <ConfidenceChip
+                              confidence={criterion.confidence}
+                              dataSource="Protocol"
+                            />
 
-                          {criterion.status === 'edited' && (
-                            <Badge className="bg-blue-100 text-blue-700 border-blue-300">
-                              <Edit2 className="w-3 h-3 mr-1" />
-                              Edited
-                            </Badge>
-                          )}
-
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => handleOpenEditPanel(criterion)}
-                          >
-                            <Edit2 className="w-3 h-3 mr-1" />
-                            Edit
-                          </Button>
-                        </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-                ))}
-            </div>
-          </div>
-
-          {/* Exclusion Criteria */}
-          <div>
-            <div className="flex items-center gap-2 mb-4">
-              <h2 className="font-semibold text-gray-900">Exclusion Criteria</h2>
-              <Badge variant="outline" className="bg-red-50 text-red-700 border-red-200">
-                {criteria.filter(c => c.type === 'exclusion').length} criteria
-              </Badge>
-            </div>
-
-            <div className="space-y-3">
-              {criteria
-                .filter(c => c.type === 'exclusion')
-                .map(criterion => (
-                  <Card
-                    key={criterion.id}
-                    className={
-                      criterion.status === 'ai-suggested'
-                        ? 'border-orange-300 bg-orange-50'
-                        : criterion.status === 'edited'
-                          ? 'border-blue-300 bg-blue-50'
-                          : ''
-                    }
-                  >
-                    <CardContent className="pt-4 pb-4">
-                      <div className="flex items-start gap-4">
-                        <div className="flex-shrink-0">
-                          <span className="inline-flex items-center justify-center w-8 h-8 bg-red-100 text-red-700 rounded-md text-sm font-medium">
-                            {criterion.id}
-                          </span>
-                        </div>
-
-                        <div className="flex-1 min-w-0">
-                          <>
-                            <p className="text-sm text-gray-900 leading-relaxed">{criterion.text}</p>
-
-                            {criterion.evidenceSnippet && (
-                              <TooltipProvider>
-                                <Tooltip>
-                                  <TooltipTrigger asChild>
-                                    <div className="mt-2 text-xs text-gray-600 flex items-center gap-1 cursor-help">
-                                      <FileText className="w-3 h-3" />
-                                      <span className="underline decoration-dotted">
-                                        View source evidence
-                                      </span>
-                                    </div>
-                                  </TooltipTrigger>
-                                  <TooltipContent className="max-w-md bg-white border border-gray-200 shadow-lg p-3">
-                                    <p className="text-xs text-gray-700">
-                                      {criterion.evidenceSnippet}
-                                    </p>
-                                  </TooltipContent>
-                                </Tooltip>
-                              </TooltipProvider>
+                            {criterion.status === 'ai-suggested' && (
+                              <>
+                                <Button size="sm" onClick={() => handleApprove(criterion.id)}>
+                                  <CheckCircle2 className="w-3 h-3 mr-1" />
+                                  Approve
+                                </Button>
+                              </>
                             )}
-                          </>
-                        </div>
 
-                        <div className="flex items-center gap-2">
-                          <ConfidenceChip
-                            confidence={criterion.confidence}
-                            dataSource="Protocol PDF Section 4.2"
-                          />
-
-                          {criterion.status === 'ai-suggested' && (
-                            <>
-                              <Button size="sm" onClick={() => handleApprove(criterion.id)}>
+                            {criterion.status === 'approved' && (
+                              <Badge className="bg-green-100 text-green-700 border-green-300">
                                 <CheckCircle2 className="w-3 h-3 mr-1" />
-                                Approve
-                              </Button>
-                            </>
-                          )}
+                                Approved
+                              </Badge>
+                            )}
 
-                          {criterion.status === 'approved' && (
-                            <Badge className="bg-green-100 text-green-700 border-green-300">
-                              <CheckCircle2 className="w-3 h-3 mr-1" />
-                              Approved
-                            </Badge>
-                          )}
+                            {criterion.status === 'edited' && (
+                              <Badge className="bg-blue-100 text-blue-700 border-blue-300">
+                                <Edit2 className="w-3 h-3 mr-1" />
+                                Edited
+                              </Badge>
+                            )}
 
-                          {criterion.status === 'edited' && (
-                            <Badge className="bg-blue-100 text-blue-700 border-blue-300">
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => handleOpenEditPanel(criterion)}
+                            >
                               <Edit2 className="w-3 h-3 mr-1" />
-                              Edited
-                            </Badge>
-                          )}
-
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => handleOpenEditPanel(criterion)}
-                          >
-                            <Edit2 className="w-3 h-3 mr-1" />
-                            Edit
-                          </Button>
+                              Edit
+                            </Button>
+                          </div>
                         </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-                ))}
+                      </CardContent>
+                    </Card>
+                  ))}
+              </div>
             </div>
-          </div>
+          ))}
         </div>
       </ScrollArea>
 
-      {/* Edit Panel */}
+      {/* Edit Panel (Text) */}
       {selectedCriterion && (
         <CriteriaEditPanel
           open={editPanelOpen}
@@ -591,6 +533,21 @@ export function ProtocolScreen({ protocol, onBack }: ProtocolScreenProps) {
             sourceText: selectedCriterion.evidenceSnippet,
           }}
           onSave={handleSaveEditPanel}
+        />
+      )}
+
+      {/* Edit Panel (Mapping) */}
+      {selectedCriterion && (
+        <EditMappingModal
+          open={mappingModalOpen}
+          onOpenChange={setMappingModalOpen}
+          criterion={{
+            id: selectedCriterion.id,
+            text: selectedCriterion.text,
+            snomedCodes: selectedCriterion.snomedCodes,
+            fieldMapping: selectedCriterion.fieldMapping,
+          }}
+          onSave={handleSaveMapping}
         />
       )}
 
