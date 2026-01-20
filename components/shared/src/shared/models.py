@@ -115,6 +115,9 @@ class Protocol:
         nct_id: ClinicalTrials.gov identifier.
         condition: Primary disease/condition.
         phase: Trial phase label.
+        source: Optional source identifier (clinicaltrials, dac, etc.).
+        registry_id: Optional registry-specific identifier.
+        registry_type: Optional registry type label (nct, isrctn, ctis).
 
     Examples:
         >>> Protocol(
@@ -123,6 +126,9 @@ class Protocol:
         ...     nct_id="NCT00000000",
         ...     condition="Melanoma",
         ...     phase="Phase 2",
+        ...     source="clinicaltrials",
+        ...     registry_id="NCT00000000",
+        ...     registry_type="nct",
         ... )
         Protocol(
         ...     id='proto-1',
@@ -130,6 +136,9 @@ class Protocol:
         ...     nct_id='NCT00000000',
         ...     condition='Melanoma',
         ...     phase='Phase 2',
+        ...     source='clinicaltrials',
+        ...     registry_id='NCT00000000',
+        ...     registry_type='nct',
         ... )
     """
 
@@ -138,6 +147,9 @@ class Protocol:
     nct_id: str
     condition: str
     phase: str
+    source: Optional[str] = None
+    registry_id: Optional[str] = None
+    registry_type: Optional[str] = None
 
 
 @dataclass
@@ -276,6 +288,9 @@ def build_protocol(
     nct_id: str = "NCT00000000",
     condition: str = "Melanoma",
     phase: str = "Phase 2",
+    source: Optional[str] = None,
+    registry_id: Optional[str] = None,
+    registry_type: Optional[str] = None,
 ) -> Protocol:
     """Create a Protocol instance with defaults for tests and examples."""
     return Protocol(
@@ -284,6 +299,9 @@ def build_protocol(
         nct_id=nct_id,
         condition=condition,
         phase=phase,
+        source=source,
+        registry_id=registry_id,
+        registry_type=registry_type,
     )
 
 

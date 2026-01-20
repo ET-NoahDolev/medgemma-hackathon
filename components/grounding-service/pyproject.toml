@@ -5,6 +5,7 @@ description = "grounding-service component"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
+    "httpx>=0.28.0",
 ]
 
 [dependency-groups]
@@ -16,10 +17,10 @@ dev = [
 [tool.ruff]
 lint.select = ["E", "F", "W", "C", "N", "I", "D"]
 lint.ignore = ["E203", "D203", "D213", "D100", "D413", "D104"]
+lint.pydocstyle.convention = "google"
 target-version = "py312"
 line-length = 88
 exclude = ["venv", ".venv", "docs"]
-lint.pydocstyle.convention = "google"
 
 [tool.ruff.lint.per-file-ignores]
 "tests/**/*.py" = ["D"]

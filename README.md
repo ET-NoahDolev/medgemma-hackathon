@@ -6,7 +6,7 @@
 [![Python](https://img.shields.io/badge/python-3.12-blue?style=flat-square)](https://www.python.org/)
 [![License](https://img.shields.io/badge/license-Proprietary-red?style=flat-square)](LICENSE)
 
-A comprehensive demo system for extracting atomic inclusion/exclusion criteria from clinical trial protocols, grounding them to SNOMED CT via UBKG, mapping to field/relation/value structures for EMR screening, and enabling nurse review through an intuitive HITL (Human-In-The-Loop) interface.
+A comprehensive demo system for extracting atomic inclusion/exclusion criteria from clinical trial protocols, grounding them to SNOMED CT via the UMLS API, mapping to field/relation/value structures for EMR screening, and enabling nurse review through an intuitive HITL (Human-In-The-Loop) interface.
 
 ---
 
@@ -59,7 +59,7 @@ This repository is organized as a **component-based monorepo**, where each servi
     ┌────┴────┐
     ▼         ▼
 ┌─────────┐ ┌──────────────┐
-│Extraction│ │  Grounding   │ ──► UBKG integration
+│Extraction│ │  Grounding   │ ──► UMLS API integration
 │ Service  │ │   Service    │
 └─────────┘ └──────────────┘
     │         │
@@ -123,11 +123,39 @@ uv run uvicorn api_service.main:app --reload
 
 API will be available at `http://localhost:8000` (FastAPI default).
 
+#### 🔐 UMLS Configuration
+
+Set these environment variables before running services that perform grounding:
+
+- `UMLS_API_KEY` (required): Your UMLS API key from NLM UTS.
+- `UMLS_BASE_URL` (optional): Defaults to `https://uts-ws.nlm.nih.gov/rest`.
+- `UMLS_TIMEOUT_SECONDS` (optional): HTTP timeout in seconds (default 10).
+
+The API service also respects `GROUNDING_SERVICE_UMLS_API_KEY` to override per-service deployments.
+
 #### 📥 Data Pipeline
 
 ```bash
 cd components/data-pipeline
 uv run python -m data_pipeline.download_protocols
+```
+
+To load downloaded PDFs into the API database, use the loader:
+
+```bash
+# Single PDF
+uv run python -m data_pipeline.loader --pdf data/protocols/example.pdf --api-url http://localhost:8000
+
+# Bulk from manifest
+uv run python -m data_pipeline.loader --manifest data/protocols/manifest.jsonl --limit 50
+```
+
+You can also upload a PDF directly to the API:
+
+```bash
+curl -X POST http://localhost:8000/v1/protocols/upload \
+  -F "file=@data/protocols/example.pdf" \
+  -F "auto_extract=true"
 ```
 
 #### 🖥️ HITL UI
@@ -148,7 +176,7 @@ UI will be available at `http://localhost:5173` (Vite default).
 |-----------|-------------|------------|
 | **`api-service`** | FastAPI endpoints and orchestration | FastAPI, Python |
 | **`extraction-service`** | MedGemma-based extraction pipeline | Python, MedGemma |
-| **`grounding-service`** | UBKG client and SNOMED grounding logic | Python, UBKG API |
+| **`grounding-service`** | UMLS client and SNOMED grounding logic | Python, UMLS API |
 | **`hitl-ui`** | React/Vite frontend for nurse review | React, TypeScript, Vite |
 | **`data-pipeline`** | Protocol ingestion and parsing | Python |
 | **`evaluation`** | Metrics calculation and reporting | Python |

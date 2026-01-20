@@ -2,15 +2,18 @@
 
 from __future__ import annotations
 
+import os
+import tempfile
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
-from typing import List, Optional
+from pathlib import Path
+from typing import List
 
-from extraction_service import (  # type: ignore[import-not-found]
-    pipeline as extraction_pipeline,
-)
-from fastapi import Body, Depends, FastAPI, HTTPException
-from grounding_service import ubkg_client  # type: ignore[import-not-found]
+from anyio import to_thread
+from data_pipeline.download_protocols import extract_text_from_pdf
+from extraction_service import pipeline as extraction_pipeline
+from fastapi import Body, Depends, FastAPI, File, HTTPException, UploadFile
+from grounding_service import umls_client
 from pydantic import BaseModel
 
 from api_service.dependencies import get_storage
@@ -22,10 +25,32 @@ from api_service.storage import Storage, init_db, reset_storage
 async def lifespan(app_instance: FastAPI) -> AsyncIterator[None]:
     """Initialize and teardown app state for the lifespan scope."""
     init_db()
+    if not (os.getenv("UMLS_API_KEY") or os.getenv("GROUNDING_SERVICE_UMLS_API_KEY")):
+        raise RuntimeError(
+            "UMLS_API_KEY (or GROUNDING_SERVICE_UMLS_API_KEY) must be set "
+            "for grounding-service"
+        )
     yield
 
 
 app = FastAPI(title="Gemma Hackathon API", version="0.1.0", lifespan=lifespan)
+DEFAULT_MAX_UPLOAD_SIZE_BYTES = 20 * 1024 * 1024
+
+
+def _max_upload_size_bytes() -> int:
+    raw_value = os.getenv("API_SERVICE_MAX_UPLOAD_BYTES")
+    if not raw_value:
+        return DEFAULT_MAX_UPLOAD_SIZE_BYTES
+    try:
+        parsed = int(raw_value)
+    except ValueError:
+        return DEFAULT_MAX_UPLOAD_SIZE_BYTES
+    if parsed <= 0:
+        return DEFAULT_MAX_UPLOAD_SIZE_BYTES
+    return parsed
+
+
+MAX_UPLOAD_SIZE_BYTES = _max_upload_size_bytes()
 
 
 class ProtocolCreateRequest(BaseModel):
@@ -70,8 +95,8 @@ class ExtractionResponse(BaseModel):
 class CriterionUpdateRequest(BaseModel):
     """Payload for updating a criterion."""
 
-    text: Optional[str] = None
-    criterion_type: Optional[str] = None
+    text: str | None = None
+    criterion_type: str | None = None
 
 
 class CriterionUpdateResponse(BaseModel):
@@ -87,6 +112,7 @@ class GroundingCandidateResponse(BaseModel):
 
     code: str
     display: str
+    ontology: str
     confidence: float
 
 
@@ -104,7 +130,7 @@ class GroundingResponse(BaseModel):
 
     criterion_id: str
     candidates: List[GroundingCandidateResponse]
-    field_mapping: Optional[FieldMappingResponse]
+    field_mapping: FieldMappingResponse | None
 
 
 class HitlFeedbackRequest(BaseModel):
@@ -112,7 +138,7 @@ class HitlFeedbackRequest(BaseModel):
 
     criterion_id: str
     action: str
-    note: Optional[str] = None
+    note: str | None = None
 
 
 def _reset_state() -> None:
@@ -128,6 +154,60 @@ def create_protocol(
     protocol = storage.create_protocol(
         title=payload.title, document_text=payload.document_text
     )
+    return ProtocolResponse(protocol_id=protocol.id, title=protocol.title)
+
+
+@app.post("/v1/protocols/upload")
+async def upload_protocol(
+    file: UploadFile = File(...),
+    auto_extract: bool = True,
+    storage: Storage = Depends(get_storage),
+) -> ProtocolResponse:
+    """Upload a PDF protocol file and create a protocol record."""
+    filename = file.filename or ""
+    if file.content_type != "application/pdf" or not filename.lower().endswith(".pdf"):
+        raise HTTPException(
+            status_code=415, detail="Unsupported media type; only PDF is allowed"
+        )
+
+    bytes_read = 0
+    with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as tmp:
+        tmp_path = Path(tmp.name)
+        while True:
+            chunk = await file.read(1024 * 1024)
+            if not chunk:
+                break
+            bytes_read += len(chunk)
+            if bytes_read > MAX_UPLOAD_SIZE_BYTES:
+                tmp_path.unlink(missing_ok=True)
+                raise HTTPException(status_code=413, detail="File too large")
+            tmp.write(chunk)
+
+    with tmp_path.open("rb") as handle:
+        header = handle.read(4)
+    if header != b"%PDF":
+        tmp_path.unlink(missing_ok=True)
+        raise HTTPException(status_code=400, detail="Invalid PDF file")
+
+    try:
+        document_text = await to_thread.run_sync(extract_text_from_pdf, tmp_path)
+    finally:
+        tmp_path.unlink(missing_ok=True)
+
+    if not document_text:
+        raise HTTPException(
+            status_code=400, detail="No text could be extracted from the PDF"
+        )
+
+    title = filename.replace(".pdf", "").replace("_", " ").strip() or "Protocol"
+    protocol = storage.create_protocol(title=title, document_text=document_text)
+
+    if auto_extract:
+        extracted = await to_thread.run_sync(
+            extraction_pipeline.extract_criteria, protocol.document_text
+        )
+        storage.replace_criteria(protocol_id=protocol.id, extracted=extracted)
+
     return ProtocolResponse(protocol_id=protocol.id, title=protocol.title)
 
 
@@ -171,7 +251,7 @@ def list_criteria(
 @app.patch("/v1/criteria/{criterion_id}")
 def update_criterion(
     criterion_id: str,
-    payload: Optional[CriterionUpdateRequest] = Body(default=None),
+    payload: CriterionUpdateRequest | None = Body(default=None),
     storage: Storage = Depends(get_storage),
 ) -> CriterionUpdateResponse:
     """Update a single criterion or its metadata."""
@@ -200,40 +280,52 @@ def ground_criterion(
     if criterion is None:
         raise HTTPException(status_code=404, detail="Criterion not found")
 
-    client = ubkg_client.UbkgClient()
-    candidates = client.search_snomed(criterion.text)
-    field_mappings = ubkg_client.propose_field_mapping(criterion.text)
+    with umls_client.UmlsClient(
+        api_key=os.getenv("GROUNDING_SERVICE_UMLS_API_KEY")
+        or os.getenv("UMLS_API_KEY")
+    ) as client:
+        candidates = client.search_snomed(criterion.text)
+        field_mappings = umls_client.propose_field_mapping(criterion.text)
 
-    snomed_codes = [candidate.code for candidate in candidates]
-    storage.set_snomed_codes(
-        criterion_id=criterion_id,
-        snomed_codes=snomed_codes,
-    )
+        if not candidates:
+            storage.set_snomed_codes(criterion_id=criterion_id, snomed_codes=[])
+            return GroundingResponse(
+                criterion_id=criterion_id,
+                candidates=[],
+                field_mapping=None,
+            )
 
-    response_candidates = [
-        GroundingCandidateResponse(
-            code=candidate.code,
-            display=candidate.display,
-            confidence=candidate.confidence,
-        )
-        for candidate in candidates
-    ]
-
-    field_mapping = None
-    if field_mappings:
-        suggestion = field_mappings[0]
-        field_mapping = FieldMappingResponse(
-            field=suggestion.field,
-            relation=suggestion.relation,
-            value=suggestion.value,
-            confidence=suggestion.confidence,
+        snomed_codes = [candidate.code for candidate in candidates]
+        storage.set_snomed_codes(
+            criterion_id=criterion_id,
+            snomed_codes=snomed_codes,
         )
 
-    return GroundingResponse(
-        criterion_id=criterion_id,
-        candidates=response_candidates,
-        field_mapping=field_mapping,
-    )
+        response_candidates = [
+            GroundingCandidateResponse(
+                code=candidate.code,
+                display=candidate.display,
+                ontology=candidate.ontology,
+                confidence=candidate.confidence,
+            )
+            for candidate in candidates
+        ]
+
+        field_mapping = None
+        if field_mappings:
+            suggestion = field_mappings[0]
+            field_mapping = FieldMappingResponse(
+                field=suggestion.field,
+                relation=suggestion.relation,
+                value=suggestion.value,
+                confidence=suggestion.confidence,
+            )
+
+        return GroundingResponse(
+            criterion_id=criterion_id,
+            candidates=response_candidates,
+            field_mapping=field_mapping,
+        )
 
 
 def _criterion_to_response(criterion: StorageCriterion) -> CriterionResponse:

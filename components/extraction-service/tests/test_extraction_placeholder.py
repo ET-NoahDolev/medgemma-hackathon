@@ -1,11 +1,16 @@
+from shared.models import Criterion
+
 from extraction_service import pipeline
 
 
 def test_criterion_dataclass_fields() -> None:
-    criterion = pipeline.Criterion(
+    criterion = Criterion(
+        id="crit-1",
         text="Age >= 18 years",
         criterion_type="inclusion",
         confidence=0.92,
+        snomed_codes=[],
+        evidence_spans=[],
     )
 
     assert criterion.text == "Age >= 18 years"

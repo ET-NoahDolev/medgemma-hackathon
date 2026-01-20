@@ -1,15 +1,17 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import Any, cast
 
 import pytest
 from fastapi.testclient import TestClient
 
-from api_service import main as api_main
+import api_service.main as api_main
 from api_service.main import app
 from api_service.storage import reset_storage
 from tests import constants
 
+api_main_any = cast(Any, api_main)
 
 @dataclass
 class FakeExtractedCriterion:
@@ -22,6 +24,7 @@ class FakeExtractedCriterion:
 class FakeGroundingCandidate:
     code: str
     display: str
+    ontology: str
     confidence: float
 
 
@@ -41,8 +44,9 @@ class FakeServicesState:
 
 
 @pytest.fixture()
-def client() -> TestClient:
+def client(monkeypatch: pytest.MonkeyPatch) -> TestClient:
     reset_storage()
+    monkeypatch.setenv("UMLS_API_KEY", "test-key")
     return TestClient(app)
 
 
@@ -60,6 +64,7 @@ def fake_services(monkeypatch: pytest.MonkeyPatch) -> FakeServicesState:
             FakeGroundingCandidate(
                 code=constants.SNOMED_CODE,
                 display="Age (finding)",
+                ontology=constants.SNOMED_ONTOLOGY,
                 confidence=0.88,
             )
         ],
@@ -76,19 +81,43 @@ def fake_services(monkeypatch: pytest.MonkeyPatch) -> FakeServicesState:
     def _extract_criteria(_text: str) -> list[FakeExtractedCriterion]:
         return state.extracted
 
-    class FakeUbkgClient:
+    class FakeUmlsClient:
+        def __init__(
+            self,
+            base_url: str | None = None,
+            api_key: str | None = None,
+            timeout: float | None = None,
+        ) -> None:
+            _ = base_url
+            _ = api_key
+            _ = timeout
+
+        def __enter__(self) -> "FakeUmlsClient":
+            return self
+
+        def __exit__(
+            self,
+            exc_type: type[BaseException] | None,
+            exc: BaseException | None,
+            traceback: object | None,
+        ) -> None:
+            self.close()
+
         def search_snomed(self, _text: str) -> list[FakeGroundingCandidate]:
             return state.candidates
+
+        def close(self) -> None:
+            return None
 
     def _propose_field_mapping(_text: str) -> list[FakeFieldMapping]:
         return state.field_mappings
 
     monkeypatch.setattr(
-        api_main.extraction_pipeline, "extract_criteria", _extract_criteria
+        api_main_any.extraction_pipeline, "extract_criteria", _extract_criteria
     )
-    monkeypatch.setattr(api_main.ubkg_client, "UbkgClient", FakeUbkgClient)
+    monkeypatch.setattr(api_main_any.umls_client, "UmlsClient", FakeUmlsClient)
     monkeypatch.setattr(
-        api_main.ubkg_client, "propose_field_mapping", _propose_field_mapping
+        api_main_any.umls_client, "propose_field_mapping", _propose_field_mapping
     )
 
     return state

@@ -5,10 +5,9 @@ import logging
 import re
 from dataclasses import asdict, dataclass
 from pathlib import Path
-from typing import List
 
-import httpx
-from pypdf import PdfReader  # type: ignore[import-not-found]
+from pypdf import PdfReader
+from shared.models import Document, Protocol
 
 
 @dataclass
@@ -50,76 +49,36 @@ class ProtocolRecord:
     source: str | None = None
     registry_id: str | None = None
     registry_type: str | None = None
+    source_url: str | None = None
+
+    def to_protocol(self, protocol_id: str) -> Protocol:
+        """Convert to shared Protocol model."""
+        return Protocol(
+            id=protocol_id,
+            title=self.title,
+            nct_id=self.nct_id,
+            condition=self.condition,
+            phase=self.phase,
+            source=self.source,
+            registry_id=self.registry_id,
+            registry_type=self.registry_type,
+        )
+
+    def to_document(self, doc_id: str, protocol_id: str) -> Document:
+        """Convert to shared Document model."""
+        return Document(
+            id=doc_id,
+            protocol_id=protocol_id,
+            text=self.document_text,
+            source_url=self.source_url,
+        )
 
 
-CT_API_BASE = "https://clinicaltrials.gov/api/v2/studies"
 DEFAULT_MANIFEST_PATH = (
     Path(__file__).resolve().parents[4] / "data" / "protocols" / "manifest.jsonl"
 )
 
 logger = logging.getLogger(__name__)
-
-
-def fetch_from_clinicaltrials(query: str, limit: int = 50) -> List[ProtocolRecord]:
-    """Fetch protocols from ClinicalTrials.gov API v2.
-
-    Args:
-        query: Condition or keyword to search.
-        limit: Maximum records to fetch.
-
-    Returns:
-        List of normalized protocol records.
-
-    Raises:
-        ValueError: If limit is not positive.
-    """
-    if limit <= 0:
-        raise ValueError("limit must be positive")
-
-    page_size = min(limit, 100)
-    params: dict[str, str | int] = {
-        "query.cond": query,
-        "fields": "NCTId|BriefTitle|Condition|Phase|EligibilityModule",
-        "pageSize": page_size,
-        "format": "json",
-    }
-
-    records: List[ProtocolRecord] = []
-    next_token: str | None = None
-    while len(records) < limit:
-        if next_token:
-            params["pageToken"] = next_token
-        else:
-            params.pop("pageToken", None)
-
-        resp = httpx.get(CT_API_BASE, params=params, timeout=30)
-        resp.raise_for_status()
-        payload = resp.json()
-
-        for study in payload.get("studies", []):
-            proto = study.get("protocolSection", {})
-            ident = proto.get("identificationModule", {})
-            conds = proto.get("conditionsModule", {})
-            design = proto.get("designModule", {})
-            elig = proto.get("eligibilityModule", {})
-
-            records.append(
-                ProtocolRecord(
-                    nct_id=ident.get("nctId", ""),
-                    title=ident.get("briefTitle", ""),
-                    condition=(conds.get("conditions") or [""])[0],
-                    phase=(design.get("phases") or [""])[0],
-                    document_text=elig.get("eligibilityCriteria", ""),
-                )
-            )
-            if len(records) >= limit:
-                break
-
-        next_token = payload.get("nextPageToken")
-        if not next_token:
-            break
-
-    return records
 
 
 def extract_text_from_pdf(path: Path) -> str:
@@ -151,19 +110,40 @@ def _extract_registry_id(url: str) -> tuple[str | None, str | None]:
     return None, None
 
 
-def _iter_manifest_entries(manifest_path: Path) -> list[dict]:
-    entries: list[dict] = []
+def read_manifest_entries(manifest_path: Path) -> list[dict[str, object]]:
+    """Read manifest entries from a JSONL file."""
+    entries: list[dict[str, object]] = []
     with manifest_path.open(encoding="utf-8") as handle:
         for line in handle:
             if line.strip():
-                entries.append(json.loads(line))
+                try:
+                    parsed = json.loads(line)
+                except json.JSONDecodeError as exc:
+                    logger.warning(
+                        "Skipping malformed manifest line: %s (%s)",
+                        line[:200].rstrip(),
+                        exc,
+                    )
+                    continue
+                if isinstance(parsed, dict):
+                    entries.append(parsed)
+                else:
+                    logger.warning(
+                        "Skipping non-dict manifest entry: %r",
+                        type(parsed),
+                    )
     return entries
 
 
-def _build_record_from_entry(entry: dict) -> ProtocolRecord | None:
-    if entry.get("status") != "downloaded":
+def _get_optional_str(entry: dict[str, object], key: str) -> str | None:
+    value = entry.get(key)
+    return value if isinstance(value, str) else None
+
+
+def _build_record_from_entry(entry: dict[str, object]) -> ProtocolRecord | None:
+    if _get_optional_str(entry, "status") != "downloaded":
         return None
-    path_value = entry.get("path")
+    path_value = _get_optional_str(entry, "path")
     if not path_value:
         return None
     pdf_path = Path(path_value)
@@ -179,10 +159,10 @@ def _build_record_from_entry(entry: dict) -> ProtocolRecord | None:
         logger.warning("Empty text extracted from %s", pdf_path)
         return None
 
-    url = entry.get("url", "")
+    url = _get_optional_str(entry, "url") or ""
     title = _derive_title(pdf_path, text)
-    registry_id = entry.get("registry_id")
-    registry_type = entry.get("registry_type")
+    registry_id = _get_optional_str(entry, "registry_id")
+    registry_type = _get_optional_str(entry, "registry_type")
     if not registry_id or not registry_type:
         derived_id, derived_type = _extract_registry_id(url)
         registry_id = registry_id or derived_id
@@ -193,15 +173,16 @@ def _build_record_from_entry(entry: dict) -> ProtocolRecord | None:
         condition="",
         phase="",
         document_text=text,
-        source=entry.get("source"),
+        source=_get_optional_str(entry, "source"),
         registry_id=registry_id,
         registry_type=registry_type,
+        source_url=url or None,
     )
 
 
 def ingest_local_protocols(
     manifest_path: Path = DEFAULT_MANIFEST_PATH, limit: int = 50
-) -> List[ProtocolRecord]:
+) -> list[ProtocolRecord]:
     """Load protocol PDFs referenced in a manifest and extract document text."""
     if limit <= 0:
         raise ValueError("limit must be positive")
@@ -209,7 +190,7 @@ def ingest_local_protocols(
         raise FileNotFoundError(f"Manifest not found: {manifest_path}")
 
     records: list[ProtocolRecord] = []
-    for entry in _iter_manifest_entries(manifest_path):
+    for entry in read_manifest_entries(manifest_path):
         if len(records) >= limit:
             break
         record = _build_record_from_entry(entry)
@@ -219,7 +200,7 @@ def ingest_local_protocols(
 
 
 def emit_records(
-    records: List[ProtocolRecord], output_path: Path | None = None
+    records: list[ProtocolRecord], output_path: Path | None = None
 ) -> None:
     """Write protocol records to JSONL file.
 
@@ -249,14 +230,7 @@ def main() -> None:
     import argparse
 
     parser = argparse.ArgumentParser(
-        description="Download protocols from ClinicalTrials.gov or local PDFs"
-    )
-    parser.add_argument("--query", default="oncology", help="Search condition")
-    parser.add_argument("--limit", type=int, default=50, help="Max records")
-    parser.add_argument(
-        "--local",
-        action="store_true",
-        help="Ingest protocols from local PDFs using the manifest.jsonl",
+        description="Ingest protocols from local PDFs using manifest.jsonl"
     )
     parser.add_argument(
         "--manifest-path",
@@ -264,15 +238,13 @@ def main() -> None:
         default=DEFAULT_MANIFEST_PATH,
         help="Path to manifest.jsonl for local ingestion",
     )
+    parser.add_argument("--limit", type=int, default=50, help="Max records")
     parser.add_argument("--output", type=Path, help="Output JSONL path")
     args = parser.parse_args()
 
-    if args.local:
-        records = ingest_local_protocols(args.manifest_path, args.limit)
-    else:
-        records = fetch_from_clinicaltrials(args.query, args.limit)
+    records = ingest_local_protocols(args.manifest_path, args.limit)
     emit_records(records, args.output)
-    print(f"Downloaded {len(records)} protocols")
+    print(f"Ingested {len(records)} protocols")
 
 
 if __name__ == "__main__":

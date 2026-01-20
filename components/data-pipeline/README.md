@@ -25,11 +25,39 @@ See the main [Getting Started](../overview/getting-started.md#scripts) documenta
 ## Entry Point
 
 - `data_pipeline/download_protocols.py`
+- `data_pipeline/loader.py`
 
 ## Running the Stub
 
 ```bash
-uv run python -m data_pipeline.download_protocols
+# Ensure PDFs and manifest exist first
+python scripts/download_protocol_sources.py --max-per-source 10
+
+# Ingest downloaded PDFs
+uv run python -m data_pipeline.download_protocols --manifest-path data/protocols/manifest.jsonl
+```
+
+## Load Into the API Database
+
+Use the loader to import extracted PDFs into the API database.
+
+```bash
+# Single PDF
+uv run python -m data_pipeline.loader --pdf data/protocols/example.pdf --api-url http://localhost:8000
+
+# Bulk from manifest
+uv run python -m data_pipeline.loader --manifest data/protocols/manifest.jsonl --limit 50
+
+# Without auto-extraction
+uv run python -m data_pipeline.loader --pdf data/protocols/example.pdf --no-extract
+```
+
+The API also exposes a PDF upload endpoint:
+
+```bash
+curl -X POST http://localhost:8000/v1/protocols/upload \
+  -F "file=@data/protocols/example.pdf" \
+  -F "auto_extract=true"
 ```
 
 ## Planned Outputs
