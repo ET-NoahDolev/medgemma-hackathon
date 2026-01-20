@@ -226,6 +226,69 @@ class UmlsClient:
         except Exception:
             pass
 
+    def get_concept_details(self, cui: str) -> dict[str, object]:
+        """Get detailed information about a UMLS concept including semantic types.
+
+        Args:
+            cui: UMLS Concept Unique Identifier.
+
+        Returns:
+            Dictionary with concept details including semantic types.
+
+        Raises:
+            ValueError: If CUI is empty.
+        """
+        if not cui.strip():
+            raise ValueError("cui is required")
+
+        cache_key = f"concept:{cui}"
+        cached = cast(dict[str, object] | None, self._cache.get(cache_key))
+        if cached is not None:
+            return cached
+
+        url = f"{self.base_url.rstrip('/')}/content/current/CUI/{cui}"
+        params: dict[str, str] = {
+            "apiKey": self.api_key or "",
+        }
+
+        try:
+            data = self._request_with_retry(url, params)
+            if self._cache_ttl:
+                self._cache.set(cache_key, data, expire=self._cache_ttl)
+            return data
+        except httpx.HTTPStatusError as exc:
+            logger.warning("UMLS API HTTP error for CUI %s: %s", cui, exc)
+            return {}
+        except httpx.RequestError as exc:
+            logger.warning("UMLS API request error for CUI %s: %s", cui, exc)
+            return {}
+
+    def get_semantic_types(self, cui: str) -> list[str]:
+        """Get semantic types (TUIs) for a UMLS concept.
+
+        Args:
+            cui: UMLS Concept Unique Identifier.
+
+        Returns:
+            List of semantic type identifiers (TUIs).
+        """
+        details = self.get_concept_details(cui)
+        result = details.get("result", {})
+        if not isinstance(result, dict):
+            return []
+
+        semantic_types = result.get("semanticTypes", [])
+        if not isinstance(semantic_types, Sequence):
+            return []
+
+        tuis: list[str] = []
+        for st in semantic_types:
+            if isinstance(st, dict):
+                name = st.get("name")
+                if isinstance(name, str) and name.startswith("T"):
+                    tuis.append(name)
+        return tuis
+
     def clear_cache(self) -> None:
         """Clear the search cache."""
         self._cache.clear()

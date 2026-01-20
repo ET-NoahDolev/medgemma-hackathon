@@ -36,6 +36,19 @@ from api_service.storage import Storage, init_db, reset_storage
 # Load .env from repo root (find_dotenv walks up to find it)
 load_dotenv(find_dotenv())
 
+# Setup logging
+import logging
+
+logger = logging.getLogger(__name__)
+
+# Try to import agent (optional dependency)
+try:
+    from grounding_service.agent import get_grounding_agent
+
+    AGENT_AVAILABLE = True
+except ImportError:
+    AGENT_AVAILABLE = False
+
 DEFAULT_MAX_UPLOAD_SIZE_BYTES = 20 * 1024 * 1024
 # Expose for backward compatibility with tests
 MAX_UPLOAD_SIZE_BYTES = DEFAULT_MAX_UPLOAD_SIZE_BYTES
@@ -505,7 +518,7 @@ def suggest_field_mapping(
 
 
 @app.post("/v1/criteria/{criterion_id}/ground")
-def ground_criterion(
+async def ground_criterion(
     criterion_id: str,
     storage: Storage = Depends(get_storage),
 ) -> GroundingResponse:
@@ -514,6 +527,58 @@ def ground_criterion(
     if criterion is None:
         raise HTTPException(status_code=404, detail="Criterion not found")
 
+    # Try AI grounding if enabled
+    use_ai = os.getenv("USE_AI_GROUNDING", "false").lower() == "true"
+    if use_ai and AGENT_AVAILABLE:
+        try:
+            agent = get_grounding_agent()
+            result = await agent.ground(criterion.text, criterion.criterion_type)
+
+            # Convert agent result to API response format
+            response_candidates = []
+            for code in result.snomed_codes:
+                # Try to get display name from UMLS
+                with umls_client.UmlsClient(api_key=_get_umls_api_key()) as client:
+                    candidates = client.search_snomed(criterion.text, limit=1)
+                    if candidates:
+                        response_candidates.append(
+                            GroundingCandidateResponse(
+                                code=candidates[0].code,
+                                display=candidates[0].display,
+                                ontology=candidates[0].ontology,
+                                confidence=candidates[0].confidence,
+                            )
+                        )
+
+            field_mapping = None
+            if result.field_mappings:
+                mapping = result.field_mappings[0]
+                field_mapping = FieldMappingResponse(
+                    field=mapping.field,
+                    relation=mapping.relation,
+                    value=mapping.value,
+                    confidence=mapping.confidence,
+                )
+
+            # Store SNOMED codes
+            snomed_codes = result.snomed_codes
+            storage.set_snomed_codes(
+                criterion_id=criterion_id, snomed_codes=snomed_codes
+            )
+
+            return GroundingResponse(
+                criterion_id=criterion_id,
+                candidates=response_candidates,
+                field_mapping=field_mapping,
+            )
+        except Exception as e:
+            logger.warning(
+                "AI grounding failed for criterion %s: %s, falling back to baseline",
+                criterion_id,
+                e,
+            )
+
+    # Fallback to baseline regex-based grounding
     with umls_client.UmlsClient(api_key=_get_umls_api_key()) as client:
         candidates = client.search_snomed(criterion.text)
         field_mappings = umls_client.propose_field_mapping(criterion.text)
