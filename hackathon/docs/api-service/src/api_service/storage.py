@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Any, Iterable, cast
 from typing import Protocol as TypingProtocol
 
+from shared.models import Protocol as SharedProtocol  # type: ignore[import-not-found]
 from sqlalchemy import JSON, Column, delete
 from sqlalchemy.engine import Engine
 from sqlmodel import Field, Session, SQLModel, create_engine, select
@@ -160,6 +161,28 @@ class Storage:
                 source=_norm_opt(source),
                 registry_id=_norm_opt(registry_id),
                 registry_type=_norm_opt(registry_type),
+            )
+            session.add(protocol)
+            session.commit()
+            session.refresh(protocol)
+            return protocol
+
+    def create_protocol_from_shared(
+        self, shared: SharedProtocol, document_text: str
+    ) -> Protocol:
+        """Create a Protocol from a shared Protocol model and document text."""
+        with Session(self._engine) as session:
+            protocol_id = _next_id(session, "protocol", "proto")
+            protocol = Protocol(
+                id=protocol_id,
+                title=shared.title.strip(),
+                document_text=document_text,
+                nct_id=_norm_opt(getattr(shared, "nct_id", None)),
+                condition=_norm_opt(getattr(shared, "condition", None)),
+                phase=_norm_opt(getattr(shared, "phase", None)),
+                source=_norm_opt(getattr(shared, "source", None)),
+                registry_id=_norm_opt(getattr(shared, "registry_id", None)),
+                registry_type=_norm_opt(getattr(shared, "registry_type", None)),
             )
             session.add(protocol)
             session.commit()

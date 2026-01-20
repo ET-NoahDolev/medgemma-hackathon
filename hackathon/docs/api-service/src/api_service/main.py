@@ -6,6 +6,7 @@ import os
 import tempfile
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
+from dataclasses import dataclass
 from pathlib import Path
 from typing import List
 
@@ -20,37 +21,54 @@ from api_service.dependencies import get_storage
 from api_service.storage import Criterion as StorageCriterion
 from api_service.storage import Storage, init_db, reset_storage
 
+DEFAULT_MAX_UPLOAD_SIZE_BYTES = 20 * 1024 * 1024
+# Expose for backward compatibility with tests
+MAX_UPLOAD_SIZE_BYTES = DEFAULT_MAX_UPLOAD_SIZE_BYTES
+
+
+@dataclass(frozen=True)
+class ApiConfig:
+    """Configuration for the API service."""
+
+    max_upload_bytes: int
+
+    @staticmethod
+    def from_env() -> "ApiConfig":
+        """Create ApiConfig from environment variables."""
+        raw_value = os.getenv("API_SERVICE_MAX_UPLOAD_BYTES")
+        try:
+            value = int(raw_value) if raw_value else MAX_UPLOAD_SIZE_BYTES
+        except ValueError:
+            value = MAX_UPLOAD_SIZE_BYTES
+        if value <= 0:
+            value = MAX_UPLOAD_SIZE_BYTES
+        return ApiConfig(max_upload_bytes=value)
+
+
+def get_config() -> ApiConfig:
+    """Get the current API configuration."""
+    return ApiConfig.from_env()
+
 
 @asynccontextmanager
 async def lifespan(app_instance: FastAPI) -> AsyncIterator[None]:
     """Initialize and teardown app state for the lifespan scope."""
     init_db()
-    if not (os.getenv("UMLS_API_KEY") or os.getenv("GROUNDING_SERVICE_UMLS_API_KEY")):
-        raise RuntimeError(
-            "UMLS_API_KEY (or GROUNDING_SERVICE_UMLS_API_KEY) must be set "
-            "for grounding-service"
-        )
+    # Validate required configuration
+    api_key = os.getenv("GROUNDING_SERVICE_UMLS_API_KEY") or os.getenv("UMLS_API_KEY")
+    if not api_key:
+        raise RuntimeError("UMLS_API_KEY or GROUNDING_SERVICE_UMLS_API_KEY must be set")
     yield
 
 
+def _get_umls_api_key() -> str:
+    api_key = os.getenv("GROUNDING_SERVICE_UMLS_API_KEY") or os.getenv("UMLS_API_KEY")
+    if not api_key:
+        raise HTTPException(status_code=503, detail="Grounding service not configured")
+    return api_key
+
+
 app = FastAPI(title="Gemma Hackathon API", version="0.1.0", lifespan=lifespan)
-DEFAULT_MAX_UPLOAD_SIZE_BYTES = 20 * 1024 * 1024
-
-
-def _max_upload_size_bytes() -> int:
-    raw_value = os.getenv("API_SERVICE_MAX_UPLOAD_BYTES")
-    if not raw_value:
-        return DEFAULT_MAX_UPLOAD_SIZE_BYTES
-    try:
-        parsed = int(raw_value)
-    except ValueError:
-        return DEFAULT_MAX_UPLOAD_SIZE_BYTES
-    if parsed <= 0:
-        return DEFAULT_MAX_UPLOAD_SIZE_BYTES
-    return parsed
-
-
-MAX_UPLOAD_SIZE_BYTES = _max_upload_size_bytes()
 
 
 class ProtocolCreateRequest(BaseModel):
@@ -178,7 +196,7 @@ async def upload_protocol(
             if not chunk:
                 break
             bytes_read += len(chunk)
-            if bytes_read > MAX_UPLOAD_SIZE_BYTES:
+            if bytes_read > get_config().max_upload_bytes:
                 tmp_path.unlink(missing_ok=True)
                 raise HTTPException(status_code=413, detail="File too large")
             tmp.write(chunk)
@@ -280,10 +298,7 @@ def ground_criterion(
     if criterion is None:
         raise HTTPException(status_code=404, detail="Criterion not found")
 
-    with umls_client.UmlsClient(
-        api_key=os.getenv("GROUNDING_SERVICE_UMLS_API_KEY")
-        or os.getenv("UMLS_API_KEY")
-    ) as client:
+    with umls_client.UmlsClient(api_key=_get_umls_api_key()) as client:
         candidates = client.search_snomed(criterion.text)
         field_mappings = umls_client.propose_field_mapping(criterion.text)
 

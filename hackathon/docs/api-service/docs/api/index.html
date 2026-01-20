@@ -498,6 +498,15 @@
 <nav aria-label="Classes" class="md-nav">
 <ul class="md-nav__list">
 <li class="md-nav__item">
+<a class="md-nav__link" href="#api_service.main.ApiConfig">
+<span class="md-ellipsis">
+      
+        ApiConfig
+      
+    </span>
+</a>
+</li>
+<li class="md-nav__item">
 <a class="md-nav__link" href="#api_service.main.ProtocolCreateRequest">
 <span class="md-ellipsis">
       
@@ -609,6 +618,15 @@
 </a>
 <nav aria-label="Functions" class="md-nav">
 <ul class="md-nav__list">
+<li class="md-nav__item">
+<a class="md-nav__link" href="#api_service.main.get_config">
+<span class="md-ellipsis">
+      
+        get_config
+      
+    </span>
+</a>
+</li>
 <li class="md-nav__item">
 <a class="md-nav__link" href="#api_service.main.lifespan">
 <span class="md-ellipsis">
@@ -1513,6 +1531,15 @@
 <nav aria-label="Classes" class="md-nav">
 <ul class="md-nav__list">
 <li class="md-nav__item">
+<a class="md-nav__link" href="#api_service.main.ApiConfig">
+<span class="md-ellipsis">
+      
+        ApiConfig
+      
+    </span>
+</a>
+</li>
+<li class="md-nav__item">
 <a class="md-nav__link" href="#api_service.main.ProtocolCreateRequest">
 <span class="md-ellipsis">
       
@@ -1624,6 +1651,15 @@
 </a>
 <nav aria-label="Functions" class="md-nav">
 <ul class="md-nav__list">
+<li class="md-nav__item">
+<a class="md-nav__link" href="#api_service.main.get_config">
+<span class="md-ellipsis">
+      
+        get_config
+      
+    </span>
+</a>
+</li>
 <li class="md-nav__item">
 <a class="md-nav__link" href="#api_service.main.lifespan">
 <span class="md-ellipsis">
@@ -1885,6 +1921,60 @@
 <p>API service wireframe for the MedGemma hackathon demo.</p>
 <div class="doc doc-children">
 <h5 id="api_service.main-classes">Classes</h5>
+<div class="doc doc-object doc-class">
+<h6 class="doc doc-heading" id="api_service.main.ApiConfig">
+<span class="doc doc-object-name doc-class-name">ApiConfig</span>
+<span class="doc doc-labels">
+<small class="doc doc-label doc-label-dataclass"><code>dataclass</code></small>
+</span>
+</h6>
+<div class="doc-signature highlight"><pre><span></span><code><span class="nf">ApiConfig</span><span class="p">(</span><span class="n">max_upload_bytes</span><span class="p">:</span> <span class="n"><span title="int">int</span></span><span class="p">)</span>
+</code></pre></div>
+<div class="doc doc-contents">
+<p>Configuration for the API service.</p>
+<div class="doc doc-children">
+<h7 id="api_service.main.ApiConfig-functions">Functions</h7>
+<div class="doc doc-object doc-function">
+<h8 class="doc doc-heading" id="api_service.main.ApiConfig.from_env">
+<span class="doc doc-object-name doc-function-name">from_env</span>
+<span class="doc doc-labels">
+<small class="doc doc-label doc-label-staticmethod"><code>staticmethod</code></small>
+</span>
+</h8>
+<div class="doc-signature highlight"><pre><span></span><code><span class="nf">from_env</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="s1">'ApiConfig'</span>
+</code></pre></div>
+<div class="doc doc-contents">
+<p>Create ApiConfig from environment variables.</p>
+<details class="mkdocstrings-source">
+<summary>Source code in <code>components/api-service/src/api_service/main.py</code></summary>
+<div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">35</span>
+<span class="normal">36</span>
+<span class="normal">37</span>
+<span class="normal">38</span>
+<span class="normal">39</span>
+<span class="normal">40</span>
+<span class="normal">41</span>
+<span class="normal">42</span>
+<span class="normal">43</span>
+<span class="normal">44</span>
+<span class="normal">45</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="nd">@staticmethod</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">from_env</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="s2">"ApiConfig"</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">"""Create ApiConfig from environment variables."""</span>
+    <span class="n">raw_value</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">getenv</span><span class="p">(</span><span class="s2">"API_SERVICE_MAX_UPLOAD_BYTES"</span><span class="p">)</span>
+    <span class="k">try</span><span class="p">:</span>
+        <span class="n">value</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">raw_value</span><span class="p">)</span> <span class="k">if</span> <span class="n">raw_value</span> <span class="k">else</span> <span class="n">MAX_UPLOAD_SIZE_BYTES</span>
+    <span class="k">except</span> <span class="ne">ValueError</span><span class="p">:</span>
+        <span class="n">value</span> <span class="o">=</span> <span class="n">MAX_UPLOAD_SIZE_BYTES</span>
+    <span class="k">if</span> <span class="n">value</span> <span class="o">&lt;=</span> <span class="mi">0</span><span class="p">:</span>
+        <span class="n">value</span> <span class="o">=</span> <span class="n">MAX_UPLOAD_SIZE_BYTES</span>
+    <span class="k">return</span> <span class="n">ApiConfig</span><span class="p">(</span><span class="n">max_upload_bytes</span><span class="o">=</span><span class="n">value</span><span class="p">)</span>
+</code></pre></div></td></tr></table></div>
+</details>
+</div>
+</div>
+</div>
+</div>
+</div>
 <div class="doc doc-object doc-class">
 <h6 class="doc doc-heading" id="api_service.main.ProtocolCreateRequest">
 <span class="doc doc-object-name doc-class-name">ProtocolCreateRequest</span>
@@ -2261,6 +2351,30 @@
 </div>
 <h5 id="api_service.main-functions">Functions</h5>
 <div class="doc doc-object doc-function">
+<h6 class="doc doc-heading" id="api_service.main.get_config">
+<span class="doc doc-object-name doc-function-name">get_config</span>
+</h6>
+<div class="doc-signature highlight"><pre><span></span><code><span class="nf">get_config</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="n"><a class="autorefs autorefs-internal" href="#api_service.main.ApiConfig" title="ApiConfig
+
+
+  
+      dataclass
+   (api_service.main.ApiConfig)">ApiConfig</a></span>
+</code></pre></div>
+<div class="doc doc-contents">
+<p>Get the current API configuration.</p>
+<details class="mkdocstrings-source">
+<summary>Source code in <code>components/api-service/src/api_service/main.py</code></summary>
+<div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">48</span>
+<span class="normal">49</span>
+<span class="normal">50</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">get_config</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="n">ApiConfig</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">"""Get the current API configuration."""</span>
+    <span class="k">return</span> <span class="n">ApiConfig</span><span class="o">.</span><span class="n">from_env</span><span class="p">()</span>
+</code></pre></div></td></tr></table></div>
+</details>
+</div>
+</div>
+<div class="doc doc-object doc-function">
 <h6 class="doc doc-heading" id="api_service.main.lifespan">
 <span class="doc doc-object-name doc-function-name">lifespan</span>
 <span class="doc doc-labels">
@@ -2273,24 +2387,22 @@
 <p>Initialize and teardown app state for the lifespan scope.</p>
 <details class="mkdocstrings-source">
 <summary>Source code in <code>components/api-service/src/api_service/main.py</code></summary>
-<div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">24</span>
-<span class="normal">25</span>
-<span class="normal">26</span>
-<span class="normal">27</span>
-<span class="normal">28</span>
-<span class="normal">29</span>
-<span class="normal">30</span>
-<span class="normal">31</span>
-<span class="normal">32</span>
-<span class="normal">33</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="nd">@asynccontextmanager</span>
+<div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">53</span>
+<span class="normal">54</span>
+<span class="normal">55</span>
+<span class="normal">56</span>
+<span class="normal">57</span>
+<span class="normal">58</span>
+<span class="normal">59</span>
+<span class="normal">60</span>
+<span class="normal">61</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="nd">@asynccontextmanager</span>
 <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">lifespan</span><span class="p">(</span><span class="n">app_instance</span><span class="p">:</span> <span class="n">FastAPI</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">AsyncIterator</span><span class="p">[</span><span class="kc">None</span><span class="p">]:</span>
 <span class="w">    </span><span class="sd">"""Initialize and teardown app state for the lifespan scope."""</span>
     <span class="n">init_db</span><span class="p">()</span>
-    <span class="k">if</span> <span class="ow">not</span> <span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">getenv</span><span class="p">(</span><span class="s2">"UMLS_API_KEY"</span><span class="p">)</span> <span class="ow">or</span> <span class="n">os</span><span class="o">.</span><span class="n">getenv</span><span class="p">(</span><span class="s2">"GROUNDING_SERVICE_UMLS_API_KEY"</span><span class="p">)):</span>
-        <span class="k">raise</span> <span class="ne">RuntimeError</span><span class="p">(</span>
-            <span class="s2">"UMLS_API_KEY (or GROUNDING_SERVICE_UMLS_API_KEY) must be set "</span>
-            <span class="s2">"for grounding-service"</span>
-        <span class="p">)</span>
+    <span class="c1"># Validate required configuration</span>
+    <span class="n">api_key</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">getenv</span><span class="p">(</span><span class="s2">"GROUNDING_SERVICE_UMLS_API_KEY"</span><span class="p">)</span> <span class="ow">or</span> <span class="n">os</span><span class="o">.</span><span class="n">getenv</span><span class="p">(</span><span class="s2">"UMLS_API_KEY"</span><span class="p">)</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">api_key</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="ne">RuntimeError</span><span class="p">(</span><span class="s2">"UMLS_API_KEY or GROUNDING_SERVICE_UMLS_API_KEY must be set"</span><span class="p">)</span>
     <span class="k">yield</span>
 </code></pre></div></td></tr></table></div>
 </details>
@@ -2306,16 +2418,16 @@
 <p>Create a protocol record and initial document entry.</p>
 <details class="mkdocstrings-source">
 <summary>Source code in <code>components/api-service/src/api_service/main.py</code></summary>
-<div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">148</span>
-<span class="normal">149</span>
-<span class="normal">150</span>
-<span class="normal">151</span>
-<span class="normal">152</span>
-<span class="normal">153</span>
-<span class="normal">154</span>
-<span class="normal">155</span>
-<span class="normal">156</span>
-<span class="normal">157</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="nd">@app</span><span class="o">.</span><span class="n">post</span><span class="p">(</span><span class="s2">"/v1/protocols"</span><span class="p">)</span>
+<div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">166</span>
+<span class="normal">167</span>
+<span class="normal">168</span>
+<span class="normal">169</span>
+<span class="normal">170</span>
+<span class="normal">171</span>
+<span class="normal">172</span>
+<span class="normal">173</span>
+<span class="normal">174</span>
+<span class="normal">175</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="nd">@app</span><span class="o">.</span><span class="n">post</span><span class="p">(</span><span class="s2">"/v1/protocols"</span><span class="p">)</span>
 <span class="k">def</span><span class="w"> </span><span class="nf">create_protocol</span><span class="p">(</span>
     <span class="n">payload</span><span class="p">:</span> <span class="n">ProtocolCreateRequest</span><span class="p">,</span>
     <span class="n">storage</span><span class="p">:</span> <span class="n">Storage</span> <span class="o">=</span> <span class="n">Depends</span><span class="p">(</span><span class="n">get_storage</span><span class="p">),</span>
@@ -2342,25 +2454,7 @@
 <p>Upload a PDF protocol file and create a protocol record.</p>
 <details class="mkdocstrings-source">
 <summary>Source code in <code>components/api-service/src/api_service/main.py</code></summary>
-<div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">160</span>
-<span class="normal">161</span>
-<span class="normal">162</span>
-<span class="normal">163</span>
-<span class="normal">164</span>
-<span class="normal">165</span>
-<span class="normal">166</span>
-<span class="normal">167</span>
-<span class="normal">168</span>
-<span class="normal">169</span>
-<span class="normal">170</span>
-<span class="normal">171</span>
-<span class="normal">172</span>
-<span class="normal">173</span>
-<span class="normal">174</span>
-<span class="normal">175</span>
-<span class="normal">176</span>
-<span class="normal">177</span>
-<span class="normal">178</span>
+<div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">178</span>
 <span class="normal">179</span>
 <span class="normal">180</span>
 <span class="normal">181</span>
@@ -2393,7 +2487,25 @@
 <span class="normal">208</span>
 <span class="normal">209</span>
 <span class="normal">210</span>
-<span class="normal">211</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="nd">@app</span><span class="o">.</span><span class="n">post</span><span class="p">(</span><span class="s2">"/v1/protocols/upload"</span><span class="p">)</span>
+<span class="normal">211</span>
+<span class="normal">212</span>
+<span class="normal">213</span>
+<span class="normal">214</span>
+<span class="normal">215</span>
+<span class="normal">216</span>
+<span class="normal">217</span>
+<span class="normal">218</span>
+<span class="normal">219</span>
+<span class="normal">220</span>
+<span class="normal">221</span>
+<span class="normal">222</span>
+<span class="normal">223</span>
+<span class="normal">224</span>
+<span class="normal">225</span>
+<span class="normal">226</span>
+<span class="normal">227</span>
+<span class="normal">228</span>
+<span class="normal">229</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="nd">@app</span><span class="o">.</span><span class="n">post</span><span class="p">(</span><span class="s2">"/v1/protocols/upload"</span><span class="p">)</span>
 <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">upload_protocol</span><span class="p">(</span>
     <span class="n">file</span><span class="p">:</span> <span class="n">UploadFile</span> <span class="o">=</span> <span class="n">File</span><span class="p">(</span><span class="o">...</span><span class="p">),</span>
     <span class="n">auto_extract</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
@@ -2414,7 +2526,7 @@
             <span class="k">if</span> <span class="ow">not</span> <span class="n">chunk</span><span class="p">:</span>
                 <span class="k">break</span>
             <span class="n">bytes_read</span> <span class="o">+=</span> <span class="nb">len</span><span class="p">(</span><span class="n">chunk</span><span class="p">)</span>
-            <span class="k">if</span> <span class="n">bytes_read</span> <span class="o">&gt;</span> <span class="n">MAX_UPLOAD_SIZE_BYTES</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">bytes_read</span> <span class="o">&gt;</span> <span class="n">get_config</span><span class="p">()</span><span class="o">.</span><span class="n">max_upload_bytes</span><span class="p">:</span>
                 <span class="n">tmp_path</span><span class="o">.</span><span class="n">unlink</span><span class="p">(</span><span class="n">missing_ok</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
                 <span class="k">raise</span> <span class="n">HTTPException</span><span class="p">(</span><span class="n">status_code</span><span class="o">=</span><span class="mi">413</span><span class="p">,</span> <span class="n">detail</span><span class="o">=</span><span class="s2">"File too large"</span><span class="p">)</span>
             <span class="n">tmp</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="n">chunk</span><span class="p">)</span>
@@ -2459,24 +2571,24 @@
 <p>Trigger extraction of atomic criteria for a protocol.</p>
 <details class="mkdocstrings-source">
 <summary>Source code in <code>components/api-service/src/api_service/main.py</code></summary>
-<div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">214</span>
-<span class="normal">215</span>
-<span class="normal">216</span>
-<span class="normal">217</span>
-<span class="normal">218</span>
-<span class="normal">219</span>
-<span class="normal">220</span>
-<span class="normal">221</span>
-<span class="normal">222</span>
-<span class="normal">223</span>
-<span class="normal">224</span>
-<span class="normal">225</span>
-<span class="normal">226</span>
-<span class="normal">227</span>
-<span class="normal">228</span>
-<span class="normal">229</span>
-<span class="normal">230</span>
-<span class="normal">231</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="nd">@app</span><span class="o">.</span><span class="n">post</span><span class="p">(</span><span class="s2">"/v1/protocols/</span><span class="si">{protocol_id}</span><span class="s2">/extract"</span><span class="p">)</span>
+<div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">232</span>
+<span class="normal">233</span>
+<span class="normal">234</span>
+<span class="normal">235</span>
+<span class="normal">236</span>
+<span class="normal">237</span>
+<span class="normal">238</span>
+<span class="normal">239</span>
+<span class="normal">240</span>
+<span class="normal">241</span>
+<span class="normal">242</span>
+<span class="normal">243</span>
+<span class="normal">244</span>
+<span class="normal">245</span>
+<span class="normal">246</span>
+<span class="normal">247</span>
+<span class="normal">248</span>
+<span class="normal">249</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="nd">@app</span><span class="o">.</span><span class="n">post</span><span class="p">(</span><span class="s2">"/v1/protocols/</span><span class="si">{protocol_id}</span><span class="s2">/extract"</span><span class="p">)</span>
 <span class="k">def</span><span class="w"> </span><span class="nf">extract_criteria</span><span class="p">(</span>
     <span class="n">protocol_id</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
     <span class="n">storage</span><span class="p">:</span> <span class="n">Storage</span> <span class="o">=</span> <span class="n">Depends</span><span class="p">(</span><span class="n">get_storage</span><span class="p">),</span>
@@ -2508,21 +2620,21 @@
 <p>List criteria generated for a protocol.</p>
 <details class="mkdocstrings-source">
 <summary>Source code in <code>components/api-service/src/api_service/main.py</code></summary>
-<div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">234</span>
-<span class="normal">235</span>
-<span class="normal">236</span>
-<span class="normal">237</span>
-<span class="normal">238</span>
-<span class="normal">239</span>
-<span class="normal">240</span>
-<span class="normal">241</span>
-<span class="normal">242</span>
-<span class="normal">243</span>
-<span class="normal">244</span>
-<span class="normal">245</span>
-<span class="normal">246</span>
-<span class="normal">247</span>
-<span class="normal">248</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="nd">@app</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"/v1/protocols/</span><span class="si">{protocol_id}</span><span class="s2">/criteria"</span><span class="p">)</span>
+<div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">252</span>
+<span class="normal">253</span>
+<span class="normal">254</span>
+<span class="normal">255</span>
+<span class="normal">256</span>
+<span class="normal">257</span>
+<span class="normal">258</span>
+<span class="normal">259</span>
+<span class="normal">260</span>
+<span class="normal">261</span>
+<span class="normal">262</span>
+<span class="normal">263</span>
+<span class="normal">264</span>
+<span class="normal">265</span>
+<span class="normal">266</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="nd">@app</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"/v1/protocols/</span><span class="si">{protocol_id}</span><span class="s2">/criteria"</span><span class="p">)</span>
 <span class="k">def</span><span class="w"> </span><span class="nf">list_criteria</span><span class="p">(</span>
     <span class="n">protocol_id</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
     <span class="n">storage</span><span class="p">:</span> <span class="n">Storage</span> <span class="o">=</span> <span class="n">Depends</span><span class="p">(</span><span class="n">get_storage</span><span class="p">),</span>
@@ -2551,26 +2663,26 @@
 <p>Update a single criterion or its metadata.</p>
 <details class="mkdocstrings-source">
 <summary>Source code in <code>components/api-service/src/api_service/main.py</code></summary>
-<div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">251</span>
-<span class="normal">252</span>
-<span class="normal">253</span>
-<span class="normal">254</span>
-<span class="normal">255</span>
-<span class="normal">256</span>
-<span class="normal">257</span>
-<span class="normal">258</span>
-<span class="normal">259</span>
-<span class="normal">260</span>
-<span class="normal">261</span>
-<span class="normal">262</span>
-<span class="normal">263</span>
-<span class="normal">264</span>
-<span class="normal">265</span>
-<span class="normal">266</span>
-<span class="normal">267</span>
-<span class="normal">268</span>
-<span class="normal">269</span>
-<span class="normal">270</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="nd">@app</span><span class="o">.</span><span class="n">patch</span><span class="p">(</span><span class="s2">"/v1/criteria/</span><span class="si">{criterion_id}</span><span class="s2">"</span><span class="p">)</span>
+<div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">269</span>
+<span class="normal">270</span>
+<span class="normal">271</span>
+<span class="normal">272</span>
+<span class="normal">273</span>
+<span class="normal">274</span>
+<span class="normal">275</span>
+<span class="normal">276</span>
+<span class="normal">277</span>
+<span class="normal">278</span>
+<span class="normal">279</span>
+<span class="normal">280</span>
+<span class="normal">281</span>
+<span class="normal">282</span>
+<span class="normal">283</span>
+<span class="normal">284</span>
+<span class="normal">285</span>
+<span class="normal">286</span>
+<span class="normal">287</span>
+<span class="normal">288</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="nd">@app</span><span class="o">.</span><span class="n">patch</span><span class="p">(</span><span class="s2">"/v1/criteria/</span><span class="si">{criterion_id}</span><span class="s2">"</span><span class="p">)</span>
 <span class="k">def</span><span class="w"> </span><span class="nf">update_criterion</span><span class="p">(</span>
     <span class="n">criterion_id</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
     <span class="n">payload</span><span class="p">:</span> <span class="n">CriterionUpdateRequest</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="n">Body</span><span class="p">(</span><span class="n">default</span><span class="o">=</span><span class="kc">None</span><span class="p">),</span>
@@ -2604,25 +2716,7 @@
 <p>Retrieve SNOMED candidates and field mappings for a criterion.</p>
 <details class="mkdocstrings-source">
 <summary>Source code in <code>components/api-service/src/api_service/main.py</code></summary>
-<div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">273</span>
-<span class="normal">274</span>
-<span class="normal">275</span>
-<span class="normal">276</span>
-<span class="normal">277</span>
-<span class="normal">278</span>
-<span class="normal">279</span>
-<span class="normal">280</span>
-<span class="normal">281</span>
-<span class="normal">282</span>
-<span class="normal">283</span>
-<span class="normal">284</span>
-<span class="normal">285</span>
-<span class="normal">286</span>
-<span class="normal">287</span>
-<span class="normal">288</span>
-<span class="normal">289</span>
-<span class="normal">290</span>
-<span class="normal">291</span>
+<div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">291</span>
 <span class="normal">292</span>
 <span class="normal">293</span>
 <span class="normal">294</span>
@@ -2659,7 +2753,22 @@
 <span class="normal">325</span>
 <span class="normal">326</span>
 <span class="normal">327</span>
-<span class="normal">328</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="nd">@app</span><span class="o">.</span><span class="n">post</span><span class="p">(</span><span class="s2">"/v1/criteria/</span><span class="si">{criterion_id}</span><span class="s2">/ground"</span><span class="p">)</span>
+<span class="normal">328</span>
+<span class="normal">329</span>
+<span class="normal">330</span>
+<span class="normal">331</span>
+<span class="normal">332</span>
+<span class="normal">333</span>
+<span class="normal">334</span>
+<span class="normal">335</span>
+<span class="normal">336</span>
+<span class="normal">337</span>
+<span class="normal">338</span>
+<span class="normal">339</span>
+<span class="normal">340</span>
+<span class="normal">341</span>
+<span class="normal">342</span>
+<span class="normal">343</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="nd">@app</span><span class="o">.</span><span class="n">post</span><span class="p">(</span><span class="s2">"/v1/criteria/</span><span class="si">{criterion_id}</span><span class="s2">/ground"</span><span class="p">)</span>
 <span class="k">def</span><span class="w"> </span><span class="nf">ground_criterion</span><span class="p">(</span>
     <span class="n">criterion_id</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
     <span class="n">storage</span><span class="p">:</span> <span class="n">Storage</span> <span class="o">=</span> <span class="n">Depends</span><span class="p">(</span><span class="n">get_storage</span><span class="p">),</span>
@@ -2669,10 +2778,7 @@
     <span class="k">if</span> <span class="n">criterion</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
         <span class="k">raise</span> <span class="n">HTTPException</span><span class="p">(</span><span class="n">status_code</span><span class="o">=</span><span class="mi">404</span><span class="p">,</span> <span class="n">detail</span><span class="o">=</span><span class="s2">"Criterion not found"</span><span class="p">)</span>
 
-    <span class="k">with</span> <span class="n">umls_client</span><span class="o">.</span><span class="n">UmlsClient</span><span class="p">(</span>
-        <span class="n">api_key</span><span class="o">=</span><span class="n">os</span><span class="o">.</span><span class="n">getenv</span><span class="p">(</span><span class="s2">"GROUNDING_SERVICE_UMLS_API_KEY"</span><span class="p">)</span>
-        <span class="ow">or</span> <span class="n">os</span><span class="o">.</span><span class="n">getenv</span><span class="p">(</span><span class="s2">"UMLS_API_KEY"</span><span class="p">)</span>
-    <span class="p">)</span> <span class="k">as</span> <span class="n">client</span><span class="p">:</span>
+    <span class="k">with</span> <span class="n">umls_client</span><span class="o">.</span><span class="n">UmlsClient</span><span class="p">(</span><span class="n">api_key</span><span class="o">=</span><span class="n">_get_umls_api_key</span><span class="p">())</span> <span class="k">as</span> <span class="n">client</span><span class="p">:</span>
         <span class="n">candidates</span> <span class="o">=</span> <span class="n">client</span><span class="o">.</span><span class="n">search_snomed</span><span class="p">(</span><span class="n">criterion</span><span class="o">.</span><span class="n">text</span><span class="p">)</span>
         <span class="n">field_mappings</span> <span class="o">=</span> <span class="n">umls_client</span><span class="o">.</span><span class="n">propose_field_mapping</span><span class="p">(</span><span class="n">criterion</span><span class="o">.</span><span class="n">text</span><span class="p">)</span>
 
@@ -2729,15 +2835,15 @@
 <p>Record HITL feedback for criteria, SNOMED candidates, and field mappings.</p>
 <details class="mkdocstrings-source">
 <summary>Source code in <code>components/api-service/src/api_service/main.py</code></summary>
-<div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">341</span>
-<span class="normal">342</span>
-<span class="normal">343</span>
-<span class="normal">344</span>
-<span class="normal">345</span>
-<span class="normal">346</span>
-<span class="normal">347</span>
-<span class="normal">348</span>
-<span class="normal">349</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="nd">@app</span><span class="o">.</span><span class="n">post</span><span class="p">(</span><span class="s2">"/v1/hitl/feedback"</span><span class="p">)</span>
+<div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">356</span>
+<span class="normal">357</span>
+<span class="normal">358</span>
+<span class="normal">359</span>
+<span class="normal">360</span>
+<span class="normal">361</span>
+<span class="normal">362</span>
+<span class="normal">363</span>
+<span class="normal">364</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="nd">@app</span><span class="o">.</span><span class="n">post</span><span class="p">(</span><span class="s2">"/v1/hitl/feedback"</span><span class="p">)</span>
 <span class="k">def</span><span class="w"> </span><span class="nf">hitl_feedback</span><span class="p">(</span>
     <span class="n">payload</span><span class="p">:</span> <span class="n">HitlFeedbackRequest</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
     <span class="n">storage</span><span class="p">:</span> <span class="n">Storage</span> <span class="o">=</span> <span class="n">Depends</span><span class="p">(</span><span class="n">get_storage</span><span class="p">),</span>
@@ -2942,9 +3048,9 @@
 <p>Initialize the storage with a database engine.</p>
 <details class="mkdocstrings-source">
 <summary>Source code in <code>components/api-service/src/api_service/storage.py</code></summary>
-<div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">134</span>
-<span class="normal">135</span>
-<span class="normal">136</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">engine</span><span class="p">:</span> <span class="n">Engine</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">135</span>
+<span class="normal">136</span>
+<span class="normal">137</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">engine</span><span class="p">:</span> <span class="n">Engine</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
 <span class="w">    </span><span class="sd">"""Initialize the storage with a database engine."""</span>
     <span class="bp">self</span><span class="o">.</span><span class="n">_engine</span> <span class="o">=</span> <span class="n">engine</span>
 </code></pre></div></td></tr></table></div>
@@ -2961,8 +3067,7 @@
 <p>Persist a protocol record and return it.</p>
 <details class="mkdocstrings-source">
 <summary>Source code in <code>components/api-service/src/api_service/storage.py</code></summary>
-<div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">138</span>
-<span class="normal">139</span>
+<div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">139</span>
 <span class="normal">140</span>
 <span class="normal">141</span>
 <span class="normal">142</span>
@@ -2990,7 +3095,8 @@
 <span class="normal">164</span>
 <span class="normal">165</span>
 <span class="normal">166</span>
-<span class="normal">167</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">create_protocol</span><span class="p">(</span>
+<span class="normal">167</span>
+<span class="normal">168</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">create_protocol</span><span class="p">(</span>
     <span class="bp">self</span><span class="p">,</span>
     <span class="o">*</span><span class="p">,</span>
     <span class="n">title</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
@@ -3025,6 +3131,66 @@
 </div>
 </div>
 <div class="doc doc-object doc-function">
+<h8 class="doc doc-heading" id="api_service.storage.Storage.create_protocol_from_shared">
+<span class="doc doc-object-name doc-function-name">create_protocol_from_shared</span>
+</h8>
+<div class="doc-signature highlight"><pre><span></span><code><span class="nf">create_protocol_from_shared</span><span class="p">(</span><span class="n">shared</span><span class="p">:</span> <span class="n"><a class="autorefs autorefs-internal" href="../../../shared/docs/api/#shared.models.Protocol" title="Protocol
+
+
+  
+      dataclass
+   (shared.models.Protocol)">Protocol</a></span><span class="p">,</span> <span class="n">document_text</span><span class="p">:</span> <span class="n"><span title="str">str</span></span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n"><a class="autorefs autorefs-internal" href="#api_service.storage.Protocol" title="Protocol (api_service.storage.Protocol)">Protocol</a></span>
+</code></pre></div>
+<div class="doc doc-contents">
+<p>Create a Protocol from a shared Protocol model and document text.</p>
+<details class="mkdocstrings-source">
+<summary>Source code in <code>components/api-service/src/api_service/storage.py</code></summary>
+<div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">170</span>
+<span class="normal">171</span>
+<span class="normal">172</span>
+<span class="normal">173</span>
+<span class="normal">174</span>
+<span class="normal">175</span>
+<span class="normal">176</span>
+<span class="normal">177</span>
+<span class="normal">178</span>
+<span class="normal">179</span>
+<span class="normal">180</span>
+<span class="normal">181</span>
+<span class="normal">182</span>
+<span class="normal">183</span>
+<span class="normal">184</span>
+<span class="normal">185</span>
+<span class="normal">186</span>
+<span class="normal">187</span>
+<span class="normal">188</span>
+<span class="normal">189</span>
+<span class="normal">190</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">create_protocol_from_shared</span><span class="p">(</span>
+    <span class="bp">self</span><span class="p">,</span> <span class="n">shared</span><span class="p">:</span> <span class="n">SharedProtocol</span><span class="p">,</span> <span class="n">document_text</span><span class="p">:</span> <span class="nb">str</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Protocol</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">"""Create a Protocol from a shared Protocol model and document text."""</span>
+    <span class="k">with</span> <span class="n">Session</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_engine</span><span class="p">)</span> <span class="k">as</span> <span class="n">session</span><span class="p">:</span>
+        <span class="n">protocol_id</span> <span class="o">=</span> <span class="n">_next_id</span><span class="p">(</span><span class="n">session</span><span class="p">,</span> <span class="s2">"protocol"</span><span class="p">,</span> <span class="s2">"proto"</span><span class="p">)</span>
+        <span class="n">protocol</span> <span class="o">=</span> <span class="n">Protocol</span><span class="p">(</span>
+            <span class="nb">id</span><span class="o">=</span><span class="n">protocol_id</span><span class="p">,</span>
+            <span class="n">title</span><span class="o">=</span><span class="n">shared</span><span class="o">.</span><span class="n">title</span><span class="o">.</span><span class="n">strip</span><span class="p">(),</span>
+            <span class="n">document_text</span><span class="o">=</span><span class="n">document_text</span><span class="p">,</span>
+            <span class="n">nct_id</span><span class="o">=</span><span class="n">_norm_opt</span><span class="p">(</span><span class="nb">getattr</span><span class="p">(</span><span class="n">shared</span><span class="p">,</span> <span class="s2">"nct_id"</span><span class="p">,</span> <span class="kc">None</span><span class="p">)),</span>
+            <span class="n">condition</span><span class="o">=</span><span class="n">_norm_opt</span><span class="p">(</span><span class="nb">getattr</span><span class="p">(</span><span class="n">shared</span><span class="p">,</span> <span class="s2">"condition"</span><span class="p">,</span> <span class="kc">None</span><span class="p">)),</span>
+            <span class="n">phase</span><span class="o">=</span><span class="n">_norm_opt</span><span class="p">(</span><span class="nb">getattr</span><span class="p">(</span><span class="n">shared</span><span class="p">,</span> <span class="s2">"phase"</span><span class="p">,</span> <span class="kc">None</span><span class="p">)),</span>
+            <span class="n">source</span><span class="o">=</span><span class="n">_norm_opt</span><span class="p">(</span><span class="nb">getattr</span><span class="p">(</span><span class="n">shared</span><span class="p">,</span> <span class="s2">"source"</span><span class="p">,</span> <span class="kc">None</span><span class="p">)),</span>
+            <span class="n">registry_id</span><span class="o">=</span><span class="n">_norm_opt</span><span class="p">(</span><span class="nb">getattr</span><span class="p">(</span><span class="n">shared</span><span class="p">,</span> <span class="s2">"registry_id"</span><span class="p">,</span> <span class="kc">None</span><span class="p">)),</span>
+            <span class="n">registry_type</span><span class="o">=</span><span class="n">_norm_opt</span><span class="p">(</span><span class="nb">getattr</span><span class="p">(</span><span class="n">shared</span><span class="p">,</span> <span class="s2">"registry_type"</span><span class="p">,</span> <span class="kc">None</span><span class="p">)),</span>
+        <span class="p">)</span>
+        <span class="n">session</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="n">protocol</span><span class="p">)</span>
+        <span class="n">session</span><span class="o">.</span><span class="n">commit</span><span class="p">()</span>
+        <span class="n">session</span><span class="o">.</span><span class="n">refresh</span><span class="p">(</span><span class="n">protocol</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">protocol</span>
+</code></pre></div></td></tr></table></div>
+</details>
+</div>
+</div>
+<div class="doc doc-object doc-function">
 <h8 class="doc doc-heading" id="api_service.storage.Storage.get_protocol">
 <span class="doc doc-object-name doc-function-name">get_protocol</span>
 </h8>
@@ -3034,10 +3200,10 @@
 <p>Fetch a protocol by ID.</p>
 <details class="mkdocstrings-source">
 <summary>Source code in <code>components/api-service/src/api_service/storage.py</code></summary>
-<div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">169</span>
-<span class="normal">170</span>
-<span class="normal">171</span>
-<span class="normal">172</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">get_protocol</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">protocol_id</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Protocol</span> <span class="o">|</span> <span class="kc">None</span><span class="p">:</span>
+<div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">192</span>
+<span class="normal">193</span>
+<span class="normal">194</span>
+<span class="normal">195</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">get_protocol</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">protocol_id</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Protocol</span> <span class="o">|</span> <span class="kc">None</span><span class="p">:</span>
 <span class="w">    </span><span class="sd">"""Fetch a protocol by ID."""</span>
     <span class="k">with</span> <span class="n">Session</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_engine</span><span class="p">)</span> <span class="k">as</span> <span class="n">session</span><span class="p">:</span>
         <span class="k">return</span> <span class="n">session</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">Protocol</span><span class="p">,</span> <span class="n">protocol_id</span><span class="p">)</span>
@@ -3055,16 +3221,16 @@
 <p>List criteria for a protocol.</p>
 <details class="mkdocstrings-source">
 <summary>Source code in <code>components/api-service/src/api_service/storage.py</code></summary>
-<div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">174</span>
-<span class="normal">175</span>
-<span class="normal">176</span>
-<span class="normal">177</span>
-<span class="normal">178</span>
-<span class="normal">179</span>
-<span class="normal">180</span>
-<span class="normal">181</span>
-<span class="normal">182</span>
-<span class="normal">183</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">list_criteria</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">protocol_id</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">list</span><span class="p">[</span><span class="n">Criterion</span><span class="p">]:</span>
+<div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">197</span>
+<span class="normal">198</span>
+<span class="normal">199</span>
+<span class="normal">200</span>
+<span class="normal">201</span>
+<span class="normal">202</span>
+<span class="normal">203</span>
+<span class="normal">204</span>
+<span class="normal">205</span>
+<span class="normal">206</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">list_criteria</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">protocol_id</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">list</span><span class="p">[</span><span class="n">Criterion</span><span class="p">]:</span>
 <span class="w">    </span><span class="sd">"""List criteria for a protocol."""</span>
     <span class="k">with</span> <span class="n">Session</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_engine</span><span class="p">)</span> <span class="k">as</span> <span class="n">session</span><span class="p">:</span>
         <span class="c1"># Keep full models for simplicity; revisit partial selects if needed later.</span>
@@ -3088,29 +3254,29 @@
 <p>Replace criteria for a protocol with extracted entries.</p>
 <details class="mkdocstrings-source">
 <summary>Source code in <code>components/api-service/src/api_service/storage.py</code></summary>
-<div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">185</span>
-<span class="normal">186</span>
-<span class="normal">187</span>
-<span class="normal">188</span>
-<span class="normal">189</span>
-<span class="normal">190</span>
-<span class="normal">191</span>
-<span class="normal">192</span>
-<span class="normal">193</span>
-<span class="normal">194</span>
-<span class="normal">195</span>
-<span class="normal">196</span>
-<span class="normal">197</span>
-<span class="normal">198</span>
-<span class="normal">199</span>
-<span class="normal">200</span>
-<span class="normal">201</span>
-<span class="normal">202</span>
-<span class="normal">203</span>
-<span class="normal">204</span>
-<span class="normal">205</span>
-<span class="normal">206</span>
-<span class="normal">207</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">replace_criteria</span><span class="p">(</span>
+<div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">208</span>
+<span class="normal">209</span>
+<span class="normal">210</span>
+<span class="normal">211</span>
+<span class="normal">212</span>
+<span class="normal">213</span>
+<span class="normal">214</span>
+<span class="normal">215</span>
+<span class="normal">216</span>
+<span class="normal">217</span>
+<span class="normal">218</span>
+<span class="normal">219</span>
+<span class="normal">220</span>
+<span class="normal">221</span>
+<span class="normal">222</span>
+<span class="normal">223</span>
+<span class="normal">224</span>
+<span class="normal">225</span>
+<span class="normal">226</span>
+<span class="normal">227</span>
+<span class="normal">228</span>
+<span class="normal">229</span>
+<span class="normal">230</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">replace_criteria</span><span class="p">(</span>
     <span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">protocol_id</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">extracted</span><span class="p">:</span> <span class="n">Iterable</span><span class="p">[</span><span class="n">ExtractedCriterion</span><span class="p">]</span>
 <span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">list</span><span class="p">[</span><span class="n">Criterion</span><span class="p">]:</span>
 <span class="w">    </span><span class="sd">"""Replace criteria for a protocol with extracted entries."""</span>
@@ -3147,26 +3313,26 @@
 <p>Update a criterion's text/type and return the updated row.</p>
 <details class="mkdocstrings-source">
 <summary>Source code in <code>components/api-service/src/api_service/storage.py</code></summary>
-<div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">209</span>
-<span class="normal">210</span>
-<span class="normal">211</span>
-<span class="normal">212</span>
-<span class="normal">213</span>
-<span class="normal">214</span>
-<span class="normal">215</span>
-<span class="normal">216</span>
-<span class="normal">217</span>
-<span class="normal">218</span>
-<span class="normal">219</span>
-<span class="normal">220</span>
-<span class="normal">221</span>
-<span class="normal">222</span>
-<span class="normal">223</span>
-<span class="normal">224</span>
-<span class="normal">225</span>
-<span class="normal">226</span>
-<span class="normal">227</span>
-<span class="normal">228</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">update_criterion</span><span class="p">(</span>
+<div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">232</span>
+<span class="normal">233</span>
+<span class="normal">234</span>
+<span class="normal">235</span>
+<span class="normal">236</span>
+<span class="normal">237</span>
+<span class="normal">238</span>
+<span class="normal">239</span>
+<span class="normal">240</span>
+<span class="normal">241</span>
+<span class="normal">242</span>
+<span class="normal">243</span>
+<span class="normal">244</span>
+<span class="normal">245</span>
+<span class="normal">246</span>
+<span class="normal">247</span>
+<span class="normal">248</span>
+<span class="normal">249</span>
+<span class="normal">250</span>
+<span class="normal">251</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">update_criterion</span><span class="p">(</span>
     <span class="bp">self</span><span class="p">,</span>
     <span class="o">*</span><span class="p">,</span>
     <span class="n">criterion_id</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
@@ -3200,10 +3366,10 @@
 <p>Fetch a criterion by ID.</p>
 <details class="mkdocstrings-source">
 <summary>Source code in <code>components/api-service/src/api_service/storage.py</code></summary>
-<div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">230</span>
-<span class="normal">231</span>
-<span class="normal">232</span>
-<span class="normal">233</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">get_criterion</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">criterion_id</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Criterion</span> <span class="o">|</span> <span class="kc">None</span><span class="p">:</span>
+<div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">253</span>
+<span class="normal">254</span>
+<span class="normal">255</span>
+<span class="normal">256</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">get_criterion</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">criterion_id</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Criterion</span> <span class="o">|</span> <span class="kc">None</span><span class="p">:</span>
 <span class="w">    </span><span class="sd">"""Fetch a criterion by ID."""</span>
     <span class="k">with</span> <span class="n">Session</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_engine</span><span class="p">)</span> <span class="k">as</span> <span class="n">session</span><span class="p">:</span>
         <span class="k">return</span> <span class="n">session</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">Criterion</span><span class="p">,</span> <span class="n">criterion_id</span><span class="p">)</span>
@@ -3221,19 +3387,19 @@
 <p>Set SNOMED codes for a criterion.</p>
 <details class="mkdocstrings-source">
 <summary>Source code in <code>components/api-service/src/api_service/storage.py</code></summary>
-<div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">235</span>
-<span class="normal">236</span>
-<span class="normal">237</span>
-<span class="normal">238</span>
-<span class="normal">239</span>
-<span class="normal">240</span>
-<span class="normal">241</span>
-<span class="normal">242</span>
-<span class="normal">243</span>
-<span class="normal">244</span>
-<span class="normal">245</span>
-<span class="normal">246</span>
-<span class="normal">247</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">set_snomed_codes</span><span class="p">(</span>
+<div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">258</span>
+<span class="normal">259</span>
+<span class="normal">260</span>
+<span class="normal">261</span>
+<span class="normal">262</span>
+<span class="normal">263</span>
+<span class="normal">264</span>
+<span class="normal">265</span>
+<span class="normal">266</span>
+<span class="normal">267</span>
+<span class="normal">268</span>
+<span class="normal">269</span>
+<span class="normal">270</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">set_snomed_codes</span><span class="p">(</span>
     <span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">criterion_id</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">snomed_codes</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span>
 <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Criterion</span> <span class="o">|</span> <span class="kc">None</span><span class="p">:</span>
 <span class="w">    </span><span class="sd">"""Set SNOMED codes for a criterion."""</span>
@@ -3260,34 +3426,34 @@
 <p>Persist a HITL edit record.</p>
 <details class="mkdocstrings-source">
 <summary>Source code in <code>components/api-service/src/api_service/storage.py</code></summary>
-<div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">249</span>
-<span class="normal">250</span>
-<span class="normal">251</span>
-<span class="normal">252</span>
-<span class="normal">253</span>
-<span class="normal">254</span>
-<span class="normal">255</span>
-<span class="normal">256</span>
-<span class="normal">257</span>
-<span class="normal">258</span>
-<span class="normal">259</span>
-<span class="normal">260</span>
-<span class="normal">261</span>
-<span class="normal">262</span>
-<span class="normal">263</span>
-<span class="normal">264</span>
-<span class="normal">265</span>
-<span class="normal">266</span>
-<span class="normal">267</span>
-<span class="normal">268</span>
-<span class="normal">269</span>
-<span class="normal">270</span>
-<span class="normal">271</span>
-<span class="normal">272</span>
+<div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">272</span>
 <span class="normal">273</span>
 <span class="normal">274</span>
 <span class="normal">275</span>
-<span class="normal">276</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">create_hitl_edit</span><span class="p">(</span>
+<span class="normal">276</span>
+<span class="normal">277</span>
+<span class="normal">278</span>
+<span class="normal">279</span>
+<span class="normal">280</span>
+<span class="normal">281</span>
+<span class="normal">282</span>
+<span class="normal">283</span>
+<span class="normal">284</span>
+<span class="normal">285</span>
+<span class="normal">286</span>
+<span class="normal">287</span>
+<span class="normal">288</span>
+<span class="normal">289</span>
+<span class="normal">290</span>
+<span class="normal">291</span>
+<span class="normal">292</span>
+<span class="normal">293</span>
+<span class="normal">294</span>
+<span class="normal">295</span>
+<span class="normal">296</span>
+<span class="normal">297</span>
+<span class="normal">298</span>
+<span class="normal">299</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">create_hitl_edit</span><span class="p">(</span>
     <span class="bp">self</span><span class="p">,</span>
     <span class="o">*</span><span class="p">,</span>
     <span class="n">criterion_id</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
@@ -3329,15 +3495,15 @@
 <p>List all HITL edits for a criterion.</p>
 <details class="mkdocstrings-source">
 <summary>Source code in <code>components/api-service/src/api_service/storage.py</code></summary>
-<div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">278</span>
-<span class="normal">279</span>
-<span class="normal">280</span>
-<span class="normal">281</span>
-<span class="normal">282</span>
-<span class="normal">283</span>
-<span class="normal">284</span>
-<span class="normal">285</span>
-<span class="normal">286</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">list_hitl_edits</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">criterion_id</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">list</span><span class="p">[</span><span class="n">HitlEdit</span><span class="p">]:</span>
+<div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">301</span>
+<span class="normal">302</span>
+<span class="normal">303</span>
+<span class="normal">304</span>
+<span class="normal">305</span>
+<span class="normal">306</span>
+<span class="normal">307</span>
+<span class="normal">308</span>
+<span class="normal">309</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">list_hitl_edits</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">criterion_id</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">list</span><span class="p">[</span><span class="n">HitlEdit</span><span class="p">]:</span>
 <span class="w">    </span><span class="sd">"""List all HITL edits for a criterion."""</span>
     <span class="k">with</span> <span class="n">Session</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_engine</span><span class="p">)</span> <span class="k">as</span> <span class="n">session</span><span class="p">:</span>
         <span class="n">statement</span> <span class="o">=</span> <span class="p">(</span>
@@ -3367,8 +3533,7 @@
 <p>Create or return the cached database engine.</p>
 <details class="mkdocstrings-source">
 <summary>Source code in <code>components/api-service/src/api_service/storage.py</code></summary>
-<div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">89</span>
-<span class="normal">90</span>
+<div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">90</span>
 <span class="normal">91</span>
 <span class="normal">92</span>
 <span class="normal">93</span>
@@ -3376,7 +3541,8 @@
 <span class="normal">95</span>
 <span class="normal">96</span>
 <span class="normal">97</span>
-<span class="normal">98</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="nd">@lru_cache</span>
+<span class="normal">98</span>
+<span class="normal">99</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="nd">@lru_cache</span>
 <span class="k">def</span><span class="w"> </span><span class="nf">get_engine</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="n">Engine</span><span class="p">:</span>
 <span class="w">    </span><span class="sd">"""Create or return the cached database engine."""</span>
     <span class="n">db_path</span> <span class="o">=</span> <span class="n">DEFAULT_DB_PATH</span>
@@ -3400,9 +3566,9 @@
 <p>Initialize the database tables.</p>
 <details class="mkdocstrings-source">
 <summary>Source code in <code>components/api-service/src/api_service/storage.py</code></summary>
-<div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">101</span>
-<span class="normal">102</span>
-<span class="normal">103</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">init_db</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">102</span>
+<span class="normal">103</span>
+<span class="normal">104</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">init_db</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
 <span class="w">    </span><span class="sd">"""Initialize the database tables."""</span>
     <span class="n">SQLModel</span><span class="o">.</span><span class="n">metadata</span><span class="o">.</span><span class="n">create_all</span><span class="p">(</span><span class="n">get_engine</span><span class="p">())</span>
 </code></pre></div></td></tr></table></div>
@@ -3419,12 +3585,12 @@
 <p>Clear all stored data (used for tests and demos).</p>
 <details class="mkdocstrings-source">
 <summary>Source code in <code>components/api-service/src/api_service/storage.py</code></summary>
-<div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">106</span>
-<span class="normal">107</span>
+<div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">107</span>
 <span class="normal">108</span>
 <span class="normal">109</span>
 <span class="normal">110</span>
-<span class="normal">111</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">reset_storage</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="normal">111</span>
+<span class="normal">112</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">reset_storage</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
 <span class="w">    </span><span class="sd">"""Clear all stored data (used for tests and demos)."""</span>
     <span class="n">engine</span> <span class="o">=</span> <span class="n">get_engine</span><span class="p">()</span>
     <span class="n">SQLModel</span><span class="o">.</span><span class="n">metadata</span><span class="o">.</span><span class="n">drop_all</span><span class="p">(</span><span class="n">engine</span><span class="p">)</span>
