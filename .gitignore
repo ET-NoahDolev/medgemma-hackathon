@@ -375,3 +375,4 @@ instructions/
 data/
 
 gcp-url-to-gcs-logs/
+components/hitl-ui/node_modules/
