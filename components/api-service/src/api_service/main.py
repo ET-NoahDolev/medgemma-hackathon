@@ -7,6 +7,7 @@ import tempfile
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
+from datetime import datetime
 from pathlib import Path
 from typing import List
 
@@ -26,8 +27,12 @@ DEFAULT_MAX_UPLOAD_SIZE_BYTES = 20 * 1024 * 1024
 # Expose for backward compatibility with tests
 MAX_UPLOAD_SIZE_BYTES = DEFAULT_MAX_UPLOAD_SIZE_BYTES
 
-# Load environment variables from repo root .env (if present).
-load_dotenv(Path(__file__).resolve().parents[4] / ".env")
+# Load environment variables from repo root .env (if present) safely.
+_here = Path(__file__).resolve()
+_repo_root = _here.parents[4] if len(_here.parents) >= 5 else _here.parents[-1]
+_env_path = _repo_root / ".env"
+if _env_path.exists():
+    load_dotenv(_env_path)
 
 
 @dataclass(frozen=True)
@@ -181,7 +186,7 @@ class HitlEditResponse(BaseModel):
     field_mapping_added: str | None
     field_mapping_removed: str | None
     note: str | None
-    created_at: str
+    created_at: datetime
 
 
 class HitlEditsListResponse(BaseModel):
@@ -476,6 +481,36 @@ def hitl_feedback(
     """Record HITL feedback for criteria, SNOMED candidates, and field mappings."""
     if payload is None:
         raise HTTPException(status_code=400, detail="Missing feedback payload")
+    allowed_actions = {
+        "accept",
+        "reject",
+        "edit",
+        "add_code",
+        "remove_code",
+        "add_mapping",
+        "remove_mapping",
+    }
+    if payload.action not in allowed_actions:
+        raise HTTPException(
+            status_code=400, detail=f"Invalid action: {payload.action}"
+        )
+    if payload.action == "add_code" and not payload.snomed_code_added:
+        raise HTTPException(
+            status_code=400, detail="snomed_code_added is required for add_code"
+        )
+    if payload.action == "remove_code" and not payload.snomed_code_removed:
+        raise HTTPException(
+            status_code=400, detail="snomed_code_removed is required for remove_code"
+        )
+    if payload.action == "add_mapping" and not payload.field_mapping_added:
+        raise HTTPException(
+            status_code=400, detail="field_mapping_added is required for add_mapping"
+        )
+    if payload.action == "remove_mapping" and not payload.field_mapping_removed:
+        raise HTTPException(
+            status_code=400,
+            detail="field_mapping_removed is required for remove_mapping",
+        )
     storage.create_hitl_edit(
         criterion_id=payload.criterion_id,
         action=payload.action,
@@ -512,7 +547,7 @@ def list_criterion_edits(
                 field_mapping_added=edit.field_mapping_added,
                 field_mapping_removed=edit.field_mapping_removed,
                 note=edit.note,
-                created_at=edit.created_at.isoformat(),
+                created_at=edit.created_at,
             )
             for edit in edits
         ],

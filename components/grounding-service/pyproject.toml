@@ -36,6 +36,9 @@ plugins = []
 pythonpath = ["src"]
 testpaths = ["tests"]
 addopts = "--cov=grounding_service --cov-branch --cov-report=term-missing"
+markers = [
+    "integration: marks tests as integration tests",
+]
 
 [tool.uv]
 cache-dir = "./.uv_cache"

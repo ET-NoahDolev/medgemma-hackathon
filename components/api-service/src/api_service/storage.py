@@ -108,7 +108,8 @@ def reset_storage() -> None:
     """Clear all stored data (used for tests and demos)."""
     if os.getenv("ALLOW_STORAGE_RESET") != "1":
         raise RuntimeError(
-            "reset_storage() requires ALLOW_STORAGE_RESET=1 environment variable"
+            "reset_storage() requires ALLOW_STORAGE_RESET=1 environment variable. "
+            "This function destroys all data and should only be used in tests."
         )
     engine = get_engine()
     SQLModel.metadata.drop_all(engine)
@@ -306,7 +307,7 @@ class Storage:
     ) -> tuple[list[Protocol], int]:
         """List protocols with pagination."""
         with Session(self._engine) as session:
-            total = session.exec(select(func.count()).select_from(Protocol)).one()
+            total = session.exec(select(func.count(Protocol.id))).one()  # type: ignore[arg-type]
             statement = select(Protocol).offset(skip).limit(limit).order_by(Protocol.id)
             protocols = list(session.exec(statement))
             return protocols, total

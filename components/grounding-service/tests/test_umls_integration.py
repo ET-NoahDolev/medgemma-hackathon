@@ -14,10 +14,13 @@ from grounding_service.umls_client import UmlsClient
 
 UMLS_API_KEY = os.getenv("UMLS_API_KEY")
 
-pytestmark = pytest.mark.skipif(
-    not UMLS_API_KEY,
-    reason="UMLS_API_KEY not set; skipping integration tests",
-)
+pytestmark = [
+    pytest.mark.integration,
+    pytest.mark.skipif(
+        not UMLS_API_KEY,
+        reason="UMLS_API_KEY not set; skipping integration tests",
+    ),
+]
 
 
 class TestUmlsIntegration:

@@ -1,4 +1,12 @@
-"""UMLS REST client."""
+"""UMLS SNOMED client with disk cache and retry.
+
+Environment variables:
+- UMLS_API_KEY: API key for UMLS (required).
+- UMLS_CACHE_DIR: Directory for disk cache (optional; defaults to
+  .cache/umls next to module).
+- UMLS_CACHE_TTL_SECONDS: TTL in seconds for cache entries (optional;
+  defaults to 7 days; must be >0).
+"""
 
 from __future__ import annotations
 
@@ -90,7 +98,14 @@ class UmlsClient:
         self._http = httpx.Client(timeout=self.timeout)
         cache_dir = os.getenv("UMLS_CACHE_DIR")
         default_cache = Path(__file__).resolve().parent / ".cache" / "umls"
-        self._cache_dir = str(cache_dir or default_cache)
+        cache_path = Path(cache_dir) if cache_dir else default_cache
+        cache_path.mkdir(parents=True, exist_ok=True)
+        try:
+            os.chmod(cache_path, 0o700)
+        except Exception:
+            # Best-effort; some FS may not support chmod
+            pass
+        self._cache_dir = str(cache_path)
         self._cache_ttl = self._parse_cache_ttl(os.getenv("UMLS_CACHE_TTL_SECONDS"))
 
     def __enter__(self) -> "UmlsClient":
@@ -203,6 +218,13 @@ class UmlsClient:
     def close(self) -> None:
         """Close the HTTP client and release resources."""
         self._http.close()
+
+    def __del__(self) -> None:  # pragma: no cover
+        """Fallback cleanup if not used as context manager."""
+        try:
+            self._http.close()
+        except Exception:
+            pass
 
     def clear_cache(self) -> None:
         """Clear the search cache."""
