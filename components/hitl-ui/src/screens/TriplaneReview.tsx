@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { CriteriaItem } from '@/features/protocols/components/CriteriaItem';
 import { EvidenceSnippet } from '@/features/protocols/components/EvidenceSnippet';
@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button';
 import { GlassButton } from '@/components/ui/glass-button';
 import { ChevronLeft, ChevronRight, CheckCircle2, XCircle } from 'lucide-react';
 import { toast } from 'sonner';
+import { useCriteria } from '@/hooks/useCriteria';
 
 interface Criterion {
   id: string;
@@ -177,6 +178,7 @@ const mockCriteria: Criterion[] = [
 
 interface TriplaneReviewProps {
   patientId?: string;
+  protocolId?: string | null;
   onApprove?: () => void;
   onReject?: () => void;
   onBack?: () => void;
@@ -185,15 +187,49 @@ interface TriplaneReviewProps {
 
 export function TriplaneReview({
   patientId = 'PT-2024-0042',
+  protocolId = null,
   onApprove,
   onReject,
   onBack,
   onViewChart: _onViewChart,
 }: TriplaneReviewProps) {
-  const [selectedCriterion, setSelectedCriterion] = useState<Criterion>(mockCriteria[2]);
-  const [criteria, setCriteria] = useState(mockCriteria);
+  // Fetch criteria from API if protocolId is provided
+  const { data: criteriaData, isLoading, error } = useCriteria(protocolId);
+
+  // Map API criteria to component format, or use mock data as fallback
+  const apiCriteria: Criterion[] = useMemo(() => {
+    if (!criteriaData?.criteria) {
+      return mockCriteria;
+    }
+
+    // Map API criteria format to component's expected format
+    return criteriaData.criteria.map((criterion) => ({
+      id: criterion.id,
+      type: criterion.criterion_type as 'inclusion' | 'exclusion',
+      criterion: criterion.text,
+      status: 'needs-review' as StatusType, // Default status, would come from patient matching logic
+      aiSummary: `Confidence: ${(criterion.confidence * 100).toFixed(0)}%`,
+      sourceText: undefined,
+      evidence: [], // Evidence would come from patient matching logic
+    }));
+  }, [criteriaData]);
+
+  const [selectedCriterion, setSelectedCriterion] = useState<Criterion>(
+    apiCriteria.length > 0 ? apiCriteria[2] || apiCriteria[0] : mockCriteria[2]
+  );
+  const [criteria, setCriteria] = useState<Criterion[]>(apiCriteria);
   const [editPanelOpen, setEditPanelOpen] = useState(false);
   const [criterionToEdit, setCriterionToEdit] = useState<Criterion | null>(null);
+
+  // Update criteria when API data loads
+  useEffect(() => {
+    if (apiCriteria.length > 0 && apiCriteria !== mockCriteria) {
+      setCriteria(apiCriteria);
+      if (!selectedCriterion || !apiCriteria.find(c => c.id === selectedCriterion.id)) {
+        setSelectedCriterion(apiCriteria[0]);
+      }
+    }
+  }, [apiCriteria, selectedCriterion]);
 
   const handleCorrection =
     (criterionId: string, type: 'inclusion' | 'exclusion') =>
@@ -275,6 +311,24 @@ export function TriplaneReview({
   const needsReviewCount = criteria.filter(
     c => c.status === 'needs-review' || c.status === 'ai-suggested'
   ).length;
+
+  // Show loading state
+  if (isLoading && protocolId) {
+    return (
+      <div className="flex h-full items-center justify-center bg-transparent">
+        <div className="text-gray-600">Loading criteria...</div>
+      </div>
+    );
+  }
+
+  // Show error state
+  if (error && protocolId) {
+    return (
+      <div className="flex h-full items-center justify-center bg-transparent">
+        <div className="text-red-600">Error loading criteria: {error.message}</div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex h-full bg-transparent">

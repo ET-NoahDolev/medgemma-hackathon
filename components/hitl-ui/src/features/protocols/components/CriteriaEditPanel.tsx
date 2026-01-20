@@ -44,6 +44,7 @@ import {
 } from '@/components/ui/select';
 import { toast } from 'sonner';
 import { FieldMappingPopup } from '@/features/mapping/components/FieldMappingPopup';
+import { useSuggestFieldMapping } from '@/hooks/useFieldMapping';
 
 interface FieldMapping {
   targetField: string;
@@ -170,6 +171,8 @@ export function CriteriaEditPanel({
   const [suggestedValue, setSuggestedValue] = useState<string>('');
   const [isPopout, setIsPopout] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
+
+  const suggestFieldMapping = useSuggestFieldMapping();
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [deleteRationale, setDeleteRationale] = useState('');
   const prevCriterionIdRef = useRef(criterion.id);
@@ -200,66 +203,26 @@ export function CriteriaEditPanel({
     sourceDocuments,
   ]);
 
-  // AI suggestion logic based on highlighted text
-  const generateAISuggestions = (text: string): { field: string; value: string } => {
-    const lowerText = text.toLowerCase();
-
-    // Age detection
-    if (lowerText.match(/\b(age|years old)\b/)) {
-      const ageMatch =
-        text.match(/\b(\d+)\s*(?:and|to|-|–)\s*(\d+)\s*years?/i) || text.match(/\b(\d+)\s*years?/i);
-      if (ageMatch) {
+  // Generate AI suggestions using backend API
+  const generateAISuggestions = async (text: string): Promise<{ field: string; value: string }> => {
+    try {
+      const suggestions = await suggestFieldMapping.mutateAsync(text);
+      if (suggestions.length > 0) {
+        const first = suggestions[0];
         return {
-          field: 'demographics.age',
-          value: ageMatch[1] || '45',
+          field: first.field,
+          value: first.value,
         };
       }
+    } catch (error) {
+      console.error('Failed to get field mapping suggestions:', error);
+      // Fallback to default if API fails
     }
-
-    // Gender detection
-    if (lowerText.match(/\b(male|female|gender|sex)\b/)) {
-      if (lowerText.includes('female')) return { field: 'demographics.gender', value: 'Female' };
-      if (lowerText.includes('male')) return { field: 'demographics.gender', value: 'Male' };
-      return { field: 'demographics.gender', value: 'Male' };
-    }
-
-    // Blood pressure detection
-    if (lowerText.match(/\b(blood pressure|hypertension|bp)\b/)) {
-      const bpMatch = text.match(/(\d+)\/(\d+)\s*mmHg/i);
-      if (bpMatch) {
-        return {
-          field: 'vitals.blood_pressure_systolic',
-          value: bpMatch[1],
-        };
-      }
-      return { field: 'vitals.blood_pressure_systolic', value: '160' };
-    }
-
-    // Cancer history detection
-    if (lowerText.match(/\b(cancer|carcinoma|malignancy)\b/)) {
-      const hasNo = lowerText.match(/\b(no|without|absence of)\s+(?:\w+\s+){0,3}cancer/i);
-      return {
-        field: 'medical_history.cancer',
-        value: hasNo ? 'No' : 'Yes',
-      };
-    }
-
-    // IBD detection
-    if (lowerText.match(/\b(ibd|inflammatory bowel|crohn|ulcerative colitis)\b/)) {
-      const hasNo = lowerText.match(
-        /\b(no|without|exclude)\s+(?:\w+\s+){0,5}(ibd|inflammatory bowel)/i
-      );
-      return {
-        field: 'medical_history.ibd',
-        value: hasNo ? 'No' : 'Yes',
-      };
-    }
-
-    // Default to age if nothing else matches
+    // Default fallback
     return { field: 'demographics.age', value: '45' };
   };
 
-  const handleTextSelection = useCallback(() => {
+  const handleTextSelection = useCallback(async () => {
     const selection = window.getSelection();
     if (selection && selection.toString().trim()) {
       const text = selection.toString().trim();
@@ -276,15 +239,15 @@ export function CriteriaEditPanel({
         },
       ]);
 
-      // Generate AI suggestions
-      const suggestions = generateAISuggestions(text);
+      // Generate AI suggestions using backend API
+      const suggestions = await generateAISuggestions(text);
       setSuggestedField(suggestions.field);
       setSuggestedValue(suggestions.value);
 
       // Show the field mapping popup
       setShowMappingPopup(true);
     }
-  }, []);
+  }, [suggestFieldMapping]);
 
   const handleClearHighlights = useCallback(() => {
     setHighlightedRanges([]);

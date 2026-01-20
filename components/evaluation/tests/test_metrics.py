@@ -29,6 +29,31 @@ class TestExtractionF1:
         with pytest.raises(ValueError):
             extraction_f1([], ["Age >= 18"])
 
+    def test_normalization_handles_punctuation(self) -> None:
+        """Test that trailing punctuation doesn't affect matching."""
+        pred = ["Age >= 18"]
+        gold = ["Age >= 18."]
+        assert extraction_f1(pred, gold) == 1.0
+
+    def test_normalization_handles_case(self) -> None:
+        """Test that case differences don't affect matching."""
+        pred = ["age >= 18"]
+        gold = ["Age >= 18"]
+        assert extraction_f1(pred, gold) == 1.0
+
+    def test_normalization_handles_whitespace(self) -> None:
+        """Test that whitespace differences don't affect matching."""
+        pred = ["Age  >=  18"]
+        gold = ["Age >= 18"]
+        assert extraction_f1(pred, gold) == 1.0
+
+    def test_normalization_preserves_meaningful_differences(self) -> None:
+        """Test that meaningful differences (like operators) are preserved."""
+        pred = ["Age >= 18"]
+        gold = ["Age > 18"]
+        # These should NOT match after normalization
+        assert extraction_f1(pred, gold) == 0.0
+
 
 class TestSnomedTop1Accuracy:
     def test_all_correct(self) -> None:

@@ -1,5 +1,6 @@
 """Shared data models for API and UI."""
 
+import json
 from dataclasses import dataclass, field
 from typing import List, Optional
 
@@ -89,18 +90,66 @@ class FieldMapping:
     confidence: Optional[float] = None
 
     def to_string(self) -> str:
-        """Serialize to pipe-delimited string."""
-        return f"{self.field}|{self.relation}|{self.value}"
+        """Serialize to JSON string.
+
+        Returns:
+            JSON string representation of the field mapping.
+
+        Examples:
+            >>> fm = FieldMapping(field="demographics.age", relation=">=", value="18")
+            >>> fm.to_string()
+            '{"field":"demographics.age","relation":">=","value":"18"}'
+        """
+        data = {
+            "field": self.field,
+            "relation": self.relation,
+            "value": self.value,
+        }
+        return json.dumps(data, separators=(",", ":"))
 
     @classmethod
     def from_string(cls, value: str) -> "FieldMapping":
-        """Deserialize from pipe-delimited string."""
+        """Deserialize from JSON string or pipe-delimited string.
+
+        Supports backward compatibility with pipe-delimited format.
+
+        Args:
+            value: JSON string or pipe-delimited string.
+
+        Returns:
+            FieldMapping instance.
+
+        Raises:
+            ValueError: If the string format is invalid.
+
+        Examples:
+            >>> json_str = '{"field":"demographics.age","relation":">=","value":"18"}'
+            >>> FieldMapping.from_string(json_str)
+            FieldMapping(field='demographics.age', relation='>=', value='18')
+            >>> FieldMapping.from_string("demographics.age|>=|18")  # Legacy
+            FieldMapping(field='demographics.age', relation='>=', value='18')
+        """
+        # Try JSON first (new format)
+        if value.strip().startswith("{"):
+            try:
+                data = json.loads(value)
+                return cls(
+                    field=data["field"],
+                    relation=data["relation"],
+                    value=data["value"],
+                )
+            except (json.JSONDecodeError, KeyError) as e:
+                raise ValueError(
+                    f"Invalid field mapping JSON string: '{value}'. Error: {e}"
+                ) from e
+
+        # Fall back to pipe-delimited format (backward compatibility)
         parts = value.split("|")
         if len(parts) != 3:
             raise ValueError(
                 "Invalid field mapping string: "
-                f"'{value}'. Expected format 'field|relation|value' "
-                "(e.g., 'demographics.age|>=|18')."
+                f"'{value}'. Expected JSON format or pipe-delimited format "
+                "'field|relation|value' (e.g., 'demographics.age|>=|18')."
             )
         return cls(field=parts[0], relation=parts[1], value=parts[2])
 

@@ -81,7 +81,8 @@ def test_extract_criteria_populates_list(
 
     extract_response = client.post(f"/v1/protocols/{protocol_id}/extract")
     assert extract_response.status_code == 200
-    assert extract_response.json()["status"] == "completed"
+    # Extraction now runs in background, so status is "processing"
+    assert extract_response.json()["status"] == "processing"
 
     list_response = client.get(f"/v1/protocols/{protocol_id}/criteria")
     assert list_response.status_code == 200

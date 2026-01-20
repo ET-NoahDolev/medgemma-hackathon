@@ -16,7 +16,15 @@ from anyio import to_thread
 from data_pipeline.download_protocols import extract_text_from_pdf
 from dotenv import find_dotenv, load_dotenv
 from extraction_service import pipeline as extraction_pipeline
-from fastapi import Body, Depends, FastAPI, File, HTTPException, UploadFile
+from fastapi import (
+    BackgroundTasks,
+    Body,
+    Depends,
+    FastAPI,
+    File,
+    HTTPException,
+    UploadFile,
+)
 from grounding_service import umls_client
 from pydantic import BaseModel
 
@@ -152,6 +160,18 @@ class FieldMappingResponse(BaseModel):
     confidence: float
 
 
+class FieldMappingSuggestionRequest(BaseModel):
+    """Request payload for field mapping suggestions."""
+
+    criterion_text: str
+
+
+class FieldMappingSuggestionResponse(BaseModel):
+    """Response payload for field mapping suggestions."""
+
+    suggestions: List[FieldMappingResponse]
+
+
 class GroundingResponse(BaseModel):
     """Response payload for grounding a criterion."""
 
@@ -256,13 +276,24 @@ def create_protocol(
     return ProtocolResponse(protocol_id=protocol.id, title=protocol.title)
 
 
+def _run_extraction(protocol_id: str, document_text: str, storage: Storage) -> None:
+    """Run extraction in background task."""
+    extracted = extraction_pipeline.extract_criteria(document_text)
+    storage.replace_criteria(protocol_id=protocol_id, extracted=extracted)
+
+
 @app.post("/v1/protocols/upload")
 async def upload_protocol(
     file: UploadFile = File(...),
     auto_extract: bool = True,
+    background_tasks: BackgroundTasks = BackgroundTasks(),
     storage: Storage = Depends(get_storage),
 ) -> ProtocolResponse:
-    """Upload a PDF protocol file and create a protocol record."""
+    """Upload a PDF protocol file and create a protocol record.
+
+    If auto_extract is True, extraction runs asynchronously in the background
+    after the response is returned to avoid request timeouts for large PDFs.
+    """
     filename = file.filename or ""
     if file.content_type != "application/pdf" or not filename.lower().endswith(".pdf"):
         raise HTTPException(
@@ -302,10 +333,10 @@ async def upload_protocol(
     protocol = storage.create_protocol(title=title, document_text=document_text)
 
     if auto_extract:
-        extracted = await to_thread.run_sync(
-            extraction_pipeline.extract_criteria, protocol.document_text
+        # Run extraction in background to avoid blocking the response
+        background_tasks.add_task(
+            _run_extraction, protocol.id, protocol.document_text, storage
         )
-        storage.replace_criteria(protocol_id=protocol.id, extracted=extracted)
 
     return ProtocolResponse(protocol_id=protocol.id, title=protocol.title)
 
@@ -313,20 +344,25 @@ async def upload_protocol(
 @app.post("/v1/protocols/{protocol_id}/extract")
 def extract_criteria(
     protocol_id: str,
+    background_tasks: BackgroundTasks = BackgroundTasks(),
     storage: Storage = Depends(get_storage),
 ) -> ExtractionResponse:
-    """Trigger extraction of atomic criteria for a protocol."""
+    """Trigger extraction of atomic criteria for a protocol.
+
+    Extraction runs asynchronously in the background after the response is returned
+    to avoid request timeouts for long documents.
+    """
     protocol = storage.get_protocol(protocol_id)
     if protocol is None:
         raise HTTPException(status_code=404, detail="Protocol not found")
 
-    extracted = extraction_pipeline.extract_criteria(protocol.document_text)
-    stored = storage.replace_criteria(
-        protocol_id=protocol_id,
-        extracted=extracted,
+    # Run extraction in background to avoid blocking the response
+    background_tasks.add_task(
+        _run_extraction, protocol_id, protocol.document_text, storage
     )
+
     return ExtractionResponse(
-        protocol_id=protocol_id, status="completed", criteria_count=len(stored)
+        protocol_id=protocol_id, status="processing", criteria_count=0
     )
 
 
@@ -418,6 +454,36 @@ def update_criterion(
         status="updated",
         criterion=_criterion_to_response(criterion),
     )
+
+
+@app.post("/v1/criteria/suggest-mapping")
+def suggest_field_mapping(
+    payload: FieldMappingSuggestionRequest,
+) -> FieldMappingSuggestionResponse:
+    """Suggest field mappings for a criterion text.
+
+    This endpoint uses the same logic as the grounding service to propose
+    field/relation/value mappings, allowing frontend components to get
+    suggestions without duplicating the regex logic.
+    """
+    if not payload.criterion_text.strip():
+        raise HTTPException(
+            status_code=400, detail="criterion_text cannot be empty"
+        )
+
+    field_mappings = umls_client.propose_field_mapping(payload.criterion_text)
+
+    suggestions = [
+        FieldMappingResponse(
+            field=mapping.field,
+            relation=mapping.relation,
+            value=mapping.value,
+            confidence=mapping.confidence,
+        )
+        for mapping in field_mappings
+    ]
+
+    return FieldMappingSuggestionResponse(suggestions=suggestions)
 
 
 @app.post("/v1/criteria/{criterion_id}/ground")

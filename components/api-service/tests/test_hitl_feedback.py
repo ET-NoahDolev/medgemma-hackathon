@@ -110,6 +110,24 @@ class TestHitlFeedbackFieldMapping:
     ) -> None:
         crit_id, _ = setup_criterion
 
+        # Use JSON format for field mapping
+        field_mapping_json = '{"field":"demographics.age","relation":">=","value":"18"}'
+        resp = client.post(
+            "/v1/hitl/feedback",
+            json={
+                "criterion_id": crit_id,
+                "action": "add_mapping",
+                "field_mapping_added": field_mapping_json,
+            },
+        )
+        assert resp.status_code == 200
+
+    def test_add_field_mapping_legacy_format(
+        self, client: TestClient, setup_criterion: tuple[str, str]
+    ) -> None:
+        """Test backward compatibility with pipe-delimited format."""
+        crit_id, _ = setup_criterion
+
         resp = client.post(
             "/v1/hitl/feedback",
             json={
