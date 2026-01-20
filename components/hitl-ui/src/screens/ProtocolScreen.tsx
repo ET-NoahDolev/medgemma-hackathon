@@ -6,13 +6,12 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { ConfidenceChip } from '@/components/common/ConfidenceChip';
 import { Badge } from '@/components/ui/badge';
 import { CriteriaEditPanel } from '@/features/protocols/components/CriteriaEditPanel';
-import { AddCriteriaPanel } from '@/features/protocols/components/AddCriteriaPanel';
 import { SourceMaterialsPanel } from '@/features/protocols/components/SourceMaterialsPanel';
-import { type Criterion } from '@/mocks/criteria';
 import { useCriteria } from '@/hooks/useCriteria';
 import { useSubmitFeedback } from '@/hooks/useSubmitFeedback';
 import { useUpdateCriterion } from '@/hooks/useUpdateCriterion';
 import { useUploadProtocol } from '@/hooks/useUploadProtocol';
+import { useProtocol } from '@/hooks/useProtocol';
 import {
   Upload,
   FileText,
@@ -20,7 +19,6 @@ import {
   Edit2,
   Sparkles,
   Info,
-  Plus,
   FolderOpen,
   ArrowLeft,
 } from 'lucide-react';
@@ -41,6 +39,15 @@ interface ProtocolScreenProps {
   onBack?: () => void;
 }
 
+interface Criterion {
+  id: string;
+  type: 'inclusion' | 'exclusion';
+  text: string;
+  confidence: number;
+  status: 'ai-suggested' | 'approved' | 'edited';
+  evidenceSnippet?: string;
+}
+
 export function ProtocolScreen({ protocol, onBack }: ProtocolScreenProps) {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
@@ -53,49 +60,58 @@ export function ProtocolScreen({ protocol, onBack }: ProtocolScreenProps) {
   );
   const [uploaded, setUploaded] = useState(!isNewProtocol);
   const [criteria, setCriteria] = useState<Criterion[]>([]);
-  const [deletedIds, setDeletedIds] = useState<string[]>([]);
   const [editPanelOpen, setEditPanelOpen] = useState(false);
   const [selectedCriterion, setSelectedCriterion] = useState<Criterion | null>(null);
-  const [addCriteriaPanelOpen, setAddCriteriaPanelOpen] = useState(false);
   const [sourceMaterialsPanelOpen, setSourceMaterialsPanelOpen] = useState(false);
-  const [availableSourceDocs, setAvailableSourceDocs] = useState<
-    Array<{
-      id: string;
-      name: string;
-      content: string;
-      type?: 'protocol' | 'ecrf' | 'other';
-    }>
-  >([]);
 
   const { data: criteriaData, isLoading, error, refetch } = useCriteria(activeProtocolId);
+  const {
+    data: protocolData,
+    isLoading: isProtocolLoading,
+    error: protocolError,
+  } = useProtocol(activeProtocolId);
   const uploadProtocol = useUploadProtocol();
   const submitFeedback = useSubmitFeedback();
   const updateCriterion = useUpdateCriterion();
 
+  const sourceDocuments = useMemo(() => {
+    if (!protocolData?.document_text) return [];
+    return [
+      {
+        id: protocolData.protocol_id,
+        name: protocolData.title || activeProtocolTitle,
+        content: protocolData.document_text,
+        type: 'protocol' as const,
+      },
+    ];
+  }, [activeProtocolTitle, protocolData]);
+
   const apiMappedCriteria: Criterion[] = useMemo(() => {
     const apiCriteria = criteriaData?.criteria ?? [];
-    const mapped: Criterion[] = apiCriteria
-      .filter(c => !deletedIds.includes(c.id))
-      .map(c => ({
-        id: c.id,
-        type: (c.criterion_type as 'inclusion' | 'exclusion') ?? 'inclusion',
-        text: c.text,
-        confidence: c.confidence,
-        status: 'ai-suggested' as const,
-        evidenceSnippet: undefined,
-      }));
-    return mapped;
-  }, [criteriaData, deletedIds]);
+    return apiCriteria.map(c => ({
+      id: c.id,
+      type: (c.criterion_type as 'inclusion' | 'exclusion') ?? 'inclusion',
+      text: c.text,
+      confidence: c.confidence,
+      status: 'ai-suggested' as const,
+      evidenceSnippet: undefined,
+    }));
+  }, [criteriaData]);
+
+  useEffect(() => {
+    if (protocolData?.title) {
+      setActiveProtocolTitle(protocolData.title);
+    }
+  }, [protocolData?.title]);
 
   // Keep existing local edits/statuses, but refresh text from API.
   useEffect(() => {
     if (!uploaded) return;
     if (!activeProtocolId) return;
 
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     setCriteria(prev => {
       const prevById = new Map(prev.map(c => [c.id, c]));
-      const mergedFromApi = apiMappedCriteria.map(c => {
+      return apiMappedCriteria.map(c => {
         const prior = prevById.get(c.id);
         if (!prior) return c;
         return {
@@ -104,13 +120,8 @@ export function ProtocolScreen({ protocol, onBack }: ProtocolScreenProps) {
           evidenceSnippet: prior.evidenceSnippet,
         };
       });
-
-      // Preserve locally-added criteria (not present in API) and not deleted.
-      const apiIds = new Set(apiMappedCriteria.map(c => c.id));
-      const localOnly = prev.filter(c => !apiIds.has(c.id) && !deletedIds.includes(c.id));
-      return [...mergedFromApi, ...localOnly];
     });
-  }, [activeProtocolId, apiMappedCriteria, deletedIds, uploaded]);
+  }, [activeProtocolId, apiMappedCriteria, uploaded]);
 
   // If extraction is still running, poll until criteria appear.
   useEffect(() => {
@@ -165,71 +176,6 @@ export function ProtocolScreen({ protocol, onBack }: ProtocolScreenProps) {
     }
   };
 
-  const handleDeleteCriterion = (rationale: string) => {
-    if (selectedCriterion) {
-      setDeletedIds(prev => (prev.includes(selectedCriterion.id) ? prev : [...prev, selectedCriterion.id]));
-      setCriteria(prev => prev.filter(c => c.id !== selectedCriterion.id));
-
-      toast.success('Criterion removed', {
-        description: `${selectedCriterion.id} removed: ${rationale}`,
-      });
-    }
-  };
-
-  const handleAddCriterion = (newCriterion: {
-    text: string;
-    type: 'inclusion' | 'exclusion';
-    sourceText: string;
-    fieldMappings?: Array<{ field: string; value: string }>;
-  }) => {
-    const existingIds = criteria
-      .filter(c => c.type === newCriterion.type)
-      .map(c => parseInt(c.id.substring(1)))
-      .filter(n => !isNaN(n));
-
-    const nextId = existingIds.length > 0 ? Math.max(...existingIds) + 1 : 1;
-    const id = newCriterion.type === 'inclusion' ? `I${nextId}` : `E${nextId}`;
-
-    const criterion: Criterion = {
-      id,
-      type: newCriterion.type,
-      text: newCriterion.text,
-      confidence: 0.85, // Manual entry gets reasonable confidence
-      status: 'ai-suggested',
-      evidenceSnippet: newCriterion.sourceText,
-    };
-
-    setCriteria(prev => [...prev, criterion]);
-
-    const mappingInfo =
-      newCriterion.fieldMappings && newCriterion.fieldMappings.length > 0
-        ? ` with ${newCriterion.fieldMappings.length} field mapping(s)`
-        : '';
-
-    toast.success('Criterion added', {
-      description: `${id} has been added for review${mappingInfo}`,
-    });
-  };
-
-  const handleSelectSourceDocument = (doc: { id: string; name: string; type: string }) => {
-    // Add the document to available sources if not already there
-    setAvailableSourceDocs(prev => {
-      const exists = prev.find(d => d.id === doc.id);
-      if (exists) return prev;
-      return [
-        ...prev,
-        {
-          id: doc.id,
-          name: doc.name,
-          content: doc.content,
-          type: doc.type,
-        },
-      ];
-    });
-    setSourceMaterialsPanelOpen(false);
-    setAddCriteriaPanelOpen(true);
-  };
-
   const approvedCount = criteria.filter(c => c.status === 'approved').length;
   const needsReviewCount = criteria.filter(c => c.status === 'ai-suggested').length;
 
@@ -246,7 +192,6 @@ export function ProtocolScreen({ protocol, onBack }: ProtocolScreenProps) {
         setActiveProtocolTitle(resp.title);
         setUploaded(true);
         setCriteria([]);
-        setDeletedIds([]);
         setSelectedCriterion(null);
         return resp;
       }),
@@ -388,13 +333,13 @@ export function ProtocolScreen({ protocol, onBack }: ProtocolScreenProps) {
           </div>
 
           <div className="flex gap-2">
-            <Button variant="outline" onClick={() => setSourceMaterialsPanelOpen(true)}>
+            <Button
+              variant="outline"
+              onClick={() => setSourceMaterialsPanelOpen(true)}
+              disabled={sourceDocuments.length === 0 || isProtocolLoading}
+            >
               <FolderOpen className="w-4 h-4 mr-2" />
               Source Materials
-            </Button>
-            <Button variant="outline" onClick={() => setAddCriteriaPanelOpen(true)}>
-              <Plus className="w-4 h-4 mr-2" />
-              Add Criterion
             </Button>
             <GlassButton variant="primary">Finalize & Deploy</GlassButton>
           </div>
@@ -408,11 +353,11 @@ export function ProtocolScreen({ protocol, onBack }: ProtocolScreenProps) {
           </AlertDescription>
         </Alert>
 
-        {error && (
+        {(error || protocolError) && (
           <Alert className="mt-4 border-red-300 bg-red-50">
             <Info className="h-4 w-4 text-red-600" />
             <AlertDescription className="text-red-800">
-              Error loading criteria: {error.message}
+              Error loading data: {error?.message ?? protocolError?.message}
             </AlertDescription>
           </Alert>
         )}
@@ -646,23 +591,14 @@ export function ProtocolScreen({ protocol, onBack }: ProtocolScreenProps) {
             sourceText: selectedCriterion.evidenceSnippet,
           }}
           onSave={handleSaveEditPanel}
-          onDelete={handleDeleteCriterion}
         />
       )}
-
-      {/* Add Criteria Panel */}
-      <AddCriteriaPanel
-        open={addCriteriaPanelOpen}
-        onOpenChange={setAddCriteriaPanelOpen}
-        sourceDocuments={availableSourceDocs.length > 0 ? availableSourceDocs : undefined}
-        onSave={handleAddCriterion}
-      />
 
       {/* Source Materials Panel */}
       <SourceMaterialsPanel
         open={sourceMaterialsPanelOpen}
         onOpenChange={setSourceMaterialsPanelOpen}
-        onSelectDocument={handleSelectSourceDocument}
+        documents={sourceDocuments}
       />
     </div>
   );
