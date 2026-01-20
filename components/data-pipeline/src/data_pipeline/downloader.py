@@ -708,6 +708,38 @@ def resolve_output_dir(output_root: Path, source: str) -> Path:
     return output_root / "crc_protocols" / source
 
 
+async def _process_completed_tasks(
+    done: set[asyncio.Task[TaskResult]], downloaded: int
+) -> int:
+    """Process completed tasks and update download count."""
+    for d in done:
+        try:
+            if d.result():
+                downloaded += 1
+        except Exception:
+            # Ignore individual task failures here; manifest records capture details
+            pass
+    return downloaded
+
+
+async def _drain_remaining_tasks(
+    pending: list[asyncio.Task[TaskResult]], max_items: int, downloaded: int
+) -> int:
+    """Drain remaining tasks while respecting the cap."""
+    for future in asyncio.as_completed(pending):
+        if downloaded >= max_items:
+            if isinstance(future, asyncio.Task):
+                future.cancel()
+            continue
+        try:
+            result = await future
+        except Exception:
+            result = None
+        if result:
+            downloaded += 1
+    return downloaded
+
+
 async def _download_from_links(
     links: Iterable[str],
     *,
@@ -723,8 +755,12 @@ async def _download_from_links(
     registry_id: Optional[str] = None,
     registry_type: Optional[str] = None,
 ) -> int:
-    tasks: list[asyncio.Task[TaskResult]] = [
-        asyncio.create_task(
+    downloaded = 0
+    pending: list[asyncio.Task[TaskResult]] = []
+    for link in list(links):
+        if downloaded >= max_items:
+            break
+        t = asyncio.create_task(
             download_pdf(
                 link,
                 destination_dir,
@@ -740,16 +776,16 @@ async def _download_from_links(
                 registry_type=registry_type,
             )
         )
-        for link in list(links)[:max_items]
-    ]
+        pending.append(t)
+        if len(pending) >= max_items:
+            done_set, pending_set = await asyncio.wait(
+                pending, return_when=asyncio.FIRST_COMPLETED
+            )
+            downloaded = await _process_completed_tasks(done_set, downloaded)
+            pending = list(pending_set)
 
-    downloaded = 0
-    for task in asyncio.as_completed(tasks):
-        result = await task
-        if result:
-            downloaded += 1
-        if downloaded >= max_items:
-            break
+    # Drain remaining tasks while respecting the cap
+    downloaded = await _drain_remaining_tasks(pending, max_items, downloaded)
     return downloaded
 
 
