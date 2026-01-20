@@ -8,4 +8,7 @@ def test_create_protocol_returns_payload(client: TestClient) -> None:
     )
 
     assert response.status_code == 200
-    assert response.json() == {"protocol_id": "proto-1", "title": "Trial A"}
+    data = response.json()
+    assert "protocol_id" in data
+    assert data["protocol_id"].startswith("proto-")
+    assert data["title"] == "Trial A"

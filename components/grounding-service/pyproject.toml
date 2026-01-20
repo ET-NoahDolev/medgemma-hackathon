@@ -5,7 +5,9 @@ description = "grounding-service component"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
+    "diskcache>=5.6.3",
     "httpx>=0.28.0",
+    "tenacity>=8.2.0",
 ]
 
 [dependency-groups]
@@ -34,6 +36,9 @@ plugins = []
 pythonpath = ["src"]
 testpaths = ["tests"]
 addopts = "--cov=grounding_service --cov-branch --cov-report=term-missing"
+markers = [
+    "integration: marks tests as integration tests",
+]
 
 [tool.uv]
 cache-dir = "./.uv_cache"

@@ -54,20 +54,54 @@ class TestHitlEdit:
         assert edit.snomed_code_removed == "371273006"
 
     def test_hitl_edit_has_field_mapping_changes(self) -> None:
-        edit = build_hitl_edit(field_mapping_added="demographics.age|>=|18")
+        field_mapping_json = '{"field":"demographics.age","relation":">=","value":"18"}'
+        edit = build_hitl_edit(field_mapping_added=field_mapping_json)
 
-        assert edit.field_mapping_added == "demographics.age|>=|18"
+        assert edit.field_mapping_added == field_mapping_json
 
 
 class TestFieldMapping:
     def test_field_mapping_to_string(self) -> None:
         fm = build_field_mapping(field="demographics.age", relation=">=", value="18")
 
-        assert fm.to_string() == "demographics.age|>=|18"
+        result = fm.to_string()
+        # Should be JSON format
+        assert result.startswith("{")
+        assert '"field":"demographics.age"' in result
+        assert '"relation":">="' in result
+        assert '"value":"18"' in result
 
-    def test_field_mapping_from_string(self) -> None:
+    def test_field_mapping_from_string_json(self) -> None:
+        """Test deserialization from JSON format."""
+        json_str = '{"field":"demographics.age","relation":">=","value":"18"}'
+        fm = FieldMapping.from_string(json_str)
+
+        assert fm.field == "demographics.age"
+        assert fm.relation == ">="
+        assert fm.value == "18"
+
+    def test_field_mapping_from_string_legacy(self) -> None:
+        """Test backward compatibility with pipe-delimited format."""
         fm = FieldMapping.from_string("demographics.age|>=|18")
 
         assert fm.field == "demographics.age"
         assert fm.relation == ">="
         assert fm.value == "18"
+
+    def test_field_mapping_round_trip(self) -> None:
+        """Test that serialization and deserialization work correctly."""
+        original = build_field_mapping(field="test.field", relation=">", value="100")
+        serialized = original.to_string()
+        deserialized = FieldMapping.from_string(serialized)
+
+        assert deserialized.field == original.field
+        assert deserialized.relation == original.relation
+        assert deserialized.value == original.value
+
+    def test_field_mapping_with_pipe_in_value(self) -> None:
+        """Test that values containing pipe characters are handled correctly."""
+        fm = FieldMapping(field="test.field", relation="=", value="value|with|pipes")
+        serialized = fm.to_string()
+        deserialized = FieldMapping.from_string(serialized)
+
+        assert deserialized.value == "value|with|pipes"

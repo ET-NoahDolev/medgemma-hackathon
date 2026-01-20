@@ -3,16 +3,17 @@
 from __future__ import annotations
 
 import os
+import uuid
 from datetime import datetime, timezone
 from functools import lru_cache
 from pathlib import Path
 from typing import Any, Iterable, cast
 from typing import Protocol as TypingProtocol
 
-from shared.models import Protocol as SharedProtocol  # type: ignore[import-not-found]
-from sqlalchemy import JSON, Column, delete
+from shared.models import Protocol as SharedProtocol
+from sqlalchemy import JSON, Column, delete, func
 from sqlalchemy.engine import Engine
-from sqlmodel import Field, Session, SQLModel, create_engine, select
+from sqlmodel import Field, Session, SQLModel, col, create_engine, select
 
 
 class ExtractedCriterion(TypingProtocol):
@@ -68,7 +69,11 @@ class HitlEdit(SQLModel, table=True):
 
 
 class IdCounter(SQLModel, table=True):
-    """Simple counter table for stable prefixed identifiers."""
+    """Deprecated: Counter table no longer used.
+
+    Replaced with UUID-based identifiers for concurrency safety.
+    This table is kept for backward compatibility but is no longer populated.
+    """
 
     key: str = Field(primary_key=True)
     value: int = 0
@@ -106,22 +111,33 @@ def init_db() -> None:
 
 def reset_storage() -> None:
     """Clear all stored data (used for tests and demos)."""
+    if os.getenv("ALLOW_STORAGE_RESET") != "1":
+        raise RuntimeError(
+            "reset_storage() requires ALLOW_STORAGE_RESET=1 environment variable. "
+            "This function destroys all data and should only be used in tests."
+        )
     engine = get_engine()
     SQLModel.metadata.drop_all(engine)
     SQLModel.metadata.create_all(engine)
     init_db()
 
 
-def _next_id(session: Session, key: str, prefix: str) -> str:
-    counter = session.get(IdCounter, key)
-    if counter is None:
-        counter = IdCounter(key=key, value=0)
-        session.add(counter)
-        session.flush()
-    counter.value += 1
-    session.add(counter)
-    session.flush()
-    return f"{prefix}-{counter.value}"
+def _generate_id(prefix: str) -> str:
+    """Generate a unique identifier with prefix.
+
+    Uses UUID4 for concurrency-safe distributed ID generation.
+
+    Args:
+        prefix: Prefix for the ID (e.g., "proto", "crit", "edit").
+
+    Returns:
+        A unique identifier in the format "{prefix}-{uuid}".
+
+    Examples:
+        >>> _generate_id("proto")
+        'proto-550e8400-e29b-41d4-a716-446655440000'
+    """
+    return f"{prefix}-{uuid.uuid4().hex}"
 
 
 def _norm_opt(value: str | None) -> str | None:
@@ -150,7 +166,7 @@ class Storage:
     ) -> Protocol:
         """Persist a protocol record and return it."""
         with Session(self._engine) as session:
-            protocol_id = _next_id(session, "protocol", "proto")
+            protocol_id = _generate_id("proto")
             protocol = Protocol(
                 id=protocol_id,
                 title=title.strip(),
@@ -172,7 +188,7 @@ class Storage:
     ) -> Protocol:
         """Create a Protocol from a shared Protocol model and document text."""
         with Session(self._engine) as session:
-            protocol_id = _next_id(session, "protocol", "proto")
+            protocol_id = _generate_id("proto")
             protocol = Protocol(
                 id=protocol_id,
                 title=shared.title.strip(),
@@ -205,6 +221,16 @@ class Storage:
             )
             return list(session.exec(statement))
 
+    def count_criteria(self, protocol_id: str) -> int:
+        """Return count of criteria for a protocol without loading all rows."""
+        with Session(self._engine) as session:
+            result = session.exec(
+                select(func.count(col(Criterion.id))).where(
+                    cast(Any, Criterion.protocol_id) == protocol_id
+                )
+            ).one()
+            return int(result)
+
     def replace_criteria(
         self, *, protocol_id: str, extracted: Iterable[ExtractedCriterion]
     ) -> list[Criterion]:
@@ -215,7 +241,7 @@ class Storage:
             )
             stored: list[Criterion] = []
             for item in extracted:
-                criterion_id = _next_id(session, "criterion", "crit")
+                criterion_id = _generate_id("crit")
                 criterion = Criterion(
                     id=criterion_id,
                     protocol_id=protocol_id,
@@ -269,6 +295,47 @@ class Storage:
             session.refresh(criterion)
             return criterion
 
+    def add_snomed_code(self, criterion_id: str, code: str) -> Criterion | None:
+        """Add a SNOMED code to a criterion."""
+        with Session(self._engine) as session:
+            criterion = session.get(Criterion, criterion_id)
+            if criterion is None:
+                return None
+            if code not in criterion.snomed_codes:
+                criterion.snomed_codes = [*criterion.snomed_codes, code]
+                session.add(criterion)
+                session.commit()
+                session.refresh(criterion)
+            return criterion
+
+    def remove_snomed_code(self, criterion_id: str, code: str) -> Criterion | None:
+        """Remove a SNOMED code from a criterion."""
+        with Session(self._engine) as session:
+            criterion = session.get(Criterion, criterion_id)
+            if criterion is None:
+                return None
+            if code in criterion.snomed_codes:
+                criterion.snomed_codes = [
+                    existing for existing in criterion.snomed_codes if existing != code
+                ]
+                session.add(criterion)
+                session.commit()
+                session.refresh(criterion)
+            return criterion
+
+    def list_protocols(
+        self, skip: int = 0, limit: int = 20
+    ) -> tuple[list[Protocol], int]:
+        """List protocols with pagination."""
+        with Session(self._engine) as session:
+            total = session.exec(select(func.count(col(Protocol.id)))).one()
+            # Order by title for consistent ordering (UUIDs are not ordered)
+            statement = (
+                select(Protocol).offset(skip).limit(limit).order_by(Protocol.title)
+            )
+            protocols = list(session.exec(statement))
+            return protocols, int(total)
+
     def create_hitl_edit(
         self,
         *,
@@ -282,7 +349,7 @@ class Storage:
     ) -> HitlEdit:
         """Persist a HITL edit record."""
         with Session(self._engine) as session:
-            edit_id = _next_id(session, "hitl_edit", "edit")
+            edit_id = _generate_id("edit")
             edit = HitlEdit(
                 id=edit_id,
                 criterion_id=criterion_id,

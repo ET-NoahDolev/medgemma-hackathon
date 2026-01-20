@@ -39,8 +39,8 @@ class TestUmlsClientSearch:
                 raise_for_status=lambda: None,
             )
             mock_client_cls.return_value = mock_client
-            client = UmlsClient(api_key="test-key")
-            candidates = client.search_snomed("melanoma")
+            with UmlsClient(api_key="test-key") as client:
+                candidates = client.search_snomed("melanoma")
 
         assert len(candidates) == 2
         assert isinstance(candidates[0], SnomedCandidate)
@@ -57,8 +57,8 @@ class TestUmlsClientSearch:
                 raise_for_status=lambda: None,
             )
             mock_client_cls.return_value = mock_client
-            client = UmlsClient(api_key="test-key")
-            candidates = client.search_snomed("melanoma")
+            with UmlsClient(api_key="test-key") as client:
+                candidates = client.search_snomed("melanoma")
 
         assert candidates[0].code == "372244006"
         assert candidates[0].display == "Malignant melanoma, stage III"
@@ -76,18 +76,21 @@ class TestUmlsClientSearch:
                 raise_for_status=lambda: None,
             )
             mock_client_cls.return_value = mock_client
-            client = UmlsClient(api_key="test-key")
-            client.search_snomed("melanoma")
-            client.search_snomed("melanoma")
+            with UmlsClient(api_key="test-key") as client:
+                client.search_snomed("melanoma")
+                client.search_snomed("melanoma")
 
         assert mock_client.get.call_count == 1
 
     def test_search_snomed_empty_query_raises(self) -> None:
-        client = UmlsClient(api_key="test-key")
-        with pytest.raises(ValueError, match="query is required"):
-            client.search_snomed("")
+        with UmlsClient(api_key="test-key") as client:
+            with pytest.raises(ValueError, match="query is required"):
+                client.search_snomed("")
 
-    def test_search_snomed_missing_api_key_raises(self) -> None:
+    def test_search_snomed_missing_api_key_raises(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.delenv("UMLS_API_KEY", raising=False)
         with pytest.raises(ValueError, match="UMLS_API_KEY is required"):
             UmlsClient(api_key=None)
 
@@ -103,8 +106,8 @@ class TestUmlsClientSearch:
                 raise_for_status=lambda: None,
             )
             mock_client_cls.return_value = mock_client
-            client = UmlsClient(api_key="test-key")
-            candidates = client.search_snomed("melanoma", limit=1)
+            with UmlsClient(api_key="test-key") as client:
+                candidates = client.search_snomed("melanoma", limit=1)
 
         assert len(candidates) == 1
 
@@ -116,17 +119,17 @@ class TestUmlsClientSearch:
                 request=MagicMock(),
             )
             mock_client_cls.return_value = mock_client
-            client = UmlsClient(api_key="test-key")
-            candidates = client.search_snomed("melanoma")
+            with UmlsClient(api_key="test-key") as client:
+                candidates = client.search_snomed("melanoma")
 
         assert candidates == []
 
 
 class TestUmlsClientConfig:
     def test_default_base_url(self) -> None:
-        client = UmlsClient(api_key="test-key")
-        assert "uts-ws" in client.base_url
+        with UmlsClient(api_key="test-key") as client:
+            assert "uts-ws" in client.base_url
 
     def test_custom_base_url(self) -> None:
-        client = UmlsClient(base_url="http://localhost:8080", api_key="test-key")
-        assert client.base_url == "http://localhost:8080"
+        with UmlsClient(base_url="http://localhost:8080", api_key="test-key") as client:
+            assert client.base_url == "http://localhost:8080"

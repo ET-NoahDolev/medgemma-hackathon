@@ -114,6 +114,127 @@ class TestHitlEditTable:
         assert isinstance(edit.created_at, datetime)
 
 
+class TestSnomedCodeManagement:
+    def test_add_snomed_code_to_criterion(self, storage: Storage) -> None:
+        proto = storage.create_protocol(title="T", document_text="Age >= 18")
+        storage.replace_criteria(
+            protocol_id=proto.id,
+            extracted=[
+                FakeCriterion(
+                    text="Age >= 18",
+                    criterion_type="inclusion",
+                    confidence=0.9,
+                )
+            ],
+        )
+        crit_id = storage.list_criteria(proto.id)[0].id
+
+        updated = storage.add_snomed_code(criterion_id=crit_id, code="371273006")
+
+        assert updated is not None
+        assert updated.snomed_codes == ["371273006"]
+
+    def test_add_snomed_code_idempotent(self, storage: Storage) -> None:
+        proto = storage.create_protocol(title="T", document_text="Age >= 18")
+        storage.replace_criteria(
+            protocol_id=proto.id,
+            extracted=[
+                FakeCriterion(
+                    text="Age >= 18",
+                    criterion_type="inclusion",
+                    confidence=0.9,
+                )
+            ],
+        )
+        crit_id = storage.list_criteria(proto.id)[0].id
+
+        storage.add_snomed_code(criterion_id=crit_id, code="371273006")
+        updated = storage.add_snomed_code(criterion_id=crit_id, code="371273006")
+
+        assert updated is not None
+        assert updated.snomed_codes == ["371273006"]
+
+    def test_remove_snomed_code_from_criterion(self, storage: Storage) -> None:
+        proto = storage.create_protocol(title="T", document_text="Age >= 18")
+        storage.replace_criteria(
+            protocol_id=proto.id,
+            extracted=[
+                FakeCriterion(
+                    text="Age >= 18",
+                    criterion_type="inclusion",
+                    confidence=0.9,
+                )
+            ],
+        )
+        crit_id = storage.list_criteria(proto.id)[0].id
+        storage.add_snomed_code(criterion_id=crit_id, code="371273006")
+
+        updated = storage.remove_snomed_code(
+            criterion_id=crit_id, code="371273006"
+        )
+
+        assert updated is not None
+        assert updated.snomed_codes == []
+
+    def test_remove_nonexistent_code_no_error(self, storage: Storage) -> None:
+        proto = storage.create_protocol(title="T", document_text="Age >= 18")
+        storage.replace_criteria(
+            protocol_id=proto.id,
+            extracted=[
+                FakeCriterion(
+                    text="Age >= 18",
+                    criterion_type="inclusion",
+                    confidence=0.9,
+                )
+            ],
+        )
+        crit_id = storage.list_criteria(proto.id)[0].id
+
+        updated = storage.remove_snomed_code(
+            criterion_id=crit_id, code="371273006"
+        )
+
+        assert updated is not None
+        assert updated.snomed_codes == []
+
+
+class TestProtocolListing:
+    def test_list_protocols_empty(self, storage: Storage) -> None:
+        protocols, total = storage.list_protocols()
+
+        assert protocols == []
+        assert total == 0
+
+    def test_list_protocols_returns_all(self, storage: Storage) -> None:
+        storage.create_protocol(title="T1", document_text="Text 1")
+        storage.create_protocol(title="T2", document_text="Text 2")
+
+        protocols, total = storage.list_protocols()
+
+        assert total == 2
+        assert [protocol.title for protocol in protocols] == ["T1", "T2"]
+
+    def test_list_protocols_pagination(self, storage: Storage) -> None:
+        for i in range(15):
+            storage.create_protocol(title=f"T{i}", document_text=f"Text {i}")
+
+        page_one, total = storage.list_protocols(skip=0, limit=10)
+        page_two, _ = storage.list_protocols(skip=10, limit=10)
+
+        assert total == 15
+        assert len(page_one) == 10
+        assert len(page_two) == 5
+
+    def test_list_protocols_returns_total_count(self, storage: Storage) -> None:
+        storage.create_protocol(title="T1", document_text="Text 1")
+        storage.create_protocol(title="T2", document_text="Text 2")
+        storage.create_protocol(title="T3", document_text="Text 3")
+
+        _, total = storage.list_protocols(skip=1, limit=1)
+
+        assert total == 3
+
+
 @dataclass
 class FakeCriterion:
     text: str

@@ -1,10 +1,44 @@
 """Evaluation metrics stubs."""
 
+import re
 from typing import Iterable, List
+
+
+def _normalize_criterion_text(text: str) -> str:
+    """Normalize criterion text for comparison.
+
+    Normalizes by:
+    - Converting to lowercase
+    - Removing trailing punctuation
+    - Normalizing whitespace
+
+    Args:
+        text: Criterion text to normalize.
+
+    Returns:
+        Normalized text string.
+
+    Examples:
+        >>> _normalize_criterion_text("Age >= 18.")
+        'age >= 18'
+        >>> _normalize_criterion_text("Age  >=  18")
+        'age >= 18'
+    """
+    # Convert to lowercase
+    normalized = text.lower()
+    # Remove trailing punctuation (periods, commas, etc.)
+    normalized = normalized.rstrip(".,;:!?")
+    # Normalize whitespace (multiple spaces to single space)
+    normalized = re.sub(r"\s+", " ", normalized)
+    # Strip leading/trailing whitespace
+    return normalized.strip()
 
 
 def extraction_f1(predicted: List[str], gold: List[str]) -> float:
     """Compute extraction F1 score for criteria lists.
+
+    Normalizes strings before comparison to handle minor variations
+    like trailing punctuation or case differences.
 
     Args:
         predicted: Extracted criterion strings.
@@ -17,21 +51,24 @@ def extraction_f1(predicted: List[str], gold: List[str]) -> float:
         ValueError: If the inputs are empty or not comparable.
 
     Examples:
-        >>> extraction_f1(["age >= 18"], ["age >= 18"])
-        0.0
-
-    Notes:
-        This is a wireframe stub. The production implementation will
-        normalize text and compute precision/recall on span matches.
+        >>> extraction_f1(["Age >= 18"], ["Age >= 18."])
+        1.0
+        >>> extraction_f1(["age >= 18"], ["Age >= 18"])
+        1.0
     """
     if not predicted or not gold:
         raise ValueError("predicted and gold must be non-empty")
 
-    predicted_set = set(predicted)
-    gold_set = set(gold)
-    true_positives = len(predicted_set & gold_set)
-    precision = true_positives / len(predicted_set)
-    recall = true_positives / len(gold_set)
+    # Normalize both predicted and gold before comparison
+    predicted_normalized = {_normalize_criterion_text(p) for p in predicted}
+    gold_normalized = {_normalize_criterion_text(g) for g in gold}
+
+    true_positives = len(predicted_normalized & gold_normalized)
+    if true_positives == 0:
+        return 0.0
+
+    precision = true_positives / len(predicted_normalized)
+    recall = true_positives / len(gold_normalized)
     if precision + recall == 0:
         return 0.0
     return 2 * precision * recall / (precision + recall)
