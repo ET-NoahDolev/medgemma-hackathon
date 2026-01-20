@@ -140,6 +140,24 @@ cd components/data-pipeline
 uv run python -m data_pipeline.download_protocols
 ```
 
+To load downloaded PDFs into the API database, use the loader:
+
+```bash
+# Single PDF
+uv run python -m data_pipeline.loader --pdf data/protocols/example.pdf --api-url http://localhost:8000
+
+# Bulk from manifest
+uv run python -m data_pipeline.loader --manifest data/protocols/manifest.jsonl --limit 50
+```
+
+You can also upload a PDF directly to the API:
+
+```bash
+curl -X POST http://localhost:8000/v1/protocols/upload \
+  -F "file=@data/protocols/example.pdf" \
+  -F "auto_extract=true"
+```
+
 #### 🖥️ HITL UI
 
 ```bash

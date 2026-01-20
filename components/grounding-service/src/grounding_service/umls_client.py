@@ -5,6 +5,8 @@ from __future__ import annotations
 import logging
 import os
 import re
+from collections.abc import Iterator
+from contextlib import contextmanager
 from dataclasses import dataclass
 from typing import Sequence
 
@@ -70,6 +72,14 @@ class UmlsClient:
             raise ValueError("UMLS_API_KEY is required")
         self._http = httpx.Client(timeout=self.timeout)
         self._cache: dict[str, list[SnomedCandidate]] = {}
+
+    def __enter__(self) -> "UmlsClient":
+        """Enter context manager scope."""
+        return self
+
+    def __exit__(self, _exc_type: object, _exc: object, _tb: object) -> None:
+        """Exit context manager scope and close resources."""
+        self.close()
 
     def search_snomed(self, query: str, limit: int = 5) -> list[SnomedCandidate]:
         """Search SNOMED concepts via UMLS.
@@ -155,6 +165,20 @@ class UmlsClient:
     def clear_cache(self) -> None:
         """Clear the search cache."""
         self._cache.clear()
+
+
+@contextmanager
+def umls_client_context(
+    base_url: str | None = None,
+    api_key: str | None = None,
+    timeout: float | None = None,
+) -> Iterator["UmlsClient"]:
+    """Provide a managed UmlsClient for safe usage elsewhere."""
+    client = UmlsClient(base_url=base_url, api_key=api_key, timeout=timeout)
+    try:
+        yield client
+    finally:
+        client.close()
 
 
 FIELD_PATTERNS: list[tuple[re.Pattern[str], str, tuple[int, ...]]] = [

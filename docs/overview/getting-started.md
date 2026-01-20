@@ -31,7 +31,7 @@ To run the data pipeline stub:
 
 ```bash
 cd components/data-pipeline
-uv run python -m data_pipeline.download_protocols
+uv run python -m data_pipeline.download_protocols --manifest-path data/protocols/manifest.jsonl
 ```
 
 To run the HITL UI:

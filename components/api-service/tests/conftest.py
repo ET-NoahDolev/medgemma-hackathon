@@ -90,8 +90,22 @@ def fake_services(monkeypatch: pytest.MonkeyPatch) -> FakeServicesState:
             _ = api_key
             _ = timeout
 
+        def __enter__(self) -> "FakeUmlsClient":
+            return self
+
+        def __exit__(
+            self,
+            exc_type: type[BaseException] | None,
+            exc: BaseException | None,
+            traceback: object | None,
+        ) -> None:
+            self.close()
+
         def search_snomed(self, _text: str) -> list[FakeGroundingCandidate]:
             return state.candidates
+
+        def close(self) -> None:
+            return None
 
     def _propose_field_mapping(_text: str) -> list[FakeFieldMapping]:
         return state.field_mappings

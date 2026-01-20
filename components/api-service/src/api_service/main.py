@@ -3,15 +3,16 @@
 from __future__ import annotations
 
 import os
+import tempfile
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
+from pathlib import Path
 from typing import List
 
-from extraction_service import (  # type: ignore[import-untyped]
-    pipeline as extraction_pipeline,
-)
-from fastapi import Body, Depends, FastAPI, HTTPException
-from grounding_service import umls_client  # type: ignore[import-untyped]
+from data_pipeline.download_protocols import extract_text_from_pdf
+from extraction_service import pipeline as extraction_pipeline
+from fastapi import Body, Depends, FastAPI, File, HTTPException, UploadFile
+from grounding_service import umls_client
 from pydantic import BaseModel
 
 from api_service.dependencies import get_storage
@@ -138,6 +139,42 @@ def create_protocol(
     return ProtocolResponse(protocol_id=protocol.id, title=protocol.title)
 
 
+@app.post("/v1/protocols/upload")
+async def upload_protocol(
+    file: UploadFile = File(...),
+    auto_extract: bool = True,
+    storage: Storage = Depends(get_storage),
+) -> ProtocolResponse:
+    """Upload a PDF protocol file and create a protocol record."""
+    filename = file.filename or ""
+    if not filename.lower().endswith(".pdf"):
+        raise HTTPException(status_code=400, detail="Only PDF files are supported")
+
+    with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as tmp:
+        content = await file.read()
+        tmp.write(content)
+        tmp_path = Path(tmp.name)
+
+    try:
+        document_text = extract_text_from_pdf(tmp_path)
+    finally:
+        tmp_path.unlink(missing_ok=True)
+
+    if not document_text:
+        raise HTTPException(
+            status_code=400, detail="No text could be extracted from the PDF"
+        )
+
+    title = filename.replace(".pdf", "").replace("_", " ").strip() or "Protocol"
+    protocol = storage.create_protocol(title=title, document_text=document_text)
+
+    if auto_extract:
+        extracted = extraction_pipeline.extract_criteria(protocol.document_text)
+        storage.replace_criteria(protocol_id=protocol.id, extracted=extracted)
+
+    return ProtocolResponse(protocol_id=protocol.id, title=protocol.title)
+
+
 @app.post("/v1/protocols/{protocol_id}/extract")
 def extract_criteria(
     protocol_id: str,
@@ -207,52 +244,52 @@ def ground_criterion(
     if criterion is None:
         raise HTTPException(status_code=404, detail="Criterion not found")
 
-    client = umls_client.UmlsClient(
+    with umls_client.UmlsClient(
         api_key=os.getenv("GROUNDING_SERVICE_UMLS_API_KEY")
         or os.getenv("UMLS_API_KEY")
-    )
-    candidates = client.search_snomed(criterion.text)
-    field_mappings = umls_client.propose_field_mapping(criterion.text)
+    ) as client:
+        candidates = client.search_snomed(criterion.text)
+        field_mappings = umls_client.propose_field_mapping(criterion.text)
 
-    if not candidates:
-        storage.set_snomed_codes(criterion_id=criterion_id, snomed_codes=[])
+        if not candidates:
+            storage.set_snomed_codes(criterion_id=criterion_id, snomed_codes=[])
+            return GroundingResponse(
+                criterion_id=criterion_id,
+                candidates=[],
+                field_mapping=None,
+            )
+
+        snomed_codes = [candidate.code for candidate in candidates]
+        storage.set_snomed_codes(
+            criterion_id=criterion_id,
+            snomed_codes=snomed_codes,
+        )
+
+        response_candidates = [
+            GroundingCandidateResponse(
+                code=candidate.code,
+                display=candidate.display,
+                ontology=candidate.ontology,
+                confidence=candidate.confidence,
+            )
+            for candidate in candidates
+        ]
+
+        field_mapping = None
+        if field_mappings:
+            suggestion = field_mappings[0]
+            field_mapping = FieldMappingResponse(
+                field=suggestion.field,
+                relation=suggestion.relation,
+                value=suggestion.value,
+                confidence=suggestion.confidence,
+            )
+
         return GroundingResponse(
             criterion_id=criterion_id,
-            candidates=[],
-            field_mapping=None,
+            candidates=response_candidates,
+            field_mapping=field_mapping,
         )
-
-    snomed_codes = [candidate.code for candidate in candidates]
-    storage.set_snomed_codes(
-        criterion_id=criterion_id,
-        snomed_codes=snomed_codes,
-    )
-
-    response_candidates = [
-        GroundingCandidateResponse(
-            code=candidate.code,
-            display=candidate.display,
-            ontology=candidate.ontology,
-            confidence=candidate.confidence,
-        )
-        for candidate in candidates
-    ]
-
-    field_mapping = None
-    if field_mappings:
-        suggestion = field_mappings[0]
-        field_mapping = FieldMappingResponse(
-            field=suggestion.field,
-            relation=suggestion.relation,
-            value=suggestion.value,
-            confidence=suggestion.confidence,
-        )
-
-    return GroundingResponse(
-        criterion_id=criterion_id,
-        candidates=response_candidates,
-        field_mapping=field_mapping,
-    )
 
 
 def _criterion_to_response(criterion: StorageCriterion) -> CriterionResponse:

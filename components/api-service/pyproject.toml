@@ -5,10 +5,13 @@ description = "api-service component"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
+    "data-pipeline",
     "extraction-service",
     "fastapi>=0.110.0",
     "grounding-service",
+    "python-multipart>=0.0.9",
     "pyyaml>=6.0.0",
+    "shared",
     "sqlalchemy>=2.0.0",
     "sqlmodel>=0.0.18",
     "uvicorn>=0.27.0",
@@ -37,13 +40,25 @@ exclude = ["venv", ".venv", "docs"]
 strict = true
 exclude = ["venv", ".venv", "docs"]
 plugins = []
+mypy_path = [
+    "../shared/src",
+    "../data-pipeline/src",
+    "../extraction-service/src",
+    "../grounding-service/src",
+]
 
 [[tool.mypy.overrides]]
 module = "yaml"
 ignore_missing_imports = true
 
 [tool.pytest.ini_options]
-pythonpath = ["src"]
+pythonpath = [
+    "src",
+    "../shared/src",
+    "../data-pipeline/src",
+    "../extraction-service/src",
+    "../grounding-service/src",
+]
 testpaths = ["tests"]
 addopts = "--cov=api_service --cov-branch --cov-report=term-missing"
 markers = ["e2e: end-to-end API workflow tests"]
@@ -52,5 +67,7 @@ markers = ["e2e: end-to-end API workflow tests"]
 cache-dir = "./.uv_cache"
 
 [tool.uv.sources]
+data-pipeline = { workspace = true }
 extraction-service = { workspace = true }
 grounding-service = { workspace = true }
+shared = { workspace = true }

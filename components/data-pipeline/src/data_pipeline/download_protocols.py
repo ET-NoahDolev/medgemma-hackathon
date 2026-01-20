@@ -6,8 +6,8 @@ import re
 from dataclasses import asdict, dataclass
 from pathlib import Path
 
-import httpx
 from pypdf import PdfReader
+from shared.models import Document, Protocol
 
 
 @dataclass
@@ -49,76 +49,36 @@ class ProtocolRecord:
     source: str | None = None
     registry_id: str | None = None
     registry_type: str | None = None
+    source_url: str | None = None
+
+    def to_protocol(self, protocol_id: str) -> Protocol:
+        """Convert to shared Protocol model."""
+        return Protocol(
+            id=protocol_id,
+            title=self.title,
+            nct_id=self.nct_id,
+            condition=self.condition,
+            phase=self.phase,
+            source=self.source,
+            registry_id=self.registry_id,
+            registry_type=self.registry_type,
+        )
+
+    def to_document(self, doc_id: str, protocol_id: str) -> Document:
+        """Convert to shared Document model."""
+        return Document(
+            id=doc_id,
+            protocol_id=protocol_id,
+            text=self.document_text,
+            source_url=self.source_url,
+        )
 
 
-CT_API_BASE = "https://clinicaltrials.gov/api/v2/studies"
 DEFAULT_MANIFEST_PATH = (
     Path(__file__).resolve().parents[4] / "data" / "protocols" / "manifest.jsonl"
 )
 
 logger = logging.getLogger(__name__)
-
-
-def fetch_from_clinicaltrials(query: str, limit: int = 50) -> list[ProtocolRecord]:
-    """Fetch protocols from ClinicalTrials.gov API v2.
-
-    Args:
-        query: Condition or keyword to search.
-        limit: Maximum records to fetch.
-
-    Returns:
-        List of normalized protocol records.
-
-    Raises:
-        ValueError: If limit is not positive.
-    """
-    if limit <= 0:
-        raise ValueError("limit must be positive")
-
-    page_size = min(limit, 100)
-    params: dict[str, str | int] = {
-        "query.cond": query,
-        "fields": "NCTId|BriefTitle|Condition|Phase|EligibilityModule",
-        "pageSize": page_size,
-        "format": "json",
-    }
-
-    records: list[ProtocolRecord] = []
-    next_token: str | None = None
-    while len(records) < limit:
-        if next_token:
-            params["pageToken"] = next_token
-        else:
-            params.pop("pageToken", None)
-
-        resp = httpx.get(CT_API_BASE, params=params, timeout=30)
-        resp.raise_for_status()
-        payload = resp.json()
-
-        for study in payload.get("studies", []):
-            proto = study.get("protocolSection", {})
-            ident = proto.get("identificationModule", {})
-            conds = proto.get("conditionsModule", {})
-            design = proto.get("designModule", {})
-            elig = proto.get("eligibilityModule", {})
-
-            records.append(
-                ProtocolRecord(
-                    nct_id=ident.get("nctId", ""),
-                    title=ident.get("briefTitle", ""),
-                    condition=(conds.get("conditions") or [""])[0],
-                    phase=(design.get("phases") or [""])[0],
-                    document_text=elig.get("eligibilityCriteria", ""),
-                )
-            )
-            if len(records) >= limit:
-                break
-
-        next_token = payload.get("nextPageToken")
-        if not next_token:
-            break
-
-    return records
 
 
 def extract_text_from_pdf(path: Path) -> str:
@@ -216,6 +176,7 @@ def _build_record_from_entry(entry: dict[str, object]) -> ProtocolRecord | None:
         source=_get_optional_str(entry, "source"),
         registry_id=registry_id,
         registry_type=registry_type,
+        source_url=url or None,
     )
 
 
@@ -269,14 +230,7 @@ def main() -> None:
     import argparse
 
     parser = argparse.ArgumentParser(
-        description="Download protocols from ClinicalTrials.gov or local PDFs"
-    )
-    parser.add_argument("--query", default="oncology", help="Search condition")
-    parser.add_argument("--limit", type=int, default=50, help="Max records")
-    parser.add_argument(
-        "--local",
-        action="store_true",
-        help="Ingest protocols from local PDFs using the manifest.jsonl",
+        description="Ingest protocols from local PDFs using manifest.jsonl"
     )
     parser.add_argument(
         "--manifest-path",
@@ -284,15 +238,13 @@ def main() -> None:
         default=DEFAULT_MANIFEST_PATH,
         help="Path to manifest.jsonl for local ingestion",
     )
+    parser.add_argument("--limit", type=int, default=50, help="Max records")
     parser.add_argument("--output", type=Path, help="Output JSONL path")
     args = parser.parse_args()
 
-    if args.local:
-        records = ingest_local_protocols(args.manifest_path, args.limit)
-    else:
-        records = fetch_from_clinicaltrials(args.query, args.limit)
+    records = ingest_local_protocols(args.manifest_path, args.limit)
     emit_records(records, args.output)
-    print(f"Downloaded {len(records)} protocols")
+    print(f"Ingested {len(records)} protocols")
 
 
 if __name__ == "__main__":

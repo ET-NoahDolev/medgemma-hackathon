@@ -32,6 +32,8 @@ class Protocol(SQLModel, table=True):
     condition: str | None = None
     phase: str | None = None
     source: str | None = None
+    registry_id: str | None = None
+    registry_type: str | None = None
 
 
 class Criterion(SQLModel, table=True):
@@ -43,6 +45,9 @@ class Criterion(SQLModel, table=True):
     criterion_type: str
     confidence: float
     snomed_codes: list[str] = Field(
+        default_factory=list, sa_column=Column(JSON, nullable=False)
+    )
+    evidence_spans: list[dict[str, object]] = Field(
         default_factory=list, sa_column=Column(JSON, nullable=False)
     )
 
@@ -135,6 +140,8 @@ class Storage:
         condition: str | None = None,
         phase: str | None = None,
         source: str | None = None,
+        registry_id: str | None = None,
+        registry_type: str | None = None,
     ) -> Protocol:
         """Persist a protocol record and return it."""
         with Session(self._engine) as session:
@@ -147,6 +154,8 @@ class Storage:
                 condition=_norm_opt(condition),
                 phase=_norm_opt(phase),
                 source=_norm_opt(source),
+                registry_id=_norm_opt(registry_id),
+                registry_type=_norm_opt(registry_type),
             )
             session.add(protocol)
             session.commit()

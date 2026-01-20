@@ -1,35 +1,9 @@
 """Extraction pipeline for MedGemma Task A."""
 
 import re
-from dataclasses import dataclass
 from typing import Dict
 
-
-@dataclass
-class Criterion:
-    """Atomic inclusion/exclusion criterion extracted from a protocol.
-
-    Args:
-        text: The criterion text span.
-        criterion_type: Inclusion or exclusion label.
-        confidence: Model confidence score from 0.0 to 1.0.
-
-    Examples:
-        >>> Criterion(
-        ...     text="Age >= 18 years",
-        ...     criterion_type="inclusion",
-        ...     confidence=0.92,
-        ... )
-        Criterion(text='Age >= 18 years', criterion_type='inclusion', confidence=0.92)
-
-    Notes:
-        Evidence spans, grounding candidates, and field mappings are stored
-        downstream by the API.
-    """
-
-    text: str
-    criterion_type: str
-    confidence: float
+from shared.models import Criterion
 
 
 def extract_criteria(document_text: str) -> list[Criterion]:
@@ -65,9 +39,12 @@ def extract_criteria(document_text: str) -> list[Criterion]:
             confidence = 0.9 if section_type != "unknown" else 0.7
             criteria.append(
                 Criterion(
+                    id="",
                     text=sentence,
                     criterion_type=criterion_type,
                     confidence=confidence,
+                    snomed_codes=[],
+                    evidence_spans=[],
                 )
             )
 

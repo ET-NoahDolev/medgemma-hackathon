@@ -1,7 +1,7 @@
 import pytest
+from shared.models import Criterion
 
 from extraction_service.pipeline import (
-    Criterion,
     classify_criterion_type,
     detect_sections,
     extract_criteria,
