@@ -3,7 +3,7 @@
 import logging
 import os
 import re
-from typing import Any, Dict
+from typing import Any, Dict, Iterator
 
 from shared.models import Criterion
 
@@ -70,31 +70,57 @@ def extract_criteria_with_lora(document_text: str) -> list[Criterion]:
     return _extract_criteria_baseline(document_text)
 
 
-def _extract_criteria_baseline(document_text: str) -> list[Criterion]:
-    """Baseline extraction implementation using regex."""
+def _extract_criteria_baseline_stream(document_text: str) -> Iterator[Criterion]:
+    """Baseline extraction implementation using regex (streaming)."""
     if not document_text.strip():
         raise ValueError("document_text is required")
 
     sections = detect_sections(document_text)
-    criteria: list[Criterion] = []
-
+    
+    # Track seen text to deduplicate if needed, essentially just yielding
     for section_type, section_text in sections.items():
         sentences = split_into_candidate_sentences(section_text)
         for sentence in sentences:
             criterion_type = classify_criterion_type(sentence, section=section_type)
             confidence = 0.9 if section_type != "unknown" else 0.7
-            criteria.append(
-                Criterion(
-                    id="",
-                    text=sentence,
-                    criterion_type=criterion_type,
-                    confidence=confidence,
-                    snomed_codes=[],
-                    evidence_spans=[],
-                )
+            yield Criterion(
+                id="",
+                text=sentence,
+                criterion_type=criterion_type,
+                confidence=confidence,
+                snomed_codes=[],
+                evidence_spans=[],
             )
 
-    return criteria
+
+def _extract_criteria_baseline(document_text: str) -> list[Criterion]:
+    """Baseline extraction implementation using regex (legacy list return)."""
+    return list(_extract_criteria_baseline_stream(document_text))
+
+
+def extract_criteria_stream(document_text: str) -> Iterator[Criterion]:
+    """Stream atomic inclusion/exclusion criteria from protocol text.
+
+    Uses LoRA if available (and implemented to stream), else falls back to baseline.
+
+    Args:
+        document_text: Raw protocol text or extracted PDF text.
+
+    Yields:
+         Extracted criteria with type and confidence scores.
+    """
+    if os.getenv("USE_LORA_MODELS", "false").lower() == "true":
+        try:
+            # TODO: Make LoRA inference streaming
+            # For now, collect list and yield
+            criteria = extract_criteria_with_lora(document_text)
+            yield from criteria
+            return
+        except Exception as e:
+            logger.warning("LoRA extraction failed: %s, using baseline", e)
+
+    # Baseline implementation
+    yield from _extract_criteria_baseline_stream(document_text)
 
 
 def extract_criteria(document_text: str) -> list[Criterion]:
@@ -119,14 +145,7 @@ def extract_criteria(document_text: str) -> list[Criterion]:
         This function uses LoRA model if USE_LORA_MODELS=true and
         EXTRACTION_MODEL_PATH is set, otherwise uses baseline regex.
     """
-    if os.getenv("USE_LORA_MODELS", "false").lower() == "true":
-        try:
-            return extract_criteria_with_lora(document_text)
-        except Exception as e:
-            logger.warning("LoRA extraction failed: %s, using baseline", e)
-
-    # Baseline implementation
-    return _extract_criteria_baseline(document_text)
+    return list(extract_criteria_stream(document_text))
 
 
 def split_into_candidate_sentences(text: str) -> list[str]:

@@ -43,6 +43,17 @@ from shared.field_schema import SEMANTIC_TYPE_MAPPING
 from grounding_service.schemas import GroundingResult
 from grounding_service.umls_client import UmlsClient
 
+# Try to import mlflow (optional dependency for dev/observability)
+try:
+    import mlflow
+    MLFLOW_AVAILABLE = True
+    # database backend (SQLite)
+    mlflow.set_tracking_uri("sqlite:///mlflow.db")
+    mlflow.set_experiment("medgemma-grounding")
+except ImportError:
+    mlflow = None
+    MLFLOW_AVAILABLE = False
+
 logger = logging.getLogger(__name__)
 
 
@@ -224,15 +235,45 @@ class GroundingAgent:
         )
 
         # Get agent and invoke
+        # Get agent and invoke
         agent = self._get_agent()
-        result = await agent.ainvoke(
-            {
-                "messages": [
-                    ("system", system_prompt),
-                    ("user", user_prompt),
-                ]
-            }
-        )
+        
+        # MLflow instrumentation
+        if MLFLOW_AVAILABLE:
+            with mlflow.start_run(run_name="ground_criterion"):
+                mlflow.log_param("criterion_text", criterion_text)
+                mlflow.log_param("criterion_type", criterion_type)
+                mlflow.log_text(system_prompt, "prompt_system.txt")
+                mlflow.log_text(user_prompt, "prompt_user.txt")
+                
+                start_time = logging.time.time()
+                try:
+                    result = await agent.ainvoke(
+                        {
+                            "messages": [
+                                ("system", system_prompt),
+                                ("user", user_prompt),
+                            ]
+                        }
+                    )
+                    duration = logging.time.time() - start_time
+                    mlflow.log_metric("latency_seconds", duration)
+                    
+                    # Log raw result if serializable, or string representation
+                    mlflow.log_text(str(result), "agent_result_raw.txt")
+                except Exception as e:
+                    mlflow.log_param("error", str(e))
+                    raise e
+        else:
+            # Standard execution without tracking
+            result = await agent.ainvoke(
+                {
+                    "messages": [
+                        ("system", system_prompt),
+                        ("user", user_prompt),
+                    ]
+                }
+            )
 
         # Extract structured response
         if "structured_response" in result:

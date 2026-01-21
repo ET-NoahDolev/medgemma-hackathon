@@ -36,6 +36,9 @@ class Protocol(SQLModel, table=True):
     source: str | None = None
     registry_id: str | None = None
     registry_type: str | None = None
+    processing_status: str = Field(default="pending")  # pending, extracting, grounding, completed, failed
+    processed_count: int = Field(default=0)
+    total_estimated: int = Field(default=0)
 
 
 class Criterion(SQLModel, table=True):
@@ -177,6 +180,8 @@ class Storage:
                 source=_norm_opt(source),
                 registry_id=_norm_opt(registry_id),
                 registry_type=_norm_opt(registry_type),
+                processing_status="pending",
+                processed_count=0,
             )
             session.add(protocol)
             session.commit()
@@ -199,6 +204,8 @@ class Storage:
                 source=_norm_opt(getattr(shared, "source", None)),
                 registry_id=_norm_opt(getattr(shared, "registry_id", None)),
                 registry_type=_norm_opt(getattr(shared, "registry_type", None)),
+                processing_status="pending",
+                processed_count=0,
             )
             session.add(protocol)
             session.commit()
@@ -374,3 +381,48 @@ class Storage:
                 .order_by(cast(Any, HitlEdit.created_at))
             )
             return list(session.exec(statement))
+
+    def update_protocol_status(
+        self,
+        *,
+        protocol_id: str,
+        processing_status: str | None = None,
+        processed_count: int | None = None,
+        total_estimated: int | None = None,
+    ) -> Protocol | None:
+        """Update protocol processing status and counts."""
+        with Session(self._engine) as session:
+            protocol = session.get(Protocol, protocol_id)
+            if protocol is None:
+                return None
+            
+            if processing_status is not None:
+                protocol.processing_status = processing_status
+            if processed_count is not None:
+                protocol.processed_count = processed_count
+            if total_estimated is not None:
+                protocol.total_estimated = total_estimated
+                
+            session.add(protocol)
+            session.commit()
+            session.refresh(protocol)
+            return protocol
+
+    def add_criterion_streaming(
+        self, *, protocol_id: str, text: str, criterion_type: str, confidence: float
+    ) -> Criterion:
+        """Add a single criterion during streaming extraction."""
+        with Session(self._engine) as session:
+            criterion_id = _generate_id("crit")
+            criterion = Criterion(
+                id=criterion_id,
+                protocol_id=protocol_id,
+                text=text,
+                criterion_type=criterion_type,
+                confidence=confidence,
+                snomed_codes=[],
+            )
+            session.add(criterion)
+            session.commit()
+            session.refresh(criterion)
+            return criterion

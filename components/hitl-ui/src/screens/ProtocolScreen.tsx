@@ -390,9 +390,15 @@ export function ProtocolScreen({ protocol, onBack }: ProtocolScreenProps) {
       {/* Criteria List */}
       <ScrollArea className="flex-1 bg-transparent">
         <div className="p-6 max-w-5xl mx-auto">
-          {isLoading && criteria.length === 0 && (
-            <div className="flex items-center justify-center py-12 text-gray-600">
-              Loading criteria...
+          {/* Extraction / Loading State */}
+          {((isLoading && criteria.length === 0) || (uploaded && criteria.length === 0)) && (
+            <div className="flex flex-col items-center justify-center py-16 text-center">
+              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-teal-600 mb-4"></div>
+              <h3 className="text-lg font-medium text-gray-900">Extracting criteria...</h3>
+              <p className="text-gray-500 mt-2 max-w-sm">
+                Our AI is analyzing the protocol document to identify inclusion and exclusion criteria.
+                This usually takes 10-20 seconds.
+              </p>
             </div>
           )}
 
