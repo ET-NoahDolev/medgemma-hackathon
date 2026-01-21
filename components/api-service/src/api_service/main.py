@@ -263,6 +263,7 @@ class ProtocolListItem(BaseModel):
     condition: str | None = None
     phase: str | None = None
     processing_status: str
+    progress_message: str | None = None
     processed_count: int
     total_estimated: int
 
@@ -287,6 +288,7 @@ class ProtocolDetailResponse(BaseModel):
     phase: str | None = None
     criteria_count: int
     processing_status: str
+    progress_message: str | None = None
     processed_count: int
     total_estimated: int
 
@@ -318,9 +320,14 @@ async def _run_extraction(
     storage.update_protocol_status(
         protocol_id=protocol_id,
         processing_status="extracting",
+        progress_message="Starting extraction…",
         processed_count=0,
     )
     # Clear existing criteria first to support re-runs.
+    storage.update_protocol_status(
+        protocol_id=protocol_id,
+        progress_message="Clearing previous criteria…",
+    )
     storage.replace_criteria(protocol_id=protocol_id, extracted=[])
 
     mlflow = _start_mlflow_run(protocol_id)
@@ -331,10 +338,15 @@ async def _run_extraction(
         # calling anyio.run() inside the running event loop thread.
         use_model = os.getenv("USE_MODEL_EXTRACTION", "true").lower() == "true"
         if use_model and hasattr(extraction_pipeline, "extract_criteria_async"):
-            items = await extraction_pipeline.extract_criteria_async(document_text)  # type: ignore[attr-defined]
+            items = await extraction_pipeline.extract_criteria_async(document_text)
             iterator = iter(items)
         else:
             iterator = extraction_pipeline.extract_criteria_stream(document_text)
+
+        storage.update_protocol_status(
+            protocol_id=protocol_id,
+            progress_message="Extracting criteria…",
+        )
 
         for item in iterator:
             storage.add_criterion_streaming(
@@ -344,14 +356,17 @@ async def _run_extraction(
                 confidence=item.confidence,
             )
             count += 1
-            storage.update_protocol_status(
-                protocol_id=protocol_id,
-                processed_count=count,
-            )
+            if count == 1 or count % 5 == 0:
+                storage.update_protocol_status(
+                    protocol_id=protocol_id,
+                    processed_count=count,
+                    progress_message=f"Extracting criteria… ({count} found)",
+                )
 
         storage.update_protocol_status(
             protocol_id=protocol_id,
             processing_status="completed",
+            progress_message=f"Extraction completed ({count} criteria).",
         )
         _finish_mlflow_run(mlflow, count=count)
     except Exception:
@@ -359,6 +374,7 @@ async def _run_extraction(
         storage.update_protocol_status(
             protocol_id=protocol_id,
             processing_status="failed",
+            progress_message="Extraction failed.",
         )
         _finish_mlflow_run(mlflow, count=count, failed=True)
 
@@ -441,6 +457,10 @@ async def upload_protocol(
     protocol = storage.create_protocol(title=title, document_text=document_text)
 
     if auto_extract:
+        storage.update_protocol_status(
+            protocol_id=protocol.id,
+            progress_message="Queued for extraction…",
+        )
         # Run extraction in background to avoid blocking the response
         background_tasks.add_task(
             _run_extraction, protocol.id, protocol.document_text, storage
@@ -464,6 +484,10 @@ def extract_criteria(
     if protocol is None:
         raise HTTPException(status_code=404, detail="Protocol not found")
 
+    storage.update_protocol_status(
+        protocol_id=protocol_id,
+        progress_message="Queued for extraction…",
+    )
     # Run extraction in background to avoid blocking the response
     background_tasks.add_task(
         _run_extraction, protocol_id, protocol.document_text, storage
@@ -494,6 +518,7 @@ def list_protocols(
                 condition=protocol.condition,
                 phase=protocol.phase,
                 processing_status=getattr(protocol, "processing_status", "pending"),
+                progress_message=getattr(protocol, "progress_message", None),
                 processed_count=getattr(protocol, "processed_count", 0),
                 total_estimated=getattr(protocol, "total_estimated", 0),
             )
@@ -526,6 +551,7 @@ def get_protocol(
         phase=protocol.phase,
         criteria_count=criteria_count,
         processing_status=getattr(protocol, "processing_status", "pending"),
+        progress_message=getattr(protocol, "progress_message", None),
         processed_count=getattr(protocol, "processed_count", 0),
         total_estimated=getattr(protocol, "total_estimated", 0),
     )

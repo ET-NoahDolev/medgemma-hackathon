@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { Link, useNavigate, useParams } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { GlassButton } from '@/components/ui/glass-button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -11,7 +12,6 @@ import { useCriteria } from '@/hooks/useCriteria';
 import { useExtractCriteria } from '@/hooks/useExtractCriteria';
 import { useSubmitFeedback } from '@/hooks/useSubmitFeedback';
 import { useUpdateCriterion } from '@/hooks/useUpdateCriterion';
-import { useUploadProtocol } from '@/hooks/useUploadProtocol';
 import { useProtocol } from '@/hooks/useProtocol';
 import { MappingDisplay } from '@/features/mapping/components/MappingDisplay';
 import { EditMappingModal } from '@/features/mapping/components/EditMappingModal';
@@ -23,26 +23,12 @@ import {
   Sparkles,
   Info,
   FolderOpen,
-  ArrowLeft,
 } from 'lucide-react';
 import { LinearProgress } from '@mui/material';
 import { Timeline, TimelineConnector, TimelineContent, TimelineDot, TimelineItem, TimelineSeparator } from '@mui/lab';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { toast } from 'sonner';
-
-interface ProtocolScreenProps {
-  protocol?: {
-    id: string;
-    name: string;
-    version: string;
-    criteriaCount?: {
-      inclusion: number;
-      exclusion: number;
-    };
-  };
-  onBack?: () => void;
-}
 
 interface Criterion {
   id: string;
@@ -59,17 +45,14 @@ interface Criterion {
   } | null;
 }
 
-export function ProtocolScreen({ protocol, onBack }: ProtocolScreenProps) {
+export function ProtocolScreen() {
+  const { protocolId } = useParams();
+  const navigate = useNavigate();
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
-  const isNewProtocol =
-    !protocol || (protocol.criteriaCount?.inclusion === 0 && protocol.criteriaCount?.exclusion === 0);
-
-  const [activeProtocolId, setActiveProtocolId] = useState<string | null>(protocol?.id ?? null);
-  const [activeProtocolTitle, setActiveProtocolTitle] = useState<string>(
-    protocol?.name ?? 'New Protocol'
-  );
-  const [uploaded, setUploaded] = useState(!isNewProtocol);
+  const [activeProtocolId, setActiveProtocolId] = useState<string | null>(protocolId ?? null);
+  const [activeProtocolTitle, setActiveProtocolTitle] = useState<string>('Protocol');
+  const [uploaded, setUploaded] = useState(!!protocolId);
   const [criteria, setCriteria] = useState<Criterion[]>([]);
   const [editPanelOpen, setEditPanelOpen] = useState(false);
   const [selectedCriterion, setSelectedCriterion] = useState<Criterion | null>(null);
@@ -88,7 +71,6 @@ export function ProtocolScreen({ protocol, onBack }: ProtocolScreenProps) {
   const { data: criteriaData, isLoading, error, refetch } = useCriteria(activeProtocolId, {
     pollIntervalMs: shouldPollCriteria ? 1500 : false,
   });
-  const uploadProtocol = useUploadProtocol();
   const extractCriteria = useExtractCriteria();
   const submitFeedback = useSubmitFeedback();
   const updateCriterion = useUpdateCriterion();
@@ -125,6 +107,13 @@ export function ProtocolScreen({ protocol, onBack }: ProtocolScreenProps) {
       setActiveProtocolTitle(protocolData.title);
     }
   }, [protocolData?.title]);
+
+  useEffect(() => {
+    setActiveProtocolId(protocolId ?? null);
+    setUploaded(!!protocolId);
+    setCriteria([]);
+    setSelectedCriterion(null);
+  }, [protocolId]);
 
   // Keep existing local edits/statuses, but refresh text from API.
   useEffect(() => {
@@ -193,26 +182,6 @@ export function ProtocolScreen({ protocol, onBack }: ProtocolScreenProps) {
     fileInputRef.current?.click();
   };
 
-  const handleFileSelected = async (file: File | null) => {
-    if (!file) return;
-
-    toast.promise(
-      uploadProtocol.mutateAsync({ file, autoExtract: true }).then(resp => {
-        setActiveProtocolId(resp.protocol_id);
-        setActiveProtocolTitle(resp.title);
-        setUploaded(true);
-        setCriteria([]);
-        setSelectedCriterion(null);
-        return resp;
-      }),
-      {
-        loading: 'Uploading and processing protocol PDF...',
-        success: _data => 'Upload accepted. Extracting criteria...',
-        error: 'Failed to upload protocol',
-      }
-    );
-  };
-
   const handleRunExtraction = () => {
     if (!activeProtocolId) return;
     toast.promise(
@@ -241,91 +210,12 @@ export function ProtocolScreen({ protocol, onBack }: ProtocolScreenProps) {
   };
 
   if (!uploaded) {
-    // ... (unchanged upload view)
     return (
-      <div className="flex flex-col h-full">
-        {/* Header for new protocol */}
-        <div className="bg-white border-b border-gray-200" style={{ padding: 'var(--space-6)' }}>
-          <div className="flex items-start justify-between">
-            <div>
-              <div
-                className="flex items-center"
-                style={{ gap: 'var(--space-3)', marginBottom: 'var(--space-2)' }}
-              >
-                {onBack && (
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={onBack}
-                    className="gap-1 -ml-2"
-                    style={{ fontSize: '14px' }}
-                  >
-                    <ArrowLeft className="w-4 h-4" />
-                    Back to Protocols
-                  </Button>
-                )}
-                <FileText className="w-6 h-6 text-teal-600" />
-                <h1 className="text-gray-900">{activeProtocolTitle}</h1>
-              </div>
-              <p className="text-gray-600" style={{ fontSize: '14px' }}>
-                Upload protocol documents to extract inclusion/exclusion criteria
-              </p>
-            </div>
-          </div>
-        </div>
-
-        {/* Upload Area */}
-        <div className="flex-1 flex items-center justify-center bg-transparent">
-          <Card className="max-w-2xl w-full mx-6">
-            <CardContent
-              style={{ paddingTop: 'var(--space-12)', paddingBottom: 'var(--space-12)' }}
-              className="text-center"
-            >
-              <div
-                className="w-20 h-20 bg-teal-100 rounded-full flex items-center justify-center mx-auto"
-                style={{ marginBottom: 'var(--space-6)' }}
-              >
-                <Upload className="w-10 h-10 text-teal-600" />
-              </div>
-              <h2 className="text-gray-900" style={{ marginBottom: 'var(--space-2)' }}>
-                Upload Protocol Document
-              </h2>
-              <p
-                className="text-gray-600"
-                style={{ fontSize: '14px', marginBottom: 'var(--space-8)' }}
-              >
-                Drag and drop your protocol PDF or eCRF file to extract inclusion/exclusion criteria
-                using AI
-              </p>
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept="application/pdf"
-                className="hidden"
-                onChange={e => void handleFileSelected(e.target.files?.item(0) ?? null)}
-              />
-              <Button onClick={handleSelectFileClick} disabled={uploadProtocol.isPending}>
-                <Upload className="w-4 h-4 mr-2" />
-                Select File
-              </Button>
-              <p
-                className="text-gray-500"
-                style={{ fontSize: '12px', marginTop: 'var(--space-4)' }}
-              >
-                Supported formats: PDF, DOCX
-              </p>
-
-              <Alert className="mt-8 text-left">
-                <Info className="h-4 w-4" />
-                <AlertDescription style={{ fontSize: '14px' }}>
-                  <strong>What happens next:</strong> Our AI will analyze the document, extract all
-                  inclusion and exclusion criteria, and present them for your review with confidence
-                  scores and source evidence.
-                </AlertDescription>
-              </Alert>
-            </CardContent>
-          </Card>
-        </div>
+      <div className="flex flex-col h-full items-center justify-center text-center p-8">
+        <FileText className="w-10 h-10 text-teal-600 mb-3" />
+        <h2 className="text-gray-900 mb-1">No protocol selected</h2>
+        <p className="text-sm text-gray-600 mb-4">Go back to the protocol list to upload or select one.</p>
+        <Button onClick={() => navigate('/')}>Back to Protocols</Button>
       </div>
     );
   }
@@ -337,25 +227,17 @@ export function ProtocolScreen({ protocol, onBack }: ProtocolScreenProps) {
         <div className="flex items-start justify-between">
           <div>
             <div className="flex items-center gap-3 mb-2">
-              {onBack && (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={onBack}
-                  className="gap-1 -ml-2"
-                  style={{ fontSize: '14px' }}
-                >
-                  <ArrowLeft className="w-4 h-4" />
+              <Link to="/">
+                <Button variant="ghost" size="sm" className="gap-1 -ml-2" style={{ fontSize: '14px' }}>
                   Back to Protocols
                 </Button>
-              )}
+              </Link>
               <FileText className="w-6 h-6 text-teal-600" />
               <h1 className="font-semibold text-gray-900">
-                {protocol?.name ?? activeProtocolTitle}
+                {activeProtocolTitle}
               </h1>
             </div>
             <p className="text-sm text-gray-600">
-              {protocol?.version ? `Version ${protocol.version} • ` : ''}
               Extracted {criteria.length} criteria
             </p>
             <div className="flex gap-4 mt-3 text-sm">
@@ -414,6 +296,9 @@ export function ProtocolScreen({ protocol, onBack }: ProtocolScreenProps) {
                 criteria
               </span>
             </div>
+            {(protocolData as any).progress_message && (
+              <div className="mt-2 text-sm text-gray-600">{(protocolData as any).progress_message}</div>
+            )}
 
             <div className="mt-2">
               {protocolData.total_estimated && protocolData.total_estimated > 0 ? (

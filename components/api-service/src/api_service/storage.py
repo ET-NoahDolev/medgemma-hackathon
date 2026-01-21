@@ -39,6 +39,7 @@ class Protocol(SQLModel, table=True):
     registry_type: str | None = None
     # pending, extracting, grounding, completed, failed
     processing_status: str = Field(default="pending")
+    progress_message: str | None = None
     processed_count: int = Field(default=0)
     total_estimated: int = Field(default=0)
 
@@ -143,6 +144,11 @@ def _ensure_sqlite_protocol_progress_columns(engine: Engine) -> None:
             migrations.append(
                 "ALTER TABLE protocol ADD COLUMN processing_status "
                 "TEXT NOT NULL DEFAULT 'pending'"
+            )
+        if "progress_message" not in existing:
+            migrations.append(
+                "ALTER TABLE protocol ADD COLUMN progress_message "
+                "TEXT NULL"
             )
         if "processed_count" not in existing:
             migrations.append(
@@ -439,6 +445,7 @@ class Storage:
         *,
         protocol_id: str,
         processing_status: str | None = None,
+        progress_message: str | None = None,
         processed_count: int | None = None,
         total_estimated: int | None = None,
     ) -> Protocol | None:
@@ -450,6 +457,8 @@ class Storage:
 
             if processing_status is not None:
                 protocol.processing_status = processing_status
+            if progress_message is not None:
+                protocol.progress_message = progress_message
             if processed_count is not None:
                 protocol.processed_count = processed_count
             if total_estimated is not None:
