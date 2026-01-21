@@ -13,7 +13,7 @@ from inference.config import AgentConfig
 
 
 def create_model_loader(config: AgentConfig | None = None) -> Callable[[], Any]:
-    """Create a lazy MedGemma model loader.
+    """Create a lazy MedGemma model loader for the configured backend.
 
     Args:
         config: Agent configuration. Defaults to `AgentConfig.from_env()`.
@@ -22,6 +22,73 @@ def create_model_loader(config: AgentConfig | None = None) -> Callable[[], Any]:
         Callable that loads and returns a LangChain chat model when invoked.
     """
     cfg = config or AgentConfig.from_env()
+    if cfg.backend == "vertex":
+        return _create_vertex_model_loader(cfg)
+    return _create_local_model_loader(cfg)
+
+
+def _create_vertex_model_loader(cfg: AgentConfig) -> Callable[[], Any]:
+    """Create a lazy Vertex AI endpoint model loader.
+
+    This loader expects Application Default Credentials (ADC) to be available
+    (e.g., via `gcloud auth application-default login`).
+
+    Raises:
+        ValueError: If required Vertex configuration is missing.
+        ImportError: If Vertex dependencies are not installed.
+    """
+    project_id = (cfg.gcp_project_id or "").strip()
+    region = (cfg.gcp_region or "").strip()
+    endpoint_id = (cfg.vertex_endpoint_id or "").strip()
+
+    if not project_id:
+        raise ValueError("GCP_PROJECT_ID is required when MODEL_BACKEND=vertex")
+    if not region:
+        raise ValueError("GCP_REGION is required when MODEL_BACKEND=vertex")
+    if not endpoint_id:
+        raise ValueError("VERTEX_ENDPOINT_ID is required when MODEL_BACKEND=vertex")
+
+    cache: list[Any] = []
+
+    def load_model() -> Any:
+        if cache:
+            return cache[0]
+
+        try:
+            import vertexai  # type: ignore[import-not-found]
+        except ImportError as exc:  # pragma: no cover
+            raise ImportError(
+                "Vertex AI backend requires google-cloud-aiplatform installed."
+            ) from exc
+
+        try:
+            from langchain_google_vertexai import (  # type: ignore[import-not-found]
+                ChatVertexAI,
+            )
+        except ImportError as exc:  # pragma: no cover
+            raise ImportError(
+                "Vertex AI backend requires langchain-google-vertexai installed."
+            ) from exc
+
+        vertexai.init(project=project_id, location=region)
+        endpoint_resource_name = (
+            f"projects/{project_id}/locations/{region}/endpoints/{endpoint_id}"
+        )
+
+        # Note: model_path/quantization are ignored for Vertex endpoints.
+        model = ChatVertexAI(
+            model_name=endpoint_resource_name,
+            max_output_tokens=cfg.max_new_tokens,
+        )
+
+        cache.append(model)
+        return model
+
+    return load_model
+
+
+def _create_local_model_loader(cfg: AgentConfig) -> Callable[[], Any]:
+    """Create a lazy local HuggingFace pipeline model loader."""
     cache: list[Any] = []
 
     def load_model() -> Any:
@@ -40,7 +107,7 @@ def create_model_loader(config: AgentConfig | None = None) -> Callable[[], Any]:
                 from huggingface_hub import login  # type: ignore[import-not-found]
 
                 login(token=hf_token, add_to_git_credential=False)
-            except Exception:
+            except (ImportError, OSError, RuntimeError, ValueError):
                 # If login fails, continue anyway - token is in env vars
                 pass
 
@@ -67,7 +134,9 @@ def create_model_loader(config: AgentConfig | None = None) -> Callable[[], Any]:
         # Check if model is already cached to avoid re-downloading
         model_cached = False
         try:
-            from huggingface_hub import try_to_load_from_cache  # type: ignore[import-not-found]
+            from huggingface_hub import (  # type: ignore[import-not-found]
+                try_to_load_from_cache,
+            )
 
             # Check for key files that indicate model is cached
             config_path = try_to_load_from_cache(
@@ -75,7 +144,7 @@ def create_model_loader(config: AgentConfig | None = None) -> Callable[[], Any]:
             )
             # If config exists, assume model files are cached (transformers handles this)
             model_cached = config_path is not None
-        except Exception:
+        except (ImportError, OSError, RuntimeError, ValueError):
             # If cache check fails, proceed with normal download
             model_cached = False
 
@@ -115,9 +184,10 @@ def create_model_loader(config: AgentConfig | None = None) -> Callable[[], Any]:
                 pipeline_kwargs=pipeline_kwargs_base,
                 **extra_kwargs,
             )
-        except Exception as e:
+        except (OSError, RuntimeError, ValueError) as exc:
             # If local_files_only=True failed (e.g., missing files), retry without it
-            if model_cached and ("local_files_only" in str(e).lower() or "not found" in str(e).lower()):
+            lowered = str(exc).lower()
+            if model_cached and ("local_files_only" in lowered or "not found" in lowered):
                 # Remove local_files_only and retry (will download missing files)
                 extra_kwargs.pop("local_files_only", None)
                 llm = HuggingFacePipeline.from_model_id(

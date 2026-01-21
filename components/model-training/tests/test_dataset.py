@@ -1,7 +1,14 @@
 # components/model-training/tests/test_dataset.py
-import pytest
 import json
-from model_training.dataset import load_training_data, format_extraction_prompt, format_grounding_prompt
+
+import pytest
+
+from model_training.dataset import (
+    format_extraction_prompt,
+    format_for_vertex,
+    format_grounding_prompt,
+    load_training_data,
+)
 
 @pytest.fixture
 def sample_data(tmp_path):
@@ -73,3 +80,28 @@ def test_format_grounding_prompt_no_codes():
     
     assert "SNOMED codes: None" in prompt
     assert "Field mapping: None" in prompt
+
+
+def test_format_for_vertex_extraction() -> None:
+    example = {"criterion_text": "Age >= 18", "criterion_type": "inclusion"}
+    formatted = format_for_vertex(example)
+    assert "messages" in formatted
+    messages = formatted["messages"]
+    assert messages[0]["role"] == "system"
+    assert messages[1]["role"] == "user"
+    assert "Criterion text: Age >= 18" in messages[1]["content"]
+    assert messages[2]["role"] == "assistant"
+    assert "Type: inclusion" in messages[2]["content"]
+
+
+def test_format_for_vertex_grounding() -> None:
+    example = {
+        "criterion_text": "Age >= 18",
+        "criterion_type": "inclusion",
+        "snomed_codes": ["12345"],
+        "field_mapping": "demographics.age|>=|18",
+    }
+    formatted = format_for_vertex(example)
+    messages = formatted["messages"]
+    assert "SNOMED codes: 12345" in messages[2]["content"]
+    assert "Field mapping: demographics.age|>=|18" in messages[2]["content"]

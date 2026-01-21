@@ -78,7 +78,7 @@ Type: {example['criterion_type']}
 <|im_end|>"""
     return {"text": prompt}
 
-def format_grounding_prompt(example: dict) -> dict:
+def format_grounding_prompt(example: dict[str, Any]) -> dict[str, str]:
     """Format prompt for the grounding task (Task B).
 
     Args:
@@ -108,3 +108,83 @@ SNOMED codes: {snomed_str}
 Field mapping: {mapping_str}
 <|im_end|>"""
     return {"text": prompt}
+
+
+def format_for_vertex(example: dict[str, Any]) -> dict[str, Any]:
+    """Format an example into Vertex AI SFT JSONL format.
+
+    Vertex managed tuning expects each JSONL line to include a `messages` array
+    with role/content objects. This helper supports our two main tasks:
+    - extraction (Task A)
+    - grounding (Task B)
+
+    The output is suitable for writing to JSONL and uploading to GCS.
+
+    Args:
+        example: An example dictionary. For extraction, must include
+            `criterion_text` and `criterion_type`. For grounding, it should also
+            include `snomed_codes` and `field_mapping`.
+
+    Returns:
+        Dict with a single key `messages` containing the conversation.
+    """
+    if "snomed_codes" in example or "field_mapping" in example:
+        return _format_grounding_for_vertex(example)
+    return _format_extraction_for_vertex(example)
+
+
+def _format_extraction_for_vertex(example: dict[str, Any]) -> dict[str, Any]:
+    if not str(example.get("criterion_text", "")).strip():
+        raise ValueError("criterion_text is required for extraction examples")
+    if not str(example.get("criterion_type", "")).strip():
+        raise ValueError("criterion_type is required for extraction examples")
+
+    return {
+        "messages": [
+            {
+                "role": "system",
+                "content": (
+                    "You are a clinical trial criteria extraction assistant. "
+                    "Extract and classify the criterion."
+                ),
+            },
+            {"role": "user", "content": f"Criterion text: {example['criterion_text']}"},
+            {"role": "assistant", "content": f"Type: {example['criterion_type']}"},
+        ]
+    }
+
+
+def _format_grounding_for_vertex(example: dict[str, Any]) -> dict[str, Any]:
+    if not str(example.get("criterion_text", "")).strip():
+        raise ValueError("criterion_text is required for grounding examples")
+    if not str(example.get("criterion_type", "")).strip():
+        raise ValueError("criterion_type is required for grounding examples")
+
+    snomed_codes = example.get("snomed_codes") or []
+    snomed_str = ", ".join(snomed_codes) if isinstance(snomed_codes, list) else str(snomed_codes)
+    if not snomed_str.strip():
+        snomed_str = "None"
+    mapping_str = str(example.get("field_mapping") or "None")
+
+    return {
+        "messages": [
+            {
+                "role": "system",
+                "content": (
+                    "You are a clinical terminology mapping assistant. "
+                    "Map the criterion to SNOMED codes and field mappings."
+                ),
+            },
+            {
+                "role": "user",
+                "content": (
+                    f"Criterion: {example['criterion_text']}\n"
+                    f"Type: {example['criterion_type']}"
+                ),
+            },
+            {
+                "role": "assistant",
+                "content": f"SNOMED codes: {snomed_str}\nField mapping: {mapping_str}",
+            },
+        ]
+    }

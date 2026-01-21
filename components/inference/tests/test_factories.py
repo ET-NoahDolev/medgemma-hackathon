@@ -4,11 +4,17 @@ from inference import AgentConfig, create_model_loader, create_react_agent
 
 
 def test_agent_config_from_env_defaults(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("MODEL_BACKEND", raising=False)
+    monkeypatch.delenv("MEDGEMMA_BACKEND", raising=False)
     monkeypatch.delenv("MEDGEMMA_MODEL_PATH", raising=False)
     monkeypatch.delenv("MEDGEMMA_QUANTIZATION", raising=False)
     monkeypatch.delenv("MEDGEMMA_MAX_TOKENS", raising=False)
+    monkeypatch.delenv("GCP_PROJECT_ID", raising=False)
+    monkeypatch.delenv("GCP_REGION", raising=False)
+    monkeypatch.delenv("VERTEX_ENDPOINT_ID", raising=False)
 
     cfg = AgentConfig.from_env()
+    assert cfg.backend in {"local", "vertex"}
     assert cfg.model_path
     assert cfg.quantization
     assert cfg.max_new_tokens > 0
@@ -19,6 +25,17 @@ def test_create_model_loader_is_lazy(monkeypatch: pytest.MonkeyPatch) -> None:
     cfg = AgentConfig(model_path="google/medgemma-4b-it", quantization="none")
     loader = create_model_loader(cfg)
     assert callable(loader)
+
+
+def test_create_model_loader_vertex_requires_env() -> None:
+    cfg = AgentConfig(
+        backend="vertex",
+        gcp_project_id="",
+        gcp_region="europe-west4",
+        vertex_endpoint_id="123",
+    )
+    with pytest.raises(ValueError, match="GCP_PROJECT_ID"):
+        create_model_loader(cfg)
 
 
 @pytest.mark.asyncio
