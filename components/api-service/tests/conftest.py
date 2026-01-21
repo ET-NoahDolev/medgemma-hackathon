@@ -90,6 +90,9 @@ def fake_services(monkeypatch: pytest.MonkeyPatch) -> FakeServicesState:
     def _extract_criteria_stream(_text: str):
         yield from state.extracted
 
+    async def _extract_criteria_async(_text: str):
+        return state.extracted
+
     class FakeUmlsClient:
         def __init__(
             self,
@@ -128,6 +131,11 @@ def fake_services(monkeypatch: pytest.MonkeyPatch) -> FakeServicesState:
         api_main_any.extraction_pipeline,
         "extract_criteria_stream",
         _extract_criteria_stream,
+    )
+    monkeypatch.setattr(
+        api_main_any.extraction_pipeline,
+        "extract_criteria_async",
+        _extract_criteria_async,
     )
     monkeypatch.setattr(api_main_any.umls_client, "UmlsClient", FakeUmlsClient)
     monkeypatch.setattr(

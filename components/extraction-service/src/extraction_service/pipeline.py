@@ -20,6 +20,27 @@ from shared.models import Criterion
 
 logger = logging.getLogger(__name__)
 
+
+def _criteria_from_extraction_result(result: Any) -> list[Criterion]:
+    """Convert an ExtractionResult-like object into Criterion list."""
+    extracted: list[Criterion] = []
+    for item in getattr(result, "criteria", []) or []:
+        text = _normalize_candidate(getattr(item, "text", ""))
+        if not is_valid_criterion_candidate(text):
+            continue
+        extracted.append(
+            Criterion(
+                id="",
+                text=text,
+                criterion_type=getattr(item, "criterion_type", "inclusion"),
+                confidence=float(getattr(item, "confidence", 0.75)),
+                snomed_codes=[],
+                evidence_spans=[],
+            )
+        )
+    return extracted
+
+
 @dataclass(frozen=True)
 class ExtractionConfig:
     """Configuration for extraction.
@@ -95,6 +116,30 @@ class ExtractionPipeline:
 
         yield from _extract_criteria_baseline_stream(document_text)
 
+    async def extract_criteria_async(self, document_text: str) -> list[Criterion]:
+        """Extract criteria using async model invocation when available.
+
+        This is the preferred entrypoint when already running inside an asyncio loop
+        (e.g., FastAPI background tasks). It avoids calling `anyio.run()`, which
+        raises "Already running asyncio in this thread".
+        """
+        if not document_text.strip():
+            raise ValueError("document_text is required")
+
+        if not self.config.use_model:
+            return _extract_criteria_baseline(document_text)
+
+        try:
+            agent = self._get_extract_agent()
+            result = await agent({"document_text": document_text})
+            extracted = _criteria_from_extraction_result(result)
+            if extracted:
+                return extracted
+        except Exception as exc:
+            logger.warning("Model extraction failed; using baseline: %s", exc)
+
+        return _extract_criteria_baseline(document_text)
+
     def extract_criteria(self, document_text: str) -> list[Criterion]:
         """Extract atomic inclusion/exclusion criteria from protocol text."""
         if not document_text.strip():
@@ -113,22 +158,7 @@ class ExtractionPipeline:
             result: ExtractionResult = run(  # type: ignore[no-untyped-call]
                 agent, {"document_text": document_text}
             )
-
-            extracted: list[Criterion] = []
-            for item in result.criteria:
-                text = _normalize_candidate(item.text)
-                if not is_valid_criterion_candidate(text):
-                    continue
-                extracted.append(
-                    Criterion(
-                        id="",
-                        text=text,
-                        criterion_type=item.criterion_type,
-                        confidence=item.confidence,
-                        snomed_codes=[],
-                        evidence_spans=[],
-                    )
-                )
+            extracted = _criteria_from_extraction_result(result)
             if extracted:
                 return extracted
         except Exception as exc:
@@ -205,6 +235,11 @@ def extract_criteria(document_text: str) -> list[Criterion]:
         uses the baseline regex extractor.
     """
     return get_extraction_pipeline().extract_criteria(document_text)
+
+
+async def extract_criteria_async(document_text: str) -> list[Criterion]:
+    """Async variant of `extract_criteria` for callers already in an event loop."""
+    return await get_extraction_pipeline().extract_criteria_async(document_text)
 
 
 _PIPELINE: ExtractionPipeline | None = None

@@ -15,8 +15,8 @@ except ImportError:  # pragma: no cover
 try:
     from transformers import AutoModelForCausalLM, AutoTokenizer  # type: ignore[import-not-found]
 except ImportError:  # pragma: no cover
-    AutoModelForCausalLM = None  # type: ignore[assignment]
-    AutoTokenizer = None  # type: ignore[assignment]
+    AutoModelForCausalLM: Any | None = None  # type: ignore[assignment, no-redef]
+    AutoTokenizer: Any | None = None  # type: ignore[assignment, no-redef]
 
 
 class TaskType(str, Enum):

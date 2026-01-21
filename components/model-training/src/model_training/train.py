@@ -11,9 +11,9 @@ try:
         TrainingArguments as _HfTrainingArguments,
     )
 except ImportError:  # pragma: no cover
-    Trainer = object  # type: ignore[assignment]
-    DataCollatorForLanguageModeling = object  # type: ignore[assignment]
-    _HfTrainingArguments = None  # type: ignore[assignment]
+    Trainer: Any = object  # type: ignore[assignment, no-redef]
+    DataCollatorForLanguageModeling: Any = object  # type: ignore[assignment, no-redef]
+    _HfTrainingArguments: Any | None = None  # type: ignore[assignment, no-redef]
 
 from model_training.dataset import Dataset
 

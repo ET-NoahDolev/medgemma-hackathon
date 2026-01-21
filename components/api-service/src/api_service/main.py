@@ -327,7 +327,16 @@ async def _run_extraction(
 
     count = 0
     try:
-        for item in extraction_pipeline.extract_criteria_stream(document_text):
+        # Prefer async extraction when model extraction is enabled to avoid
+        # calling anyio.run() inside the running event loop thread.
+        use_model = os.getenv("USE_MODEL_EXTRACTION", "true").lower() == "true"
+        if use_model and hasattr(extraction_pipeline, "extract_criteria_async"):
+            items = await extraction_pipeline.extract_criteria_async(document_text)  # type: ignore[attr-defined]
+            iterator = iter(items)
+        else:
+            iterator = extraction_pipeline.extract_criteria_stream(document_text)
+
+        for item in iterator:
             storage.add_criterion_streaming(
                 protocol_id=protocol_id,
                 text=item.text,
