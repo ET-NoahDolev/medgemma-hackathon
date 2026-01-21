@@ -4,12 +4,14 @@ version = "0.1.0"
 description = "shared component"
 readme = "README.md"
 requires-python = ">=3.12"
+dependencies = []
 
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
-dependencies = [
-]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/shared"]
 
 [dependency-groups]
 dev = [
