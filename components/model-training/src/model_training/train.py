@@ -1,11 +1,44 @@
 # components/model-training/src/model_training/train.py
-from typing import Optional
-from transformers import Trainer, TrainingArguments, DataCollatorForLanguageModeling, PreTrainedModel, PreTrainedTokenizer
-from datasets import Dataset
+from __future__ import annotations
+
+from dataclasses import dataclass
+from typing import Any, Optional, Protocol
+
+try:
+    from transformers import (  # type: ignore[import-not-found]
+        DataCollatorForLanguageModeling,
+        Trainer,
+        TrainingArguments as _HfTrainingArguments,
+    )
+except ImportError:  # pragma: no cover
+    Trainer = object  # type: ignore[assignment]
+    DataCollatorForLanguageModeling = object  # type: ignore[assignment]
+    _HfTrainingArguments = None  # type: ignore[assignment]
+
+from model_training.dataset import Dataset
+
+
+class _HasDevice(Protocol):
+    device: Any
+
+
+@dataclass
+class TrainingArguments:
+    """Fallback TrainingArguments for tests when transformers isn't installed."""
+
+    output_dir: str
+    num_train_epochs: int
+    per_device_train_batch_size: int
+    gradient_accumulation_steps: int
+    learning_rate: float
+    warmup_steps: int
+    logging_steps: int
+    save_steps: int
+    fp16: bool
 
 def train_model(
-    model: PreTrainedModel,
-    tokenizer: PreTrainedTokenizer,
+    model: Any,
+    tokenizer: Any,
     train_dataset: Dataset,
     output_dir: str,
     num_epochs: int = 3,
@@ -25,20 +58,33 @@ def train_model(
         eval_dataset: Optional evaluation dataset.
         learning_rate: Learning rate.
     """
-    training_args = TrainingArguments(
-        output_dir=output_dir,
-        num_train_epochs=num_epochs,
-        per_device_train_batch_size=batch_size,
-        gradient_accumulation_steps=4,
-        learning_rate=learning_rate,
-        warmup_steps=100,
-        logging_steps=10,
-        save_steps=500,
-        fp16=True,
-    )
-    
+    if _HfTrainingArguments is not None:
+        training_args: Any = _HfTrainingArguments(
+            output_dir=output_dir,
+            num_train_epochs=num_epochs,
+            per_device_train_batch_size=batch_size,
+            gradient_accumulation_steps=4,
+            learning_rate=learning_rate,
+            warmup_steps=100,
+            logging_steps=10,
+            save_steps=500,
+            fp16=True,
+        )
+    else:
+        training_args = TrainingArguments(
+            output_dir=output_dir,
+            num_train_epochs=num_epochs,
+            per_device_train_batch_size=batch_size,
+            gradient_accumulation_steps=4,
+            learning_rate=learning_rate,
+            warmup_steps=100,
+            logging_steps=10,
+            save_steps=500,
+            fp16=True,
+        )
+
     data_collator = DataCollatorForLanguageModeling(tokenizer, mlm=False)
-    
+
     trainer = Trainer(
         model=model,
         args=training_args,
@@ -46,6 +92,11 @@ def train_model(
         eval_dataset=eval_dataset,
         data_collator=data_collator,
     )
-    
+
     trainer.train()
     trainer.save_model(output_dir)
+
+
+def _legacy_train_model_removed() -> None:  # pragma: no cover
+    """Placeholder to keep file structure stable."""
+    return None

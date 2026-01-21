@@ -14,7 +14,7 @@ from dotenv import find_dotenv, load_dotenv
 from grounding_service.umls_client import UmlsClient
 
 # Load .env from repo root (find_dotenv walks up to find it)
-load_dotenv(find_dotenv())
+load_dotenv(find_dotenv(), override=True)
 
 pytestmark = [pytest.mark.integration]
 

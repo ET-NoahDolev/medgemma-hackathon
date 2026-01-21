@@ -1,5 +1,4 @@
 # components/model-training/tests/test_train.py
-import pytest
 from unittest.mock import patch, MagicMock
 from model_training.train import train_model
 

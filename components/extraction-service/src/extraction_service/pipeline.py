@@ -29,8 +29,11 @@ def _load_model() -> tuple[Any, Any] | tuple[None, None]:
         return None, None
 
     try:
-        from transformers import AutoModelForCausalLM, AutoTokenizer
-        from peft import PeftModel
+        from peft import PeftModel  # type: ignore[import-not-found]
+        from transformers import (  # type: ignore[import-not-found]
+            AutoModelForCausalLM,
+            AutoTokenizer,
+        )
 
         base_model = "google/medgemma-4b-it"
         _tokenizer = AutoTokenizer.from_pretrained(base_model)

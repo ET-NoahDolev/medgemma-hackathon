@@ -22,7 +22,7 @@ def export_training_data(examples: List[TrainingExample], output_path: Path) -> 
         output_path: Path to output JSONL file.
     """
     output_path.parent.mkdir(parents=True, exist_ok=True)
-    
+
     lines = [json.dumps(asdict(ex)) for ex in examples]
     output_path.write_text("\n".join(lines) + "\n")
 
@@ -37,11 +37,10 @@ def export_from_database(db_path: str, output_path: Path) -> int:
     Returns:
         Number of examples exported.
     """
-    from sqlalchemy import create_engine
-    from sqlmodel import Session, select
-
     # Import storage models (api-service is now a proper dependency)
     from api_service.storage import Criterion, HitlEdit
+    from sqlalchemy import create_engine
+    from sqlmodel import Session, select
 
     engine = create_engine(f"sqlite:///{db_path}")
     examples: List[TrainingExample] = []

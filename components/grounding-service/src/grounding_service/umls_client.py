@@ -247,7 +247,7 @@ class UmlsClient:
             return cached
 
         url = f"{self.base_url.rstrip('/')}/content/current/CUI/{cui}"
-        params: dict[str, str] = {
+        params: dict[str, str | int] = {
             "apiKey": self.api_key or "",
         }
 

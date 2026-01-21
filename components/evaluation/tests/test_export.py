@@ -1,8 +1,7 @@
 # components/evaluation/tests/test_export.py
-import pytest
 import json
-from pathlib import Path
-from evaluation.export import export_training_data, TrainingExample
+
+from evaluation.export import TrainingExample, export_training_data
 
 
 class TestExportTrainingData:
@@ -27,7 +26,12 @@ class TestExportTrainingData:
     def test_each_line_is_valid_json(self, tmp_path):
         output = tmp_path / "train.jsonl"
         examples = [
-            TrainingExample(criterion_text=f"Criterion {i}", criterion_type="inclusion", snomed_codes=[], field_mapping=None)
+            TrainingExample(
+                criterion_text=f"Criterion {i}",
+                criterion_type="inclusion",
+                snomed_codes=[],
+                field_mapping=None,
+            )
             for i in range(5)
         ]
 

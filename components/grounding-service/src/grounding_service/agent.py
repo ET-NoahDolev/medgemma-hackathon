@@ -5,11 +5,39 @@ import os
 from pathlib import Path
 from typing import Any
 
-import torch
 from jinja2 import Environment, FileSystemLoader
-from langchain_core.tools import tool
-from langchain_huggingface import ChatHuggingFace, HuggingFacePipeline
-from langgraph.prebuilt import create_react_agent
+
+try:
+    from langchain_core.tools import tool  # type: ignore[import-not-found]
+except ImportError:  # pragma: no cover
+    # Minimal fallback so this module can be imported without LangChain installed.
+    def _tool(func=None, **_kwargs):  # type: ignore[no-redef]
+        if func is None:
+            return lambda f: f
+        return func
+
+    tool = _tool  # type: ignore[assignment]
+
+try:
+    from langchain_huggingface import (  # type: ignore[import-not-found]
+        ChatHuggingFace,
+        HuggingFacePipeline,
+    )
+except ImportError:  # pragma: no cover
+    ChatHuggingFace = Any  # type: ignore[assignment]
+    HuggingFacePipeline = Any  # type: ignore[assignment]
+
+try:
+    from langgraph.prebuilt import create_react_agent  # type: ignore[import-not-found]
+except ImportError:  # pragma: no cover
+    def _create_react_agent(*_args: Any, **_kwargs: Any) -> Any:  # type: ignore[no-redef]
+        raise ImportError(
+            "LangGraph is required for GroundingAgent. Install grounding-service "
+            "ML dependencies to enable AI grounding."
+        )
+
+    create_react_agent = _create_react_agent  # type: ignore[assignment]
+
 from shared.field_schema import SEMANTIC_TYPE_MAPPING
 
 from grounding_service.schemas import GroundingResult
@@ -105,13 +133,27 @@ class GroundingAgent:
         prompts_dir = Path(__file__).parent / "prompts"
         self.jinja_env = Environment(loader=FileSystemLoader(str(prompts_dir)))
 
-        # Load model
-        self.model = self._load_model()
+        # Lazy-load the model (keeps tests lightweight if ML deps aren't installed)
+        self.model: Any | None = None
         self.agent = None
 
-    def _load_model(self) -> ChatHuggingFace:
+    def _load_model(self) -> Any:
         """Load MedGemma model with appropriate quantization."""
-        from transformers import BitsAndBytesConfig
+        try:
+            import torch  # type: ignore[import-not-found]
+        except ImportError as e:  # pragma: no cover
+            raise ImportError(
+                "Torch is required to load MedGemma. Install grounding-service ML "
+                "dependencies to enable AI grounding."
+            ) from e
+
+        if HuggingFacePipeline is Any or ChatHuggingFace is Any:  # type: ignore[comparison-overlap]
+            raise ImportError(
+                "LangChain HuggingFace integration is required to load MedGemma. "
+                "Install grounding-service ML dependencies to enable AI grounding."
+            )
+
+        from transformers import BitsAndBytesConfig  # type: ignore[import-not-found]
 
         model_kwargs: dict[str, Any] = {
             "device_map": "auto",
@@ -141,12 +183,18 @@ class GroundingAgent:
             logger.error("Error loading model: %s", e)
             raise
 
+    def _get_model(self) -> Any:
+        """Get or lazily load the underlying model."""
+        if self.model is None:
+            self.model = self._load_model()
+        return self.model
+
     def _get_agent(self) -> Any:
         """Get or create the ReAct agent."""
         if self.agent is None:
             tools = [search_concepts_tool, get_semantic_type_tool]
             self.agent = create_react_agent(
-                model=self.model,
+                model=self._get_model(),
                 tools=tools,
                 response_format=GroundingResult,
             )

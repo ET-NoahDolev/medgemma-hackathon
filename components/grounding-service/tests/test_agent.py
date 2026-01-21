@@ -1,6 +1,5 @@
 """Tests for grounding agent."""
 
-import os
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -91,7 +90,7 @@ def test_get_grounding_agent_singleton():
 
 
 @pytest.mark.asyncio
-async def test_search_concepts_tool():
+async def test_search_concepts_tool(monkeypatch: pytest.MonkeyPatch) -> None:
     """Test the search_concepts_tool LangChain tool."""
     from grounding_service.agent import search_concepts_tool
 
@@ -106,8 +105,12 @@ async def test_search_concepts_tool():
         mock_client.search_snomed.return_value = [mock_candidate]
         mock_client_class.return_value = mock_client
 
-        os.environ["UMLS_API_KEY"] = "test-key"
-        result = search_concepts_tool.invoke({"term": "test", "limit": 5})
+        monkeypatch.setenv("UMLS_API_KEY", "test-key")
+        if hasattr(search_concepts_tool, "invoke"):
+            result = search_concepts_tool.invoke({"term": "test", "limit": 5})
+        else:
+            # When LangChain isn't installed, our fallback @tool decorator is a no-op.
+            result = search_concepts_tool(term="test", limit=5)
 
         import json
 
@@ -117,7 +120,7 @@ async def test_search_concepts_tool():
 
 
 @pytest.mark.asyncio
-async def test_get_semantic_type_tool():
+async def test_get_semantic_type_tool(monkeypatch: pytest.MonkeyPatch) -> None:
     """Test the get_semantic_type_tool LangChain tool."""
     from grounding_service.agent import get_semantic_type_tool
 
@@ -128,8 +131,11 @@ async def test_get_semantic_type_tool():
         mock_client.get_semantic_types.return_value = ["T032", "T081"]
         mock_client_class.return_value = mock_client
 
-        os.environ["UMLS_API_KEY"] = "test-key"
-        result = get_semantic_type_tool.invoke({"cui": "C123456"})
+        monkeypatch.setenv("UMLS_API_KEY", "test-key")
+        if hasattr(get_semantic_type_tool, "invoke"):
+            result = get_semantic_type_tool.invoke({"cui": "C123456"})
+        else:
+            result = get_semantic_type_tool(cui="C123456")
 
         import json
 

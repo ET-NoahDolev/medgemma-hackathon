@@ -9,7 +9,7 @@ import logging
 import os
 from typing import Any
 
-from fastmcp import FastMCP
+from fastmcp import FastMCP  # type: ignore[import-not-found]
 
 from grounding_service.umls_client import UmlsClient
 

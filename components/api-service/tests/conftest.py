@@ -46,7 +46,8 @@ class FakeServicesState:
 @pytest.fixture()
 def client(monkeypatch: pytest.MonkeyPatch) -> TestClient:
     reset_storage()
-    monkeypatch.setenv("UMLS_API_KEY", "test-key")
+    # Avoid clobbering a real UMLS_API_KEY loaded from repo root .env.
+    monkeypatch.setenv("GROUNDING_SERVICE_UMLS_API_KEY", "test-key")
     return TestClient(app)
 
 

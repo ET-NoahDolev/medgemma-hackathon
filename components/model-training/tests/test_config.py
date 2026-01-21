@@ -1,8 +1,6 @@
 # components/model-training/tests/test_config.py
-import pytest
 from unittest.mock import patch, MagicMock
 from model_training.config import get_lora_config, load_model_and_tokenizer
-from peft import TaskType
 
 def test_get_lora_config():
     config = get_lora_config(r=16, alpha=32, dropout=0.05)
@@ -10,7 +8,8 @@ def test_get_lora_config():
     assert config.r == 16
     assert config.lora_alpha == 32
     assert config.lora_dropout == 0.05
-    assert config.task_type == TaskType.CAUSAL_LM
+    # Works with real peft TaskType or our fallback TaskType enum.
+    assert str(config.task_type) in {"TaskType.CAUSAL_LM", "CAUSAL_LM"}
     assert "q_proj" in config.target_modules
 
 @patch("model_training.config.AutoTokenizer")

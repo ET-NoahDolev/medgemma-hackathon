@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import os
 import tempfile
 from collections.abc import AsyncIterator
@@ -35,9 +36,6 @@ from api_service.storage import Storage, init_db, reset_storage
 
 # Load .env from repo root (find_dotenv walks up to find it)
 load_dotenv(find_dotenv())
-
-# Setup logging
-import logging
 
 logger = logging.getLogger(__name__)
 

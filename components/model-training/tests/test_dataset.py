@@ -1,7 +1,6 @@
 # components/model-training/tests/test_dataset.py
 import pytest
 import json
-from pathlib import Path
 from model_training.dataset import load_training_data, format_extraction_prompt, format_grounding_prompt
 
 @pytest.fixture

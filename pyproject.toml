@@ -29,6 +29,7 @@ dependencies = [
     "python-dotenv>=1.2.1",
     "diskcache>=5.6.3",
     "platformdirs>=4.5.1",
+    "torch>=2.9.1",
 ]
 
 [dependency-groups]
@@ -54,7 +55,7 @@ members = [
 ]
 
 [tool.mypy]
-exclude = "^(site|components/.*/tests)/"
+exclude = "^(site|components/.*/tests|instructions|notebooks)/"
 
 [[tool.mypy.overrides]]
 module = "fastapi"
@@ -99,6 +100,26 @@ module = [
 ]
 ignore_missing_imports = true
 
+[[tool.mypy.overrides]]
+module = [
+    "datasets",
+    "datasets.*",
+    "fastmcp",
+    "langchain_core",
+    "langchain_core.*",
+    "langchain_huggingface",
+    "langchain_huggingface.*",
+    "langgraph",
+    "langgraph.*",
+    "peft",
+    "peft.*",
+    "torch",
+    "torch.*",
+    "transformers",
+    "transformers.*",
+]
+ignore_missing_imports = true
+
 [tool.pytest.ini_options]
 testpaths = ["components"]
 norecursedirs = ["site", "docs", ".venv", "venv", ".uv_cache", "node_modules", ".git"]
@@ -112,8 +133,10 @@ pythonpath = [
     "components/evaluation/src",
     "components/extraction-service/src",
     "components/grounding-service/src",
+    "components/model-training/src",
     "components/shared/src",
 ]
+asyncio_mode = "auto"
 addopts = "--cov=api_service --cov=data_pipeline --cov=evaluation --cov=extraction_service --cov=grounding_service --cov=shared --cov-branch --cov-report=term-missing"
 
 [tool.coverage.run]
