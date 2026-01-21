@@ -15,7 +15,7 @@ from grounding_service.umls_client import UmlsClient
 
 logger = logging.getLogger(__name__)
 
-mcp = FastMCP("UMLS Tools")
+mcp: FastMCP = FastMCP("UMLS Tools")
 
 
 @mcp.tool()

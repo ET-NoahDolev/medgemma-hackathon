@@ -113,3 +113,31 @@ class TestExtractCriteria:
     def test_no_criteria_returns_empty(self) -> None:
         criteria = extract_criteria("This is just random text with no criteria")
         assert criteria == []
+
+    def test_truncates_at_references_section(self) -> None:
+        text = """
+Inclusion Criteria:
+- Age >= 18
+
+Exclusion Criteria:
+- Pregnant or breastfeeding
+
+References:
+patients. Int J Chron Obstruct Pulmon Dis. 2013;8:569-79
+"""
+        criteria = extract_criteria(text)
+        texts = [c.text for c in criteria]
+        assert any("Age" in t for t in texts)
+        assert any("Pregnant" in t for t in texts)
+        assert not any("Int J Chron Obstruct" in t for t in texts)
+
+    def test_filters_citation_like_lines(self) -> None:
+        text = """
+Inclusion Criteria:
+- Age >= 18
+- Int J Chron Obstruct Pulmon Dis. 2013;8:569-79
+"""
+        criteria = extract_criteria(text)
+        texts = [c.text for c in criteria]
+        assert any("Age" in t for t in texts)
+        assert not any("2013;8:569-79" in t for t in texts)

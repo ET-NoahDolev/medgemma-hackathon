@@ -1,73 +1,140 @@
-"""Extraction pipeline for MedGemma Task A."""
+"""Extraction pipeline for MedGemma Task A.
+
+This module provides:
+- A baseline regex-based extractor (fast, deterministic).
+- An optional MedGemma-based extractor (via the shared `inference` component).
+
+The public API remains:
+- `extract_criteria(document_text)`
+- `extract_criteria_stream(document_text)`
+"""
 
 import logging
 import os
 import re
+from dataclasses import dataclass
+from pathlib import Path
 from typing import Any, Dict, Iterator
 
 from shared.models import Criterion
 
 logger = logging.getLogger(__name__)
 
-# Lazy load model
-_model = None
-_tokenizer = None
+@dataclass(frozen=True)
+class ExtractionConfig:
+    """Configuration for extraction.
 
-
-def _load_model() -> tuple[Any, Any] | tuple[None, None]:
-    """Load LoRA model if available.
-
-    Returns:
-        Tuple of (model, tokenizer) or (None, None) if unavailable.
+    Attributes:
+        use_model: Whether to attempt MedGemma-based extraction.
+        model_path: HuggingFace model ID or local model path.
+        quantization: Quantization level ("4bit", "8bit", or "none").
     """
-    global _model, _tokenizer
-    if _model is not None:
-        return _model, _tokenizer
 
-    model_path = os.getenv("EXTRACTION_MODEL_PATH")
-    if not model_path or not os.path.exists(model_path):
-        return None, None
+    use_model: bool = True
+    model_path: str = "google/medgemma-4b-it"
+    quantization: str = "4bit"
 
-    try:
-        from peft import PeftModel  # type: ignore[import-not-found]
-        from transformers import (  # type: ignore[import-not-found]
-            AutoModelForCausalLM,
-            AutoTokenizer,
+    @classmethod
+    def from_env(cls) -> "ExtractionConfig":
+        """Create config from environment variables."""
+        use_model = os.getenv("USE_MODEL_EXTRACTION", "true").lower() == "true"
+        return cls(
+            use_model=use_model,
+            model_path=os.getenv("MEDGEMMA_MODEL_PATH", cls.model_path),
+            quantization=os.getenv("MEDGEMMA_QUANTIZATION", cls.quantization),
         )
 
-        base_model = "google/medgemma-4b-it"
-        _tokenizer = AutoTokenizer.from_pretrained(base_model)
-        _model = AutoModelForCausalLM.from_pretrained(
-            base_model, load_in_8bit=True, device_map="auto"
+
+class ExtractionPipeline:
+    """Extraction pipeline with optional MedGemma-based extraction."""
+
+    def __init__(self, config: ExtractionConfig | None = None) -> None:
+        """Initialize the extraction pipeline."""
+        self.config = config or ExtractionConfig.from_env()
+        self._extract_agent: Any | None = None
+
+    def _get_extract_agent(self) -> Any:
+        """Lazily create the MedGemma extraction agent."""
+        if self._extract_agent is not None:
+            return self._extract_agent
+
+        from inference import AgentConfig, create_model_loader, create_react_agent
+
+        prompts_dir = Path(__file__).parent / "prompts"
+        agent_cfg = AgentConfig(
+            model_path=self.config.model_path,
+            quantization=self.config.quantization,
         )
-        _model = PeftModel.from_pretrained(_model, model_path)
-        return _model, _tokenizer
-    except Exception as e:
-        logger.warning("Failed to load LoRA model: %s", e)
-        return None, None
+        model_loader = create_model_loader(agent_cfg)
+        # Import locally to keep baseline users lightweight.
+        from extraction_service.schemas import ExtractionResult
 
+        self._extract_agent = create_react_agent(
+            model_loader=model_loader,
+            prompts_dir=prompts_dir,
+            tools=[],
+            response_schema=ExtractionResult,
+            system_template="extraction_system.j2",
+            user_template="extraction_user.j2",
+        )
+        return self._extract_agent
 
-def extract_criteria_with_lora(document_text: str) -> list[Criterion]:
-    """Extract criteria using LoRA model.
+    def extract_criteria_stream(self, document_text: str) -> Iterator[Criterion]:
+        """Stream atomic inclusion/exclusion criteria from protocol text."""
+        if not document_text.strip():
+            raise ValueError("document_text is required")
 
-    Args:
-        document_text: Raw protocol text or extracted PDF text.
+        if self.config.use_model:
+            try:
+                # Model extraction returns a list; stream it for API consistency.
+                criteria = self.extract_criteria(document_text)
+                yield from criteria
+                return
+            except Exception as exc:
+                logger.warning("Model extraction failed; using baseline: %s", exc)
 
-    Returns:
-        A list of extracted criteria with type and confidence scores.
+        yield from _extract_criteria_baseline_stream(document_text)
 
-    Raises:
-        ValueError: If the document text is empty or not parseable.
-    """
-    model, tokenizer = _load_model()
-    if model is None:
-        # Fallback to baseline
+    def extract_criteria(self, document_text: str) -> list[Criterion]:
+        """Extract atomic inclusion/exclusion criteria from protocol text."""
+        if not document_text.strip():
+            raise ValueError("document_text is required")
+
+        if not self.config.use_model:
+            return _extract_criteria_baseline(document_text)
+
+        try:
+            agent = self._get_extract_agent()
+            # The agent is an async callable; run it via anyio from sync context.
+            from anyio import run  # type: ignore[import-not-found]
+
+            from extraction_service.schemas import ExtractionResult
+
+            result: ExtractionResult = run(  # type: ignore[no-untyped-call]
+                agent, {"document_text": document_text}
+            )
+
+            extracted: list[Criterion] = []
+            for item in result.criteria:
+                text = _normalize_candidate(item.text)
+                if not is_valid_criterion_candidate(text):
+                    continue
+                extracted.append(
+                    Criterion(
+                        id="",
+                        text=text,
+                        criterion_type=item.criterion_type,
+                        confidence=item.confidence,
+                        snomed_codes=[],
+                        evidence_spans=[],
+                    )
+                )
+            if extracted:
+                return extracted
+        except Exception as exc:
+            logger.warning("Model extraction failed; using baseline: %s", exc)
+
         return _extract_criteria_baseline(document_text)
-
-    # TODO: Implement model inference
-    # For now, fallback to baseline
-    logger.warning("LoRA model loaded but inference not implemented, using baseline")
-    return _extract_criteria_baseline(document_text)
 
 
 def _extract_criteria_baseline_stream(document_text: str) -> Iterator[Criterion]:
@@ -81,6 +148,8 @@ def _extract_criteria_baseline_stream(document_text: str) -> Iterator[Criterion]
     for section_type, section_text in sections.items():
         sentences = split_into_candidate_sentences(section_text)
         for sentence in sentences:
+            if not is_valid_criterion_candidate(sentence):
+                continue
             criterion_type = classify_criterion_type(sentence, section=section_type)
             confidence = 0.9 if section_type != "unknown" else 0.7
             yield Criterion(
@@ -101,7 +170,7 @@ def _extract_criteria_baseline(document_text: str) -> list[Criterion]:
 def extract_criteria_stream(document_text: str) -> Iterator[Criterion]:
     """Stream atomic inclusion/exclusion criteria from protocol text.
 
-    Uses LoRA if available (and implemented to stream), else falls back to baseline.
+    Uses MedGemma if enabled, else falls back to baseline.
 
     Args:
         document_text: Raw protocol text or extracted PDF text.
@@ -109,24 +178,13 @@ def extract_criteria_stream(document_text: str) -> Iterator[Criterion]:
     Yields:
          Extracted criteria with type and confidence scores.
     """
-    if os.getenv("USE_LORA_MODELS", "false").lower() == "true":
-        try:
-            # TODO: Make LoRA inference streaming
-            # For now, collect list and yield
-            criteria = extract_criteria_with_lora(document_text)
-            yield from criteria
-            return
-        except Exception as e:
-            logger.warning("LoRA extraction failed: %s, using baseline", e)
-
-    # Baseline implementation
-    yield from _extract_criteria_baseline_stream(document_text)
+    yield from get_extraction_pipeline().extract_criteria_stream(document_text)
 
 
 def extract_criteria(document_text: str) -> list[Criterion]:
-    """Extract atomic inclusion/exclusion criteria from protocol text.
+    r"""Extract atomic inclusion/exclusion criteria from protocol text.
 
-    Uses LoRA if available, else falls back to baseline.
+    Uses MedGemma if enabled, else falls back to baseline.
 
     Args:
         document_text: Raw protocol text or extracted PDF text.
@@ -138,14 +196,34 @@ def extract_criteria(document_text: str) -> list[Criterion]:
         ValueError: If the document text is empty or not parseable.
 
     Examples:
-        >>> extract_criteria("Inclusion: Age >= 18 years.")
-        []
+        >>> items = extract_criteria("Inclusion Criteria:\\n- Age >= 18 years.")
+        >>> len(items) >= 1
+        True
 
     Notes:
-        This function uses LoRA model if USE_LORA_MODELS=true and
-        EXTRACTION_MODEL_PATH is set, otherwise uses baseline regex.
+        This function uses MedGemma if USE_MODEL_EXTRACTION=true, otherwise it
+        uses the baseline regex extractor.
     """
-    return list(extract_criteria_stream(document_text))
+    return get_extraction_pipeline().extract_criteria(document_text)
+
+
+_PIPELINE: ExtractionPipeline | None = None
+
+
+def get_extraction_pipeline(
+    config: ExtractionConfig | None = None,
+) -> ExtractionPipeline:
+    """Get or create a singleton extraction pipeline.
+
+    Args:
+        config: Optional configuration override. If provided, returns a new instance.
+    """
+    global _PIPELINE
+    if config is not None:
+        return ExtractionPipeline(config=config)
+    if _PIPELINE is None:
+        _PIPELINE = ExtractionPipeline()
+    return _PIPELINE
 
 
 def split_into_candidate_sentences(text: str) -> list[str]:
@@ -199,6 +277,41 @@ def _split_inline_criteria(text: str) -> list[str]:
 def _normalize_candidate(text: str) -> str:
     """Normalize candidate criteria text."""
     return text.strip().rstrip(".")
+
+
+_PAGE_NUMBER_PATTERN = re.compile(r"^\s*\d+\s*$")
+_NUMERIC_RANGE_PATTERN = re.compile(r"^\s*\d+\s*[-–]\s*\d+\s*$")
+_CITATION_YEAR_VOL_PAGES_PATTERN = re.compile(
+    r"\b(19|20)\d{2}\s*;\s*\d+\s*:\s*\d+(?:\s*[-–]\s*\d+)?\b", re.IGNORECASE
+)
+_CITATION_MARKERS_PATTERN = re.compile(
+    r"\b(?:et\s+al\.?|doi:|pmid:|issn:|vol\.|no\.|pp\.|pages?)\b", re.IGNORECASE
+)
+
+
+def is_valid_criterion_candidate(text: str) -> bool:
+    """Heuristically filter out noise that is not a criterion.
+
+    Args:
+        text: Candidate text.
+
+    Returns:
+        True if the text looks like an inclusion/exclusion criterion.
+    """
+    cleaned = text.strip()
+    if not cleaned:
+        return False
+    if _PAGE_NUMBER_PATTERN.match(cleaned):
+        return False
+    if _NUMERIC_RANGE_PATTERN.match(cleaned):
+        return False
+    if not re.search(r"[A-Za-z]", cleaned):
+        return False
+    if _CITATION_YEAR_VOL_PAGES_PATTERN.search(cleaned):
+        return False
+    if _CITATION_MARKERS_PATTERN.search(cleaned):
+        return False
+    return True
 
 
 def classify_criterion_type(candidate_text: str, section: str = "unknown") -> str:
@@ -274,16 +387,50 @@ def detect_sections(document_text: str) -> Dict[str, str]:
         inc_match = INLINE_INCLUSION.search(document_text)
         exc_match = INLINE_EXCLUSION.search(document_text)
 
+    if not inc_match and not exc_match:
+        return sections
+
+    def _truncate_at_boundary(text: str) -> str:
+        boundary = SECTION_END_PATTERNS.search(text)
+        return text[: boundary.start()] if boundary else text
+
     if inc_match and exc_match:
         if inc_match.start() < exc_match.start():
-            sections["inclusion"] = document_text[inc_match.end() : exc_match.start()]
-            sections["exclusion"] = document_text[exc_match.end() :]
+            sections["inclusion"] = _truncate_at_boundary(
+                document_text[inc_match.end() : exc_match.start()]
+            )
+            sections["exclusion"] = _truncate_at_boundary(
+                document_text[exc_match.end() :]
+            )
         else:
-            sections["exclusion"] = document_text[exc_match.end() : inc_match.start()]
-            sections["inclusion"] = document_text[inc_match.end() :]
+            sections["exclusion"] = _truncate_at_boundary(
+                document_text[exc_match.end() : inc_match.start()]
+            )
+            sections["inclusion"] = _truncate_at_boundary(
+                document_text[inc_match.end() :]
+            )
     elif inc_match:
-        sections["inclusion"] = document_text[inc_match.end() :]
+        sections["inclusion"] = _truncate_at_boundary(document_text[inc_match.end() :])
     elif exc_match:
-        sections["exclusion"] = document_text[exc_match.end() :]
+        sections["exclusion"] = _truncate_at_boundary(document_text[exc_match.end() :])
 
     return sections
+
+
+SECTION_END_PATTERNS = re.compile(
+    r"(?:^|\n)\s*(?:"
+    r"study\s*design|"
+    r"methods?|"
+    r"statistical\s*analysis|"
+    r"references?|"
+    r"procedures?|"
+    r"interventions?|"
+    r"endpoints?|"
+    r"outcome\s*measures?|"
+    r"assessments?|"
+    r"safety|"
+    r"adverse\s*events?|"
+    r"bibliography"
+    r")\s*:?\s*(?:\n|$)",
+    re.IGNORECASE | re.MULTILINE,
+)

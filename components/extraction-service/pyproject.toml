@@ -7,10 +7,10 @@ requires-python = ">=3.12"
 dependencies = [
     "shared",
     "transformers>=4.45.0",
-    "peft>=0.10.0",
     "bitsandbytes>=0.43.0",
     "accelerate>=0.30.0",
     "torch>=2.0.0",
+    "inference",
 ]
 
 [build-system]
@@ -29,10 +29,10 @@ dev = [
 [tool.ruff]
 lint.select = ["E", "F", "W", "C", "N", "I", "D"]
 lint.ignore = ["E203", "D203", "D213", "D100", "D413", "D104"]
+lint.pydocstyle.convention = "google"
 target-version = "py312"
 line-length = 88
 exclude = ["venv", ".venv", "docs"]
-lint.pydocstyle.convention = "google"
 
 [tool.ruff.lint.per-file-ignores]
 "tests/**/*.py" = ["D"]
@@ -53,3 +53,4 @@ cache-dir = "./.uv_cache"
 
 [tool.uv.sources]
 shared = { workspace = true }
+inference = { workspace = true }

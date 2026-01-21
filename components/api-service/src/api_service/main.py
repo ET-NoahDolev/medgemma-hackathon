@@ -607,6 +607,8 @@ async def ground_criterion(
         try:
             agent = get_grounding_agent()
             result = await agent.ground(criterion.text, criterion.criterion_type)
+            if not result.snomed_codes and not result.field_mappings:
+                raise RuntimeError("AI grounding returned empty result")
 
             # Convert agent result to API response format
             response_candidates = []

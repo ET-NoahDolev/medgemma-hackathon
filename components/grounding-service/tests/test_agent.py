@@ -1,6 +1,6 @@
 """Tests for grounding agent."""
 
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -9,45 +9,33 @@ from grounding_service.schemas import FieldMappingResult, GroundingResult
 
 
 @pytest.fixture
-def mock_model():
-    """Mock ChatHuggingFace model."""
-    model = MagicMock()
-    return model
+def mock_invoke():
+    """Mock inference invoke function."""
 
+    async def invoke(_prompt_vars):
+        return GroundingResult(
+            snomed_codes=["123456789"],
+            field_mappings=[
+                FieldMappingResult(
+                    field="demographics.age",
+                    relation=">=",
+                    value="18",
+                    confidence=0.9,
+                    umls_cui="123456789",
+                )
+            ],
+            reasoning="Test reasoning",
+        )
 
-@pytest.fixture
-def mock_agent_graph():
-    """Mock LangGraph agent."""
-    agent = AsyncMock()
-    agent.ainvoke = AsyncMock(
-        return_value={
-            "structured_response": GroundingResult(
-                snomed_codes=["123456789"],
-                field_mappings=[
-                    FieldMappingResult(
-                        field="demographics.age",
-                        relation=">=",
-                        value="18",
-                        confidence=0.9,
-                        umls_cui="123456789",
-                    )
-                ],
-                reasoning="Test reasoning",
-            )
-        }
-    )
-    return agent
+    return invoke
 
 
 @pytest.mark.asyncio
-async def test_ground_returns_structured_result(mock_agent_graph):
+async def test_ground_returns_structured_result(mock_invoke):
     """Test that ground() returns a structured GroundingResult."""
     with patch("grounding_service.agent.create_react_agent") as mock_create:
-        mock_create.return_value = mock_agent_graph
-
+        mock_create.return_value = mock_invoke
         agent = GroundingAgent(model_path="test-model", quantization="none")
-        agent._get_agent = lambda: mock_agent_graph
-
         result = await agent.ground("Age >= 18", "inclusion")
 
         assert isinstance(result, GroundingResult)
@@ -57,18 +45,15 @@ async def test_ground_returns_structured_result(mock_agent_graph):
 
 
 @pytest.mark.asyncio
-async def test_ground_fallback_on_parse_error(mock_agent_graph):
-    """Test that ground() handles parse errors gracefully."""
-    mock_agent_graph.ainvoke = AsyncMock(
-        return_value={"messages": [MagicMock(content="Invalid JSON")]}
-    )
+async def test_ground_fallback_on_invoke_error():
+    """Test that ground() handles invoke errors gracefully."""
+
+    async def bad_invoke(_prompt_vars):
+        raise ValueError("Invalid JSON")
 
     with patch("grounding_service.agent.create_react_agent") as mock_create:
-        mock_create.return_value = mock_agent_graph
-
+        mock_create.return_value = bad_invoke
         agent = GroundingAgent(model_path="test-model", quantization="none")
-        agent._get_agent = lambda: mock_agent_graph
-
         result = await agent.ground("Age >= 18", "inclusion")
 
         assert isinstance(result, GroundingResult)

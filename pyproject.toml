@@ -57,6 +57,7 @@ members = [
     "components/grounding-service",
     "components/data-pipeline",
     "components/evaluation",
+    "components/inference",
     "components/model-training",
     "components/shared",
 ]
@@ -140,11 +141,12 @@ pythonpath = [
     "components/evaluation/src",
     "components/extraction-service/src",
     "components/grounding-service/src",
+    "components/inference/src",
     "components/model-training/src",
     "components/shared/src",
 ]
 asyncio_mode = "auto"
-addopts = "--cov=api_service --cov=data_pipeline --cov=evaluation --cov=extraction_service --cov=grounding_service --cov=shared --cov-branch --cov-report=term-missing"
+addopts = "--cov=api_service --cov=data_pipeline --cov=evaluation --cov=extraction_service --cov=grounding_service --cov=inference --cov=shared --cov-branch --cov-report=term-missing"
 
 [tool.coverage.run]
 source = [
@@ -153,6 +155,7 @@ source = [
     "components/evaluation/src",
     "components/extraction-service/src",
     "components/grounding-service/src",
+    "components/inference/src",
     "components/shared/src",
 ]
 omit = ["*/tests/*", "*/.venv/*", "*/venv/*"]

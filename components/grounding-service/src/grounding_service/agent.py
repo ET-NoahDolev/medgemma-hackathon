@@ -2,10 +2,11 @@
 
 import logging
 import os
+import time
 from pathlib import Path
 from typing import Any
 
-from jinja2 import Environment, FileSystemLoader
+from inference import AgentConfig, create_model_loader, create_react_agent
 
 try:
     from langchain_core.tools import tool  # type: ignore[import-not-found]
@@ -18,36 +19,18 @@ except ImportError:  # pragma: no cover
 
     tool = _tool  # type: ignore[assignment]
 
-try:
-    from langchain_huggingface import (  # type: ignore[import-not-found]
-        ChatHuggingFace,
-        HuggingFacePipeline,
-    )
-except ImportError:  # pragma: no cover
-    ChatHuggingFace = Any  # type: ignore[assignment]
-    HuggingFacePipeline = Any  # type: ignore[assignment]
-
-try:
-    from langgraph.prebuilt import create_react_agent  # type: ignore[import-not-found]
-except ImportError:  # pragma: no cover
-    def _create_react_agent(*_args: Any, **_kwargs: Any) -> Any:  # type: ignore[no-redef]
-        raise ImportError(
-            "LangGraph is required for GroundingAgent. Install grounding-service "
-            "ML dependencies to enable AI grounding."
-        )
-
-    create_react_agent = _create_react_agent  # type: ignore[assignment]
-
 from shared.field_schema import SEMANTIC_TYPE_MAPPING
 
 from grounding_service.schemas import GroundingResult
 from grounding_service.umls_client import UmlsClient
 
 # Try to import mlflow (optional dependency for dev/observability)
+mlflow: Any | None
 try:
-    import mlflow
+    import mlflow as _mlflow
     MLFLOW_AVAILABLE = True
     # database backend (SQLite)
+    mlflow = _mlflow
     mlflow.set_tracking_uri("sqlite:///mlflow.db")
     mlflow.set_experiment("medgemma-grounding")
 except ImportError:
@@ -135,81 +118,28 @@ class GroundingAgent:
             model_path: Path to MedGemma model or HuggingFace model ID.
             quantization: Quantization level ("4bit", "8bit", or "none").
         """
-        self.model_path = model_path or os.getenv(
-            "MEDGEMMA_MODEL_PATH", "google/medgemma-1.5-4b-it"
-        )
+        default_model = os.getenv("MEDGEMMA_MODEL_PATH", "google/medgemma-1.5-4b-it")
+        self.model_path = model_path or default_model
         self.quantization = quantization or os.getenv("MEDGEMMA_QUANTIZATION", "4bit")
+        self._invoke: Any | None = None
 
-        # Setup Jinja2 environment
-        prompts_dir = Path(__file__).parent / "prompts"
-        self.jinja_env = Environment(loader=FileSystemLoader(str(prompts_dir)))
+    def _get_invoke(self) -> Any:
+        """Get or create the shared inference invoke function."""
+        if self._invoke is not None:
+            return self._invoke
 
-        # Lazy-load the model (keeps tests lightweight if ML deps aren't installed)
-        self.model: Any | None = None
-        self.agent = None
-
-    def _load_model(self) -> Any:
-        """Load MedGemma model with appropriate quantization."""
-        try:
-            import torch  # type: ignore[import-not-found]
-        except ImportError as e:  # pragma: no cover
-            raise ImportError(
-                "Torch is required to load MedGemma. Install grounding-service ML "
-                "dependencies to enable AI grounding."
-            ) from e
-
-        if HuggingFacePipeline is Any or ChatHuggingFace is Any:  # type: ignore[comparison-overlap]
-            raise ImportError(
-                "LangChain HuggingFace integration is required to load MedGemma. "
-                "Install grounding-service ML dependencies to enable AI grounding."
-            )
-
-        from transformers import BitsAndBytesConfig  # type: ignore[import-not-found]
-
-        model_kwargs: dict[str, Any] = {
-            "device_map": "auto",
-            "torch_dtype": torch.bfloat16,
-        }
-
-        if self.quantization == "4bit":
-            bnb_config = BitsAndBytesConfig(
-                load_in_4bit=True,
-                bnb_4bit_compute_dtype=torch.float16,
-                bnb_4bit_quant_type="nf4",
-            )
-            model_kwargs["quantization_config"] = bnb_config
-        elif self.quantization == "8bit":
-            bnb_config = BitsAndBytesConfig(load_in_8bit=True)
-            model_kwargs["quantization_config"] = bnb_config
-
-        try:
-            llm = HuggingFacePipeline.from_model_id(
-                model_id=self.model_path,
-                task="text-generation",
-                model_kwargs=model_kwargs,
-                pipeline_kwargs={"max_new_tokens": 512},
-            )
-            return ChatHuggingFace(llm=llm)
-        except Exception as e:
-            logger.error("Error loading model: %s", e)
-            raise
-
-    def _get_model(self) -> Any:
-        """Get or lazily load the underlying model."""
-        if self.model is None:
-            self.model = self._load_model()
-        return self.model
-
-    def _get_agent(self) -> Any:
-        """Get or create the ReAct agent."""
-        if self.agent is None:
-            tools = [search_concepts_tool, get_semantic_type_tool]
-            self.agent = create_react_agent(
-                model=self._get_model(),
-                tools=tools,
-                response_format=GroundingResult,
-            )
-        return self.agent
+        cfg = AgentConfig(model_path=self.model_path, quantization=self.quantization)
+        model_loader = create_model_loader(cfg)
+        prompts_dir = os.path.join(os.path.dirname(__file__), "prompts")
+        self._invoke = create_react_agent(
+            model_loader=model_loader,
+            prompts_dir=Path(prompts_dir),
+            tools=[search_concepts_tool, get_semantic_type_tool],
+            response_schema=GroundingResult,
+            system_template="grounding_system.j2",
+            user_template="grounding_user.j2",
+        )
+        return self._invoke
 
     async def ground(
         self, criterion_text: str, criterion_type: str
@@ -223,91 +153,44 @@ class GroundingAgent:
         Returns:
             GroundingResult with SNOMED codes and field mappings.
         """
-        # Build prompts from Jinja2 templates
-        system_template = self.jinja_env.get_template("grounding_system.j2")
-        user_template = self.jinja_env.get_template("grounding_user.j2")
+        invoke = self._get_invoke()
+        prompt_vars = {
+            "semantic_mappings": SEMANTIC_TYPE_MAPPING,
+            "criterion_text": criterion_text,
+            "criterion_type": criterion_type,
+        }
 
-        system_prompt = system_template.render(
-            semantic_mappings=SEMANTIC_TYPE_MAPPING
-        )
-        user_prompt = user_template.render(
-            criterion_text=criterion_text, criterion_type=criterion_type
-        )
-
-        # Get agent and invoke
-        # Get agent and invoke
-        agent = self._get_agent()
+        async def _safe_invoke() -> GroundingResult:
+            try:
+                return await invoke(prompt_vars)
+            except Exception as exc:
+                logger.warning("Grounding agent failed: %s", exc)
+                return GroundingResult(
+                    snomed_codes=[],
+                    field_mappings=[],
+                    reasoning=(
+                        "Agent execution completed but structured output not available"
+                    ),
+                )
 
         # MLflow instrumentation
-        if MLFLOW_AVAILABLE:
+        if MLFLOW_AVAILABLE and mlflow is not None:
             with mlflow.start_run(run_name="ground_criterion"):
                 mlflow.log_param("criterion_text", criterion_text)
                 mlflow.log_param("criterion_type", criterion_type)
-                mlflow.log_text(system_prompt, "prompt_system.txt")
-                mlflow.log_text(user_prompt, "prompt_user.txt")
 
-                start_time = logging.time.time()
+                start_time = time.time()
+                result = await _safe_invoke()
                 try:
-                    result = await agent.ainvoke(
-                        {
-                            "messages": [
-                                ("system", system_prompt),
-                                ("user", user_prompt),
-                            ]
-                        }
-                    )
-                    duration = logging.time.time() - start_time
+                    duration = time.time() - start_time
                     mlflow.log_metric("latency_seconds", duration)
 
-                    # Log raw result if serializable, or string representation
-                    mlflow.log_text(str(result), "agent_result_raw.txt")
                 except Exception as e:
                     mlflow.log_param("error", str(e))
                     raise e
+                return result
         else:
-            # Standard execution without tracking
-            result = await agent.ainvoke(
-                {
-                    "messages": [
-                        ("system", system_prompt),
-                        ("user", user_prompt),
-                    ]
-                }
-            )
-
-        # Extract structured response
-        if "structured_response" in result:
-            return result["structured_response"]
-        elif isinstance(result, dict) and "messages" in result:
-            # Fallback: try to parse from last message
-            messages = result["messages"]
-            if messages:
-                last_msg = messages[-1]
-                if hasattr(last_msg, "content"):
-                    # Try to parse JSON from content
-                    import json
-
-                    try:
-                        content = last_msg.content
-                        if isinstance(content, str):
-                            # Look for JSON in the content
-                            if "{" in content and "}" in content:
-                                # Extract JSON portion
-                                start = content.find("{")
-                                end = content.rfind("}") + 1
-                                json_str = content[start:end]
-                                data = json.loads(json_str)
-                                return GroundingResult(**data)
-                    except Exception as e:
-                        logger.warning("Failed to parse structured response: %s", e)
-
-        # Final fallback: return empty result
-        logger.warning("Could not extract structured response, returning empty")
-        return GroundingResult(
-            snomed_codes=[],
-            field_mappings=[],
-            reasoning="Agent execution completed but structured output not available",
-        )
+            return await _safe_invoke()
 
 
 # Singleton instance
