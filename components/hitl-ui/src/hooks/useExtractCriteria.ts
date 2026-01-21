@@ -6,6 +6,7 @@ export function useExtractCriteria() {
   return useMutation({
     mutationFn: async (protocolId: string) => triggerExtraction(protocolId),
     onSuccess: async (_data, protocolId) => {
+      await queryClient.invalidateQueries({ queryKey: ['protocol', protocolId] });
       await queryClient.invalidateQueries({ queryKey: ['criteria', protocolId] });
     },
   });

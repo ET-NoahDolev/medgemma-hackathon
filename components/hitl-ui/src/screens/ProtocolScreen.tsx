@@ -8,6 +8,7 @@ import { Badge } from '@/components/ui/badge';
 import { CriteriaEditPanel } from '@/features/protocols/components/CriteriaEditPanel';
 import { SourceMaterialsPanel } from '@/features/protocols/components/SourceMaterialsPanel';
 import { useCriteria } from '@/hooks/useCriteria';
+import { useExtractCriteria } from '@/hooks/useExtractCriteria';
 import { useSubmitFeedback } from '@/hooks/useSubmitFeedback';
 import { useUpdateCriterion } from '@/hooks/useUpdateCriterion';
 import { useUploadProtocol } from '@/hooks/useUploadProtocol';
@@ -74,13 +75,21 @@ export function ProtocolScreen({ protocol, onBack }: ProtocolScreenProps) {
   const [selectedCriterion, setSelectedCriterion] = useState<Criterion | null>(null);
   const [sourceMaterialsPanelOpen, setSourceMaterialsPanelOpen] = useState(false);
 
-  const { data: criteriaData, isLoading, error, refetch } = useCriteria(activeProtocolId);
   const {
     data: protocolData,
     isLoading: isProtocolLoading,
     error: protocolError,
   } = useProtocol(activeProtocolId);
+
+  const status = protocolData?.processing_status ?? 'pending';
+  const shouldPollCriteria =
+    status === 'pending' || status === 'extracting' || status === 'grounding';
+
+  const { data: criteriaData, isLoading, error, refetch } = useCriteria(activeProtocolId, {
+    pollIntervalMs: shouldPollCriteria ? 1500 : false,
+  });
   const uploadProtocol = useUploadProtocol();
+  const extractCriteria = useExtractCriteria();
   const submitFeedback = useSubmitFeedback();
   const updateCriterion = useUpdateCriterion();
 
@@ -137,21 +146,7 @@ export function ProtocolScreen({ protocol, onBack }: ProtocolScreenProps) {
     });
   }, [activeProtocolId, apiMappedCriteria, uploaded]);
 
-  // If extraction is still running, poll criteria so the list grows in real time.
-  useEffect(() => {
-    if (!uploaded) return;
-    if (!activeProtocolId) return;
-    if (error) return;
-    const status = protocolData?.processing_status ?? 'pending';
-    const shouldPoll = status === 'pending' || status === 'extracting' || status === 'grounding';
-    if (!shouldPoll) return;
-
-    const interval = window.setInterval(() => {
-      void refetch();
-    }, 1500);
-
-    return () => window.clearInterval(interval);
-  }, [activeProtocolId, error, protocolData?.processing_status, refetch, uploaded]);
+  // Criteria polling is handled by React Query via useCriteria(refetchInterval).
 
   const handleApprove = (id: string) => {
     submitFeedback.mutate({ criterion_id: id, action: 'accept' });
@@ -214,6 +209,20 @@ export function ProtocolScreen({ protocol, onBack }: ProtocolScreenProps) {
         loading: 'Uploading and processing protocol PDF...',
         success: _data => 'Upload accepted. Extracting criteria...',
         error: 'Failed to upload protocol',
+      }
+    );
+  };
+
+  const handleRunExtraction = () => {
+    if (!activeProtocolId) return;
+    toast.promise(
+      extractCriteria.mutateAsync(activeProtocolId).then(() => {
+        setCriteria([]);
+      }),
+      {
+        loading: 'Starting extraction...',
+        success: 'Extraction started. Criteria will appear as they are processed.',
+        error: 'Failed to start extraction',
       }
     );
   };
@@ -369,6 +378,14 @@ export function ProtocolScreen({ protocol, onBack }: ProtocolScreenProps) {
             >
               <FolderOpen className="w-4 h-4 mr-2" />
               Source Materials
+            </Button>
+            <Button
+              variant="outline"
+              onClick={handleRunExtraction}
+              disabled={!activeProtocolId || extractCriteria.isPending}
+            >
+              <Sparkles className="w-4 h-4 mr-2" />
+              {extractCriteria.isPending ? 'Starting…' : 'Re-run extraction'}
             </Button>
             <GlassButton variant="primary">Finalize & Deploy</GlassButton>
           </div>

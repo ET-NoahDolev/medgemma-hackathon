@@ -40,7 +40,8 @@ export function EditMappingModal({
     criterion,
     onSave,
 }: EditMappingModalProps) {
-    const groundCriterion = useGroundCriterion();
+    // protocolId not available here; invalidate all criteria queries after grounding.
+    const groundCriterion = useGroundCriterion(null);
     const submitFeedback = useSubmitFeedback();
 
     // Local state for editing
@@ -57,19 +58,18 @@ export function EditMappingModal({
     // Fetch grounding candidates when opening
     useEffect(() => {
         if (open && criterion.id) {
-            groundCriterion.mutate(criterion.id, {
-                onSuccess: (data) => {
+            void groundCriterion
+                .mutateAsync(criterion.id)
+                .then((data) => {
                     setCandidates(data.candidates);
-                    // Only auto-fill if empty? Or maybe show suggestions separately.
-                    // For now, let's trust the existing mapping unless user picks a new one across the board.
-                    // But if current mapping is empty, we could populate from candidates.
-                    if (!criterion.snomedCodes?.length && data.candidates.length > 0) {
-                        // Auto-select top candidate? Maybe not, let user choose.
-                    }
-                },
-            });
+                })
+                .catch(() => {
+                    toast.error('Grounding failed', {
+                        description: 'Could not fetch SNOMED candidates. You can still edit manually.',
+                    });
+                });
         }
-    }, [open, criterion.id]);
+    }, [open, criterion.id, groundCriterion]);
 
     const handleAddCode = (code: string) => {
         if (!snomedCodes.includes(code)) {
