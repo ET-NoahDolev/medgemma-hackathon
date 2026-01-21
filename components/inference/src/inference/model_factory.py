@@ -222,7 +222,10 @@ def _build_vertex_endpoint_model(
         from langchain_core.messages import BaseMessage, AIMessage
         from langchain_core.outputs import ChatResult, ChatGeneration
         from langchain_core.callbacks.manager import CallbackManagerForLLMRun
-        from pydantic import Field
+        from langchain_core.language_models import LanguageModelInput
+        from langchain_core.runnables import Runnable
+        from pydantic import Field, BaseModel
+        from typing import Union, Type, Dict
     except ImportError as exc:  # pragma: no cover
         raise ImportError(
             "Vertex AI backend requires langchain-core installed."
@@ -293,6 +296,31 @@ def _build_vertex_endpoint_model(
         @property
         def _llm_type(self) -> str:
             return "vertex_model_garden"
+
+        def with_structured_output(
+            self,
+            schema: Union[Dict, Type[BaseModel]],
+            *,
+            include_raw: bool = False,
+            **kwargs: Any,
+        ) -> Runnable[LanguageModelInput, Union[Dict, BaseModel]]:
+            """Implement with_structured_output using a JSON parser.
+
+            This allows the model to be used with LangGraph's structured output
+            features even without native tool calling support.
+            """
+            from langchain_core.output_parsers import JsonOutputParser
+
+            parser = JsonOutputParser(
+                pydantic_object=schema
+                if isinstance(schema, type) and issubclass(schema, BaseModel)
+                else None
+            )
+            if include_raw:
+                from langchain_core.runnables import RunnablePassthrough
+
+                return RunnablePassthrough.assign(parsed=self | parser)
+            return self | parser
 
     return ModelGardenChatModel(
         endpoint_resource_name=resolved_resource_name,
