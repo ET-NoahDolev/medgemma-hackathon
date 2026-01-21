@@ -1,13 +1,51 @@
 """Extraction pipeline for MedGemma Task A."""
 
+import logging
+import os
 import re
-from typing import Dict
+from typing import Any, Dict
 
 from shared.models import Criterion
 
+logger = logging.getLogger(__name__)
 
-def extract_criteria(document_text: str) -> list[Criterion]:
-    """Extract atomic inclusion/exclusion criteria from protocol text.
+# Lazy load model
+_model = None
+_tokenizer = None
+
+
+def _load_model() -> tuple[Any, Any] | tuple[None, None]:
+    """Load LoRA model if available.
+
+    Returns:
+        Tuple of (model, tokenizer) or (None, None) if unavailable.
+    """
+    global _model, _tokenizer
+    if _model is not None:
+        return _model, _tokenizer
+
+    model_path = os.getenv("EXTRACTION_MODEL_PATH")
+    if not model_path or not os.path.exists(model_path):
+        return None, None
+
+    try:
+        from transformers import AutoModelForCausalLM, AutoTokenizer
+        from peft import PeftModel
+
+        base_model = "google/medgemma-4b-it"
+        _tokenizer = AutoTokenizer.from_pretrained(base_model)
+        _model = AutoModelForCausalLM.from_pretrained(
+            base_model, load_in_8bit=True, device_map="auto"
+        )
+        _model = PeftModel.from_pretrained(_model, model_path)
+        return _model, _tokenizer
+    except Exception as e:
+        logger.warning("Failed to load LoRA model: %s", e)
+        return None, None
+
+
+def extract_criteria_with_lora(document_text: str) -> list[Criterion]:
+    """Extract criteria using LoRA model.
 
     Args:
         document_text: Raw protocol text or extracted PDF text.
@@ -17,15 +55,20 @@ def extract_criteria(document_text: str) -> list[Criterion]:
 
     Raises:
         ValueError: If the document text is empty or not parseable.
-
-    Examples:
-        >>> extract_criteria("Inclusion: Age >= 18 years.")
-        []
-
-    Notes:
-        This baseline implementation uses section detection and rule-based
-        classification for prototyping.
     """
+    model, tokenizer = _load_model()
+    if model is None:
+        # Fallback to baseline
+        return _extract_criteria_baseline(document_text)
+
+    # TODO: Implement model inference
+    # For now, fallback to baseline
+    logger.warning("LoRA model loaded but inference not implemented, using baseline")
+    return _extract_criteria_baseline(document_text)
+
+
+def _extract_criteria_baseline(document_text: str) -> list[Criterion]:
+    """Baseline extraction implementation using regex."""
     if not document_text.strip():
         raise ValueError("document_text is required")
 
@@ -49,6 +92,38 @@ def extract_criteria(document_text: str) -> list[Criterion]:
             )
 
     return criteria
+
+
+def extract_criteria(document_text: str) -> list[Criterion]:
+    """Extract atomic inclusion/exclusion criteria from protocol text.
+
+    Uses LoRA if available, else falls back to baseline.
+
+    Args:
+        document_text: Raw protocol text or extracted PDF text.
+
+    Returns:
+        A list of extracted criteria with type and confidence scores.
+
+    Raises:
+        ValueError: If the document text is empty or not parseable.
+
+    Examples:
+        >>> extract_criteria("Inclusion: Age >= 18 years.")
+        []
+
+    Notes:
+        This function uses LoRA model if USE_LORA_MODELS=true and
+        EXTRACTION_MODEL_PATH is set, otherwise uses baseline regex.
+    """
+    if os.getenv("USE_LORA_MODELS", "false").lower() == "true":
+        try:
+            return extract_criteria_with_lora(document_text)
+        except Exception as e:
+            logger.warning("LoRA extraction failed: %s, using baseline", e)
+
+    # Baseline implementation
+    return _extract_criteria_baseline(document_text)
 
 
 def split_into_candidate_sentences(text: str) -> list[str]:

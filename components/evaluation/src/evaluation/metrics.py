@@ -89,7 +89,7 @@ def snomed_top1_accuracy(predicted: List[str], gold: List[str]) -> float:
 
     Examples:
         >>> snomed_top1_accuracy(["372244006"], ["372244006"])
-        0.0
+        1.0
 
     Notes:
         This stub will be replaced by a metric implementation aligned with
@@ -122,7 +122,7 @@ def field_mapping_accuracy(predicted: List[str], gold: List[str]) -> float:
 
     Examples:
         >>> field_mapping_accuracy(["demographics.age|>|75"], ["demographics.age|>|75"])
-        0.0
+        1.0
 
     Notes:
         This stub will be replaced by a metric implementation aligned with
@@ -154,7 +154,7 @@ def hitl_acceptance_rate(actions: Iterable[str]) -> float:
 
     Examples:
         >>> hitl_acceptance_rate(["accept", "reject", "accept"])
-        0.0
+        0.6666666666666666
 
     Notes:
         This stub represents the acceptance metric tracked in the hackathon.

@@ -49,6 +49,7 @@ members = [
     "components/grounding-service",
     "components/data-pipeline",
     "components/evaluation",
+    "components/model-training",
     "components/shared",
 ]
 

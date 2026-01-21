@@ -254,6 +254,105 @@ def test_ground_criterion_returns_empty_candidates(
     assert payload["field_mapping"] is None
 
 
+@pytest.mark.asyncio
+async def test_ground_criterion_uses_ai_when_enabled(
+    client: TestClient,
+    fake_services: FakeServicesState,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Test that AI grounding is used when USE_AI_GROUNDING=true."""
+    from unittest.mock import AsyncMock, MagicMock
+
+    from grounding_service.schemas import FieldMappingResult, GroundingResult
+
+    # Enable AI grounding
+    monkeypatch.setenv("USE_AI_GROUNDING", "true")
+
+    # Mock the agent
+    mock_agent = MagicMock()
+    mock_result = GroundingResult(
+        snomed_codes=["123456789"],
+        field_mappings=[
+            FieldMappingResult(
+                field="demographics.age",
+                relation=">=",
+                value="18",
+                confidence=0.95,
+                umls_cui="C123456",
+            )
+        ],
+        reasoning="AI reasoning test",
+    )
+    mock_agent.ground = AsyncMock(return_value=mock_result)
+
+    # Mock get_grounding_agent to return our mock
+    monkeypatch.setattr(
+        api_main_any, "get_grounding_agent", lambda: mock_agent
+    )
+    monkeypatch.setattr(api_main_any, "AGENT_AVAILABLE", True)
+
+    create_response = client.post(
+        "/v1/protocols",
+        json={"title": PROTOCOL_TITLE, "document_text": DOCUMENT_TEXT},
+    )
+    protocol_id = create_response.json()["protocol_id"]
+    client.post(f"/v1/protocols/{protocol_id}/extract")
+
+    list_response = client.get(f"/v1/protocols/{protocol_id}/criteria")
+    criterion_id = list_response.json()["criteria"][0]["id"]
+
+    response = client.post(f"/v1/criteria/{criterion_id}/ground")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["criterion_id"] == criterion_id
+    # Verify agent was called
+    mock_agent.ground.assert_called_once()
+    # Verify SNOMED codes were stored (from agent result)
+    assert "123456789" in payload.get("candidates", [{}])[0].get("code", "")
+
+
+@pytest.mark.asyncio
+async def test_ground_criterion_falls_back_when_ai_fails(
+    client: TestClient,
+    fake_services: FakeServicesState,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Test that grounding falls back to baseline when AI fails."""
+    from unittest.mock import AsyncMock, MagicMock
+
+    # Enable AI grounding
+    monkeypatch.setenv("USE_AI_GROUNDING", "true")
+
+    # Mock the agent to raise an exception
+    mock_agent = MagicMock()
+    mock_agent.ground = AsyncMock(side_effect=Exception("AI model error"))
+
+    monkeypatch.setattr(
+        api_main_any, "get_grounding_agent", lambda: mock_agent
+    )
+    monkeypatch.setattr(api_main_any, "AGENT_AVAILABLE", True)
+
+    create_response = client.post(
+        "/v1/protocols",
+        json={"title": PROTOCOL_TITLE, "document_text": DOCUMENT_TEXT},
+    )
+    protocol_id = create_response.json()["protocol_id"]
+    client.post(f"/v1/protocols/{protocol_id}/extract")
+
+    list_response = client.get(f"/v1/protocols/{protocol_id}/criteria")
+    criterion_id = list_response.json()["criteria"][0]["id"]
+
+    response = client.post(f"/v1/criteria/{criterion_id}/ground")
+
+    # Should still succeed using baseline
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["criterion_id"] == criterion_id
+    # Should have baseline results
+    assert len(payload.get("candidates", [])) > 0 or payload.get("field_mapping") is not None
+
+
 def test_lifespan_requires_api_key(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv("UMLS_API_KEY", raising=False)
     monkeypatch.delenv("GROUNDING_SERVICE_UMLS_API_KEY", raising=False)

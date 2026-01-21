@@ -1,4 +1,9 @@
-"""FastMCP server exposing UMLS tools for agent use."""
+"""FastMCP server exposing UMLS tools for external MCP protocol clients.
+
+This server can be used by external MCP clients. The agent (agent.py) uses
+LangChain tools that call UmlsClient directly, but both implementations
+use the same underlying UmlsClient for consistency.
+"""
 
 import logging
 import os

@@ -40,9 +40,7 @@ def export_from_database(db_path: str, output_path: Path) -> int:
     from sqlalchemy import create_engine
     from sqlmodel import Session, select
 
-    # Import storage models
-    import sys
-    sys.path.insert(0, str(Path(__file__).parents[4] / "api-service" / "src"))
+    # Import storage models (api-service is now a proper dependency)
     from api_service.storage import Criterion, HitlEdit
 
     engine = create_engine(f"sqlite:///{db_path}")

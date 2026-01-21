@@ -19,6 +19,9 @@ logger = logging.getLogger(__name__)
 
 
 # LangChain tools wrapping UMLS client
+# Note: These tools use UmlsClient directly. The MCP server (mcp_server.py)
+# provides the same functionality via FastMCP for external MCP protocol clients.
+# Both implementations use the same underlying UmlsClient, ensuring consistency.
 @tool
 def search_concepts_tool(term: str, limit: int = 5) -> str:
     """Search UMLS for clinical concepts matching a term.

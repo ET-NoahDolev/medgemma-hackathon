@@ -5,6 +5,9 @@ description = "evaluation component"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
+    "api-service",
+    "sqlalchemy>=2.0.0",
+    "sqlmodel>=0.0.18",
 ]
 
 [dependency-groups]
@@ -28,11 +31,20 @@ lint.pydocstyle.convention = "google"
 strict = true
 exclude = ["venv", ".venv", "docs"]
 plugins = []
+mypy_path = [
+    "../api-service/src",
+]
 
 [tool.pytest.ini_options]
-pythonpath = ["src"]
+pythonpath = [
+    "src",
+    "../api-service/src",
+]
 testpaths = ["tests"]
 addopts = "--cov=evaluation --cov-branch --cov-report=term-missing"
 
 [tool.uv]
 cache-dir = "./.uv_cache"
+
+[tool.uv.sources]
+api-service = { workspace = true }
