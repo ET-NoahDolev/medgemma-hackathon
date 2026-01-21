@@ -12,6 +12,119 @@ from typing import Any, Callable
 from inference.config import AgentConfig
 
 
+def _ensure_hf_auth_env() -> None:
+    hf_token = os.getenv("HF_TOKEN") or os.getenv("HUGGINGFACEHUB_API_TOKEN")
+    if not hf_token:
+        return
+
+    os.environ["HF_TOKEN"] = hf_token
+    os.environ["HUGGINGFACEHUB_API_TOKEN"] = hf_token
+    try:
+        from huggingface_hub import login
+
+        login(token=hf_token, add_to_git_credential=False)
+    except (ImportError, OSError, RuntimeError, ValueError):
+        # Token is already set in env vars; continue.
+        return
+
+
+def _import_torch() -> Any:
+    try:
+        import torch
+    except ImportError as exc:  # pragma: no cover
+        raise ImportError(
+            "Torch is required to load MedGemma. Install inference ML dependencies."
+        ) from exc
+    return torch
+
+
+def _import_langchain_hf() -> tuple[Any, Any]:
+    try:
+        from langchain_huggingface import (
+            ChatHuggingFace,
+            HuggingFacePipeline,
+        )
+    except ImportError as exc:  # pragma: no cover
+        raise ImportError(
+            "langchain-huggingface is required to load MedGemma. "
+            "Install inference ML dependencies."
+        ) from exc
+    return ChatHuggingFace, HuggingFacePipeline
+
+
+def _is_model_cached(model_path: str) -> bool:
+    try:
+        from huggingface_hub import (
+            try_to_load_from_cache,
+        )
+
+        config_path = try_to_load_from_cache(
+            repo_id=model_path, filename="config.json", revision="main"
+        )
+        return config_path is not None
+    except (ImportError, OSError, RuntimeError, ValueError):
+        return False
+
+
+def _build_model_kwargs(*, quantization: str, torch: Any) -> dict[str, Any]:
+    from transformers import BitsAndBytesConfig
+
+    model_kwargs: dict[str, Any] = {"device_map": "auto", "dtype": torch.bfloat16}
+
+    quant = (quantization or "none").lower()
+    if quant == "4bit":
+        model_kwargs["quantization_config"] = BitsAndBytesConfig(  # type: ignore[no-untyped-call]
+            load_in_4bit=True,
+            bnb_4bit_compute_dtype=torch.float16,
+            bnb_4bit_quant_type="nf4",
+        )
+    elif quant == "8bit":
+        model_kwargs["quantization_config"] = BitsAndBytesConfig(  # type: ignore[no-untyped-call]
+            load_in_8bit=True
+        )
+    elif quant == "none":
+        pass
+    else:
+        raise ValueError(f"Unsupported quantization: {quantization}")
+    return model_kwargs
+
+
+def _load_hf_pipeline(
+    *,
+    model_id: str,
+    max_new_tokens: int,
+    hf_pipeline_cls: Any,
+    model_kwargs: dict[str, Any],
+    model_cached: bool,
+) -> Any:
+    pipeline_kwargs: dict[str, Any] = {"max_new_tokens": max_new_tokens}
+    if model_cached:
+        extra_kwargs: dict[str, Any] = {"local_files_only": True}
+    else:
+        extra_kwargs = {}
+
+    try:
+        return hf_pipeline_cls.from_model_id(
+            model_id=model_id,
+            task="text-generation",
+            model_kwargs=model_kwargs,
+            pipeline_kwargs=pipeline_kwargs,
+            **extra_kwargs,
+        )
+    except (OSError, RuntimeError, ValueError) as exc:
+        lowered = str(exc).lower()
+        if model_cached and ("local_files_only" in lowered or "not found" in lowered):
+            extra_kwargs.pop("local_files_only", None)
+            return hf_pipeline_cls.from_model_id(
+                model_id=model_id,
+                task="text-generation",
+                model_kwargs=model_kwargs,
+                pipeline_kwargs=pipeline_kwargs,
+                **extra_kwargs,
+            )
+        raise
+
+
 def create_model_loader(config: AgentConfig | None = None) -> Callable[[], Any]:
     """Create a lazy MedGemma model loader for the configured backend.
 
@@ -55,16 +168,14 @@ def _create_vertex_model_loader(cfg: AgentConfig) -> Callable[[], Any]:
             return cache[0]
 
         try:
-            import vertexai  # type: ignore[import-not-found]
+            import vertexai
         except ImportError as exc:  # pragma: no cover
             raise ImportError(
                 "Vertex AI backend requires google-cloud-aiplatform installed."
             ) from exc
 
         try:
-            from langchain_google_vertexai import (  # type: ignore[import-not-found]
-                ChatVertexAI,
-            )
+            from langchain_google_vertexai import ChatVertexAI
         except ImportError as exc:  # pragma: no cover
             raise ImportError(
                 "Vertex AI backend requires langchain-google-vertexai installed."
@@ -95,112 +206,21 @@ def _create_local_model_loader(cfg: AgentConfig) -> Callable[[], Any]:
         if cache:
             return cache[0]
 
-        # Ensure Hugging Face token is available for authentication
-        # transformers/huggingface_hub looks for HF_TOKEN or HUGGINGFACEHUB_API_TOKEN
-        hf_token = os.getenv("HF_TOKEN") or os.getenv("HUGGINGFACEHUB_API_TOKEN")
-        if hf_token:
-            # Set both environment variable names to ensure compatibility
-            os.environ["HF_TOKEN"] = hf_token
-            os.environ["HUGGINGFACEHUB_API_TOKEN"] = hf_token
-            # Also ensure huggingface_hub uses the token
-            try:
-                from huggingface_hub import login  # type: ignore[import-not-found]
+        _ensure_hf_auth_env()
+        torch = _import_torch()
+        chat_hf_cls, hf_pipeline_cls = _import_langchain_hf()
+        model_cached = _is_model_cached(cfg.model_path)
+        model_kwargs = _build_model_kwargs(quantization=cfg.quantization, torch=torch)
 
-                login(token=hf_token, add_to_git_credential=False)
-            except (ImportError, OSError, RuntimeError, ValueError):
-                # If login fails, continue anyway - token is in env vars
-                pass
+        llm = _load_hf_pipeline(
+            model_id=cfg.model_path,
+            max_new_tokens=cfg.max_new_tokens,
+            hf_pipeline_cls=hf_pipeline_cls,
+            model_kwargs=model_kwargs,
+            model_cached=model_cached,
+        )
 
-        try:
-            import torch  # type: ignore[import-not-found]
-        except ImportError as exc:  # pragma: no cover
-            raise ImportError(
-                "Torch is required to load MedGemma. Install inference ML dependencies."
-            ) from exc
-
-        try:
-            from langchain_huggingface import (  # type: ignore[import-not-found]
-                ChatHuggingFace,
-                HuggingFacePipeline,
-            )
-        except ImportError as exc:  # pragma: no cover
-            raise ImportError(
-                "langchain-huggingface is required to load MedGemma. "
-                "Install inference ML dependencies."
-            ) from exc
-
-        from transformers import BitsAndBytesConfig  # type: ignore[import-not-found]
-
-        # Check if model is already cached to avoid re-downloading
-        model_cached = False
-        try:
-            from huggingface_hub import (  # type: ignore[import-not-found]
-                try_to_load_from_cache,
-            )
-
-            # Check for key files that indicate model is cached
-            config_path = try_to_load_from_cache(
-                repo_id=cfg.model_path, filename="config.json", revision="main"
-            )
-            # If config exists, assume model files are cached (transformers handles this)
-            model_cached = config_path is not None
-        except (ImportError, OSError, RuntimeError, ValueError):
-            # If cache check fails, proceed with normal download
-            model_cached = False
-
-        model_kwargs: dict[str, Any] = {
-            "device_map": "auto",
-            "dtype": torch.bfloat16,
-        }
-
-        quant = (cfg.quantization or "none").lower()
-        if quant == "4bit":
-            model_kwargs["quantization_config"] = BitsAndBytesConfig(
-                load_in_4bit=True,
-                bnb_4bit_compute_dtype=torch.float16,
-                bnb_4bit_quant_type="nf4",
-            )
-        elif quant == "8bit":
-            model_kwargs["quantization_config"] = BitsAndBytesConfig(load_in_8bit=True)
-        elif quant == "none":
-            pass
-        else:
-            raise ValueError(f"Unsupported quantization: {cfg.quantization}")
-
-        # Prepare kwargs for HuggingFacePipeline.from_model_id
-        # If model is cached, use local_files_only to avoid network calls
-        pipeline_kwargs_base: dict[str, Any] = {"max_new_tokens": cfg.max_new_tokens}
-        extra_kwargs: dict[str, Any] = {}
-        if model_cached:
-            # Pass local_files_only via **kwargs to avoid re-downloading
-            extra_kwargs["local_files_only"] = True
-
-        # Try loading with local_files_only first if cached, fall back to normal if it fails
-        try:
-            llm = HuggingFacePipeline.from_model_id(
-                model_id=cfg.model_path,
-                task="text-generation",
-                model_kwargs=model_kwargs,
-                pipeline_kwargs=pipeline_kwargs_base,
-                **extra_kwargs,
-            )
-        except (OSError, RuntimeError, ValueError) as exc:
-            # If local_files_only=True failed (e.g., missing files), retry without it
-            lowered = str(exc).lower()
-            if model_cached and ("local_files_only" in lowered or "not found" in lowered):
-                # Remove local_files_only and retry (will download missing files)
-                extra_kwargs.pop("local_files_only", None)
-                llm = HuggingFacePipeline.from_model_id(
-                    model_id=cfg.model_path,
-                    task="text-generation",
-                    model_kwargs=model_kwargs,
-                    pipeline_kwargs=pipeline_kwargs_base,
-                    **extra_kwargs,
-                )
-            else:
-                raise
-
-        model = ChatHuggingFace(llm=llm)
+        model = chat_hf_cls(llm=llm)
         cache.append(model)
         return model
 

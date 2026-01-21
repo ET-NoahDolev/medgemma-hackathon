@@ -56,6 +56,18 @@ def allow_storage_reset(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("ALLOW_STORAGE_RESET", "1")
 
 
+@pytest.fixture(autouse=True)
+def force_fast_test_settings(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Force fast, deterministic settings for tests.
+
+    BackgroundTasks can execute extraction during request handling. Ensure we do
+    not accidentally invoke model-backed extraction/grounding in unit tests.
+    """
+
+    monkeypatch.setenv("USE_MODEL_EXTRACTION", "false")
+    monkeypatch.setenv("USE_AI_GROUNDING", "false")
+
+
 @pytest.fixture()
 def fake_services(monkeypatch: pytest.MonkeyPatch) -> FakeServicesState:
     state = FakeServicesState(

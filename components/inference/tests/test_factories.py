@@ -1,3 +1,6 @@
+from pathlib import Path
+from typing import Any
+
 import pytest
 
 from inference import AgentConfig, create_model_loader, create_react_agent
@@ -38,35 +41,106 @@ def test_create_model_loader_vertex_requires_env() -> None:
         create_model_loader(cfg)
 
 
+def test_vertex_loader_is_lazy_on_imports(monkeypatch: pytest.MonkeyPatch) -> None:
+    # Creating the loader should not import vertex dependencies.
+    monkeypatch.delenv("MODEL_BACKEND", raising=False)
+    monkeypatch.delenv("MEDGEMMA_BACKEND", raising=False)
+
+    cfg = AgentConfig(
+        backend="vertex",
+        gcp_project_id="p",
+        gcp_region="r",
+        vertex_endpoint_id="123",
+    )
+
+    import sys
+
+    sys.modules.pop("vertexai", None)
+    sys.modules.pop("langchain_google_vertexai", None)
+
+    loader = create_model_loader(cfg)
+    assert callable(loader)
+    assert "vertexai" not in sys.modules
+    assert "langchain_google_vertexai" not in sys.modules
+
+
+def test_vertex_loader_initializes_and_builds_resource_name(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # Full offline test: env selects vertex backend; loader initializes vertexai and
+    # constructs ChatVertexAI with endpoint resource name.
+    monkeypatch.setenv("MODEL_BACKEND", "vertex")
+    monkeypatch.setenv("GCP_PROJECT_ID", "my-project")
+    monkeypatch.setenv("GCP_REGION", "europe-west4")
+    monkeypatch.setenv("VERTEX_ENDPOINT_ID", "987654321")
+
+    init_args: tuple[str, str] | None = None
+    chat_args: tuple[str, int] | None = None
+
+    def _init(*, project: str, location: str) -> None:
+        nonlocal init_args
+        init_args = (project, location)
+
+    class _ChatVertexAI:
+        def __init__(self, *, model_name: str, max_output_tokens: int) -> None:
+            nonlocal chat_args
+            chat_args = (model_name, max_output_tokens)
+
+    import sys
+    import types
+
+    monkeypatch.setitem(sys.modules, "vertexai", types.SimpleNamespace(init=_init))
+    monkeypatch.setitem(
+        sys.modules,
+        "langchain_google_vertexai",
+        types.SimpleNamespace(ChatVertexAI=_ChatVertexAI),
+    )
+
+    loader = create_model_loader()
+    model = loader()
+    assert model is not None
+
+    assert init_args == ("my-project", "europe-west4")
+    assert chat_args is not None
+    model_name, max_tokens = chat_args
+    assert max_tokens == 512
+    assert model_name == (
+        "projects/my-project/locations/europe-west4/endpoints/987654321"
+    )
+
+
 @pytest.mark.asyncio
 async def test_create_react_agent_smoke(
-    monkeypatch: pytest.MonkeyPatch, tmp_path
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     # Keep this lightweight: stub model + stub agent so we don't need real ML deps.
     (tmp_path / "sys.j2").write_text("system {{ x }}")
     (tmp_path / "user.j2").write_text("user {{ y }}")
 
-    class DummySchema:  # minimal pydantic-like interface
-        def __init__(self, **kwargs):
-            self.kwargs = kwargs
+    from pydantic import BaseModel
 
-    async def _ainvoke(_payload):
-        return {"structured_response": {"ok": True}}
+    class DummySchema(BaseModel):
+        ok: bool = False
 
     class DummyAgent:
-        ainvoke = staticmethod(_ainvoke)
+        async def ainvoke(self, _payload: object) -> dict[str, object]:
+            return {"structured_response": {"ok": True}}
 
-    def dummy_model_loader():
+    def dummy_model_loader() -> object:
         return object()
 
     # Monkeypatch langgraph.prebuilt.create_react_agent to return DummyAgent
+    import sys
     import types
 
-    prebuilt = types.SimpleNamespace(create_react_agent=lambda **_kw: DummyAgent())
+    def _create_react_agent(**_kw: Any) -> DummyAgent:
+        return DummyAgent()
+
+    prebuilt = types.SimpleNamespace(create_react_agent=_create_react_agent)
     monkeypatch.setitem(
-        __import__("sys").modules, "langgraph", types.SimpleNamespace(prebuilt=prebuilt)
+        sys.modules, "langgraph", types.SimpleNamespace(prebuilt=prebuilt)
     )
-    monkeypatch.setitem(__import__("sys").modules, "langgraph.prebuilt", prebuilt)
+    monkeypatch.setitem(sys.modules, "langgraph.prebuilt", prebuilt)
 
     invoke = create_react_agent(
         model_loader=dummy_model_loader,
@@ -78,5 +152,5 @@ async def test_create_react_agent_smoke(
     )
     result = await invoke({"x": "a", "y": "b"})
     assert isinstance(result, DummySchema)
-    assert result.kwargs["ok"] is True
+    assert result.ok is True
 

@@ -64,7 +64,7 @@ def upload_training_data_to_gcs(
     resolved_project = (project_id or os.getenv("GCP_PROJECT_ID") or "").strip() or None
 
     try:
-        from google.cloud import storage  # type: ignore[import-not-found]
+        from google.cloud import storage  # type: ignore[import-not-found, import-untyped]
     except ImportError as exc:  # pragma: no cover
         raise ImportError(
             "Uploading to GCS requires google-cloud-storage installed."

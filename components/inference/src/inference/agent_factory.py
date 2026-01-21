@@ -18,9 +18,7 @@ TModel = TypeVar("TModel", bound=BaseModel)
 def _load_langgraph_create_react_agent() -> Any:
     """Load LangGraph's prebuilt create_react_agent lazily."""
     try:
-        from langgraph.prebuilt import (  # type: ignore[import-not-found]
-            create_react_agent as lg_create_react_agent,
-        )
+        from langgraph.prebuilt import create_react_agent as lg_create_react_agent
     except ImportError as exc:  # pragma: no cover
         raise ImportError(
             "langgraph is required to create ReAct agents. "
@@ -121,7 +119,7 @@ def create_react_agent(
             return parsed
 
         logger.warning("No structured response available; returning default schema")
-        return response_schema()  # type: ignore[call-arg]
+        return response_schema()
 
     return invoke
 

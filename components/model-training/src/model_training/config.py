@@ -5,12 +5,22 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Any, Tuple
 
+_PeftLoraConfig: Any = None
+get_peft_model: Any = None
+_PeftTaskType: Any = None
+
 try:
-    from peft import LoraConfig as _PeftLoraConfig, get_peft_model, TaskType as _PeftTaskType  # type: ignore[import-not-found]
+    from peft import (  # type: ignore[import-not-found]
+        LoraConfig as PeftLoraConfig,
+        TaskType as PeftTaskType,
+        get_peft_model as peft_get_peft_model,
+    )
 except ImportError:  # pragma: no cover
-    _PeftLoraConfig = None  # type: ignore[assignment]
-    get_peft_model = None  # type: ignore[assignment]
-    _PeftTaskType = None  # type: ignore[assignment]
+    pass
+else:  # pragma: no cover
+    _PeftLoraConfig = PeftLoraConfig
+    get_peft_model = peft_get_peft_model
+    _PeftTaskType = PeftTaskType
 
 try:
     from transformers import AutoModelForCausalLM, AutoTokenizer  # type: ignore[import-not-found]
@@ -89,7 +99,7 @@ def load_model_and_tokenizer(
 
     tokenizer = AutoTokenizer.from_pretrained(model_name)
 
-    model = AutoModelForCausalLM.from_pretrained(
+    model: Any = AutoModelForCausalLM.from_pretrained(
         model_name,
         load_in_8bit=load_in_8bit,
         device_map="auto",

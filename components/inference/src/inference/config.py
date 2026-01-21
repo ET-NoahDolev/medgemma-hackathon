@@ -34,7 +34,9 @@ class AgentConfig:
     @classmethod
     def from_env(cls) -> "AgentConfig":
         """Create AgentConfig from environment variables."""
-        raw_backend = (os.getenv("MODEL_BACKEND") or os.getenv("MEDGEMMA_BACKEND") or "local").strip()
+        raw_backend = (
+            os.getenv("MODEL_BACKEND") or os.getenv("MEDGEMMA_BACKEND") or "local"
+        ).strip()
         backend = raw_backend.lower()
         if backend not in {"local", "vertex"}:
             backend = "local"

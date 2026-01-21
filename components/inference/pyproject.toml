@@ -53,6 +53,9 @@ pythonpath = ["src"]
 testpaths = ["tests"]
 addopts = "--cov=inference --cov-branch --cov-report=term-missing"
 asyncio_mode = "auto"
+markers = [
+    "integration: tests requiring external services (opt-in via env vars)",
+]
 
 [tool.uv]
 cache-dir = "./.uv_cache"

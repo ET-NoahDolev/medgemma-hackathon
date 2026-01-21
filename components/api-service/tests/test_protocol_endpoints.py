@@ -1,14 +1,6 @@
-import pytest
+from __future__ import annotations
+
 from fastapi.testclient import TestClient
-
-from api_service.main import app
-from api_service.storage import reset_storage
-
-
-@pytest.fixture()
-def client() -> TestClient:
-    reset_storage()
-    return TestClient(app)
 
 
 class TestListProtocols:

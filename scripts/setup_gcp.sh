@@ -136,14 +136,64 @@ main() {
   if [[ "${WRITE_ENV_TEMPLATE}" == "true" ]]; then
     local repo_root
     repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+    
+    # Try to detect existing Vertex endpoints
+    local endpoint_id=""
+    if [[ "${DRY_RUN}" != "true" ]]; then
+      # Look for endpoints with "medgemma" in the name (case-insensitive)
+      # Suppress errors in case API isn't enabled or no endpoints exist yet
+      local endpoints
+      endpoints=$(gcloud ai endpoints list \
+        --region="${region}" \
+        --format="value(name)" \
+        --filter="displayName~(?i)medgemma" \
+        2>/dev/null || echo "")
+      
+      if [[ -n "${endpoints}" ]]; then
+        # Take the first one found and extract just the endpoint ID
+        endpoint_id=$(echo "${endpoints}" | head -n1 | sed 's|.*/endpoints/||' || echo "")
+        if [[ -n "${endpoint_id}" ]]; then
+          echo "Found existing Vertex endpoint: ${endpoint_id}"
+        fi
+      fi
+    fi
+    
     cat > "${repo_root}/.env.vertex" <<EOF
+# Vertex AI Inference Configuration
+# Source this file or export these variables before running services:
+#   source .env.vertex
+#   export \$(cat .env.vertex | xargs)
+
+# Backend selection: "local" or "vertex"
 MODEL_BACKEND=vertex
+
+# GCP Project Configuration
 GCP_PROJECT_ID=${GCP_PROJECT_ID}
 GCP_REGION=${region}
+
+# Vertex AI Endpoint (required for MODEL_BACKEND=vertex)
+# Get this from: gcloud ai endpoints list --region=${region}
+# Or from Vertex AI Console -> Endpoints
+VERTEX_ENDPOINT_ID=${endpoint_id}
+
+# GCS Bucket for training data and model artifacts
 GCS_BUCKET=gs://${bucket_name}
-VERTEX_ENDPOINT_ID=
+
+# Optional: Training backend selection ("local" or "vertex")
+# TRAINING_BACKEND=vertex
+
+# Optional: Vertex E2E test configuration (for integration tests)
+# VERTEX_E2E=1
+# VERTEX_E2E_MAX_TOKENS=32
+# VERTEX_E2E_PROMPT="Reply with 'ok' only."
 EOF
-    echo "Wrote ${repo_root}/.env.vertex (fill VERTEX_ENDPOINT_ID after deployment)."
+    if [[ -z "${endpoint_id}" ]]; then
+      echo "Wrote ${repo_root}/.env.vertex"
+      echo "  ⚠️  VERTEX_ENDPOINT_ID is empty - fill it after deploying your model."
+      echo "     List endpoints: gcloud ai endpoints list --region=${region}"
+    else
+      echo "Wrote ${repo_root}/.env.vertex (with detected endpoint ID)"
+    fi
   fi
 
   if [[ "${WRITE_CONFIG}" == "true" ]]; then
@@ -165,11 +215,25 @@ EOF
     echo "- Option A (recommended): Vertex AI Model Garden -> search 'MedGemma' -> Deploy"
     echo "- Option B: custom container / vLLM deployment (see instructions/vertex_pamphlet.md)"
     echo
-    echo "After deployment, set:"
-    echo "  export VERTEX_ENDPOINT_ID=<your-endpoint-id>"
+    echo "After deployment, update .env.vertex with your endpoint ID:"
+    echo "  VERTEX_ENDPOINT_ID=\$(gcloud ai endpoints list --region=${region} --format='value(name)' --filter='displayName~medgemma' | head -n1 | sed 's|.*/endpoints/||')"
+    echo "  sed -i '' \"s/^VERTEX_ENDPOINT_ID=.*/VERTEX_ENDPOINT_ID=\${VERTEX_ENDPOINT_ID}/\" .env.vertex"
+    echo
+    echo "Or manually edit .env.vertex and set VERTEX_ENDPOINT_ID"
   fi
 
-  echo "GCP setup complete."
+  echo
+  echo "✅ GCP setup complete!"
+  if [[ "${WRITE_ENV_TEMPLATE}" == "true" ]]; then
+    echo
+    echo "To use Vertex AI backend, source the environment file:"
+    echo "  source .env.vertex"
+    echo
+    echo "Or export variables manually:"
+    echo "  export \$(grep -v '^#' .env.vertex | xargs)"
+    echo
+    echo "Then run your services - they will automatically use Vertex AI."
+  fi
 }
 
 main "$@"
