@@ -40,6 +40,16 @@ def test_create_model_loader_vertex_requires_env() -> None:
     with pytest.raises(ValueError, match="GCP_PROJECT_ID"):
         create_model_loader(cfg)
 
+    cfg = AgentConfig(
+        backend="vertex",
+        gcp_project_id="p",
+        gcp_region="europe-west4",
+        vertex_endpoint_id="",
+        vertex_model_name="",
+    )
+    with pytest.raises(ValueError, match="VERTEX_ENDPOINT_ID or VERTEX_MODEL_NAME"):
+        create_model_loader(cfg)
+
 
 def test_vertex_loader_is_lazy_on_imports(monkeypatch: pytest.MonkeyPatch) -> None:
     # Creating the loader should not import vertex dependencies.
@@ -56,6 +66,7 @@ def test_vertex_loader_is_lazy_on_imports(monkeypatch: pytest.MonkeyPatch) -> No
     import sys
 
     sys.modules.pop("vertexai", None)
+    sys.modules.pop("langchain_google_genai", None)
     sys.modules.pop("langchain_google_vertexai", None)
 
     loader = create_model_loader(cfg)
@@ -73,6 +84,7 @@ def test_vertex_loader_initializes_and_builds_resource_name(
     monkeypatch.setenv("GCP_PROJECT_ID", "my-project")
     monkeypatch.setenv("GCP_REGION", "europe-west4")
     monkeypatch.setenv("VERTEX_ENDPOINT_ID", "987654321")
+    monkeypatch.delenv("VERTEX_MODEL_NAME", raising=False)
 
     init_args: tuple[str, str] | None = None
     chat_args: tuple[str, int] | None = None
@@ -107,6 +119,59 @@ def test_vertex_loader_initializes_and_builds_resource_name(
     assert model_name == (
         "projects/my-project/locations/europe-west4/endpoints/987654321"
     )
+
+
+def test_vertex_loader_uses_genai_model_name(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("MODEL_BACKEND", "vertex")
+    monkeypatch.setenv("GCP_PROJECT_ID", "my-project")
+    monkeypatch.setenv("GCP_REGION", "europe-west4")
+    monkeypatch.setenv("VERTEX_MODEL_NAME", "gemini-1.5-pro")
+    monkeypatch.delenv("VERTEX_ENDPOINT_ID", raising=False)
+
+    init_args: tuple[str, str] | None = None
+    chat_args: tuple[str, str, str, bool, int] | None = None
+
+    def _init(*, project: str, location: str) -> None:
+        nonlocal init_args
+        init_args = (project, location)
+
+    class _ChatGoogleGenerativeAI:
+        def __init__(
+            self,
+            *,
+            model: str,
+            project: str,
+            location: str,
+            vertexai: bool,
+            max_output_tokens: int,
+        ) -> None:
+            nonlocal chat_args
+            chat_args = (
+                model,
+                project,
+                location,
+                vertexai,
+                max_output_tokens,
+            )
+
+    import sys
+    import types
+
+    monkeypatch.setitem(sys.modules, "vertexai", types.SimpleNamespace(init=_init))
+    monkeypatch.setitem(
+        sys.modules,
+        "langchain_google_genai",
+        types.SimpleNamespace(ChatGoogleGenerativeAI=_ChatGoogleGenerativeAI),
+    )
+
+    loader = create_model_loader()
+    model = loader()
+    assert model is not None
+
+    assert init_args == ("my-project", "europe-west4")
+    assert chat_args == ("gemini-1.5-pro", "my-project", "europe-west4", True, 512)
 
 
 @pytest.mark.asyncio

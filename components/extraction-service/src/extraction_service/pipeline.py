@@ -82,9 +82,15 @@ class ExtractionPipeline:
         from inference import AgentConfig, create_model_loader, create_react_agent
 
         prompts_dir = Path(__file__).parent / "prompts"
+        base_cfg = AgentConfig.from_env()
         agent_cfg = AgentConfig(
-            model_path=self.config.model_path,
-            quantization=self.config.quantization,
+            backend=base_cfg.backend,
+            model_path=self.config.model_path or base_cfg.model_path,
+            quantization=self.config.quantization or base_cfg.quantization,
+            max_new_tokens=base_cfg.max_new_tokens,
+            gcp_project_id=base_cfg.gcp_project_id,
+            gcp_region=base_cfg.gcp_region,
+            vertex_endpoint_id=base_cfg.vertex_endpoint_id,
         )
         model_loader = create_model_loader(agent_cfg)
         # Import locally to keep baseline users lightweight.

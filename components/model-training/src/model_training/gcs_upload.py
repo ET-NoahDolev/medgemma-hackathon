@@ -1,5 +1,7 @@
 """Google Cloud Storage upload helpers for Vertex training datasets."""
 
+# mypy: disable-error-code=import-untyped
+
 from __future__ import annotations
 
 import os

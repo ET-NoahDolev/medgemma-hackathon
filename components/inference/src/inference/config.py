@@ -21,6 +21,8 @@ class AgentConfig:
         gcp_project_id: GCP project ID (required for Vertex backend).
         gcp_region: GCP region (required for Vertex backend).
         vertex_endpoint_id: Vertex AI endpoint ID (required for Vertex backend).
+        vertex_model_name: Vertex model name (optional alternative to endpoint).
+        vertex_endpoint_url: Dedicated endpoint URL (optional, auto-detected).
     """
 
     backend: str = "local"
@@ -30,6 +32,8 @@ class AgentConfig:
     gcp_project_id: str = ""
     gcp_region: str = "europe-west4"
     vertex_endpoint_id: str = ""
+    vertex_model_name: str = ""
+    vertex_endpoint_url: str = ""
 
     @classmethod
     def from_env(cls) -> "AgentConfig":
@@ -56,5 +60,11 @@ class AgentConfig:
             gcp_project_id=os.getenv("GCP_PROJECT_ID", cls.gcp_project_id),
             gcp_region=os.getenv("GCP_REGION", cls.gcp_region),
             vertex_endpoint_id=os.getenv("VERTEX_ENDPOINT_ID", cls.vertex_endpoint_id),
+            vertex_model_name=os.getenv(
+                "VERTEX_MODEL_NAME", cls.vertex_model_name
+            ),
+            vertex_endpoint_url=os.getenv(
+                "VERTEX_ENDPOINT_URL", cls.vertex_endpoint_url
+            ),
         )
 

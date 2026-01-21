@@ -14,6 +14,7 @@ API_PORT="${API_PORT:-8000}"
 UI_PORT="${UI_PORT:-3000}"
 BASE_PATH="${BASE_PATH:-/demo-app/}"
 VITE_API_BASE_URL="${VITE_API_BASE_URL:-http://localhost:${API_PORT}}"
+RESET_UI_CACHE="${RESET_UI_CACHE:-false}"
 
 # PIDs for cleanup
 BACKEND_PID=""
@@ -35,6 +36,18 @@ if [ -f ".env" ]; then
     # shellcheck disable=SC1091
     . "$REPO_ROOT/.env"
     set +a
+fi
+
+if [ -f ".env.vertex" ]; then
+    echo "⚠️  Detected .env.vertex. Please move those values into .env."
+fi
+
+if [[ "${RESET_UI_CACHE}" == "true" ]]; then
+    API_DB_PATH="${REPO_ROOT}/components/api-service/.data/api_service.db"
+    if [ -f "${API_DB_PATH}" ]; then
+        echo "🧹 Clearing API service database: ${API_DB_PATH}"
+        rm -f "${API_DB_PATH}"
+    fi
 fi
 
 # Verify UMLS key is set (either in .env or environment).
