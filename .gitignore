@@ -381,3 +381,5 @@ scripts/tmp/
 mlruns/mlflow.db
 mlruns/*
 mlruns/
+
+.npm-cache/
