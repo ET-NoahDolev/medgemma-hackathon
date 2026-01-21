@@ -76,7 +76,7 @@ def _extract_criteria_baseline_stream(document_text: str) -> Iterator[Criterion]
         raise ValueError("document_text is required")
 
     sections = detect_sections(document_text)
-    
+
     # Track seen text to deduplicate if needed, essentially just yielding
     for section_type, section_text in sections.items():
         sentences = split_into_candidate_sentences(section_text)

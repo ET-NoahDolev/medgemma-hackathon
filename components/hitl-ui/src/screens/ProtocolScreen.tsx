@@ -24,6 +24,8 @@ import {
   FolderOpen,
   ArrowLeft,
 } from 'lucide-react';
+import { LinearProgress } from '@mui/material';
+import { Timeline, TimelineConnector, TimelineContent, TimelineDot, TimelineItem, TimelineSeparator } from '@mui/lab';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { toast } from 'sonner';
@@ -103,6 +105,8 @@ export function ProtocolScreen({ protocol, onBack }: ProtocolScreenProps) {
       confidence: c.confidence,
       status: 'ai-suggested' as const,
       evidenceSnippet: undefined,
+      snomedCodes: c.snomed_codes ?? [],
+      fieldMapping: null,
     }));
   }, [criteriaData]);
 
@@ -133,20 +137,21 @@ export function ProtocolScreen({ protocol, onBack }: ProtocolScreenProps) {
     });
   }, [activeProtocolId, apiMappedCriteria, uploaded]);
 
-  // If extraction is still running, poll until criteria appear.
+  // If extraction is still running, poll criteria so the list grows in real time.
   useEffect(() => {
     if (!uploaded) return;
     if (!activeProtocolId) return;
-    if (isLoading) return;
     if (error) return;
-    if ((criteriaData?.criteria?.length ?? 0) > 0) return;
+    const status = protocolData?.processing_status ?? 'pending';
+    const shouldPoll = status === 'pending' || status === 'extracting' || status === 'grounding';
+    if (!shouldPoll) return;
 
     const interval = window.setInterval(() => {
       void refetch();
     }, 1500);
 
     return () => window.clearInterval(interval);
-  }, [activeProtocolId, criteriaData?.criteria?.length, error, isLoading, refetch, uploaded]);
+  }, [activeProtocolId, error, protocolData?.processing_status, refetch, uploaded]);
 
   const handleApprove = (id: string) => {
     submitFeedback.mutate({ criterion_id: id, action: 'accept' });
@@ -377,6 +382,81 @@ export function ProtocolScreen({ protocol, onBack }: ProtocolScreenProps) {
           </AlertDescription>
         </Alert>
 
+        {protocolData && (
+          <div className="mt-4">
+            <div className="flex items-center justify-between text-sm text-gray-600">
+              <span>
+                Status:{' '}
+                <span className="font-medium text-gray-900">
+                  {protocolData.processing_status ?? 'pending'}
+                </span>
+              </span>
+              <span>
+                Extracted{' '}
+                <span className="font-medium text-gray-900">{protocolData.processed_count ?? 0}</span>{' '}
+                criteria
+              </span>
+            </div>
+
+            <div className="mt-2">
+              {protocolData.total_estimated && protocolData.total_estimated > 0 ? (
+                <LinearProgress
+                  variant="determinate"
+                  value={Math.min(
+                    100,
+                    (100 * (protocolData.processed_count ?? 0)) / protocolData.total_estimated
+                  )}
+                />
+              ) : (
+                <LinearProgress variant="indeterminate" />
+              )}
+            </div>
+
+            <div className="mt-4">
+              <Timeline sx={{ p: 0, m: 0 }}>
+                <TimelineItem sx={{ '&:before': { flex: 0, padding: 0 } }}>
+                  <TimelineSeparator>
+                    <TimelineDot color="success" />
+                    <TimelineConnector />
+                  </TimelineSeparator>
+                  <TimelineContent sx={{ py: 0.5 }}>
+                    <span className="text-sm text-gray-900">Upload</span>
+                  </TimelineContent>
+                </TimelineItem>
+
+                <TimelineItem sx={{ '&:before': { flex: 0, padding: 0 } }}>
+                  <TimelineSeparator>
+                    <TimelineDot
+                      color={
+                        protocolData.processing_status === 'failed'
+                          ? 'error'
+                          : protocolData.processing_status === 'completed'
+                            ? 'success'
+                            : protocolData.processing_status === 'extracting'
+                              ? 'primary'
+                              : 'grey'
+                      }
+                    />
+                    <TimelineConnector />
+                  </TimelineSeparator>
+                  <TimelineContent sx={{ py: 0.5 }}>
+                    <span className="text-sm text-gray-900">Extraction</span>
+                  </TimelineContent>
+                </TimelineItem>
+
+                <TimelineItem sx={{ '&:before': { flex: 0, padding: 0 } }}>
+                  <TimelineSeparator>
+                    <TimelineDot color={protocolData.processing_status === 'completed' ? 'primary' : 'grey'} />
+                  </TimelineSeparator>
+                  <TimelineContent sx={{ py: 0.5 }}>
+                    <span className="text-sm text-gray-900">Review</span>
+                  </TimelineContent>
+                </TimelineItem>
+              </Timeline>
+            </div>
+          </div>
+        )}
+
         {(error || protocolError) && (
           <Alert className="mt-4 border-red-300 bg-red-50">
             <Info className="h-4 w-4 text-red-600" />
@@ -418,7 +498,7 @@ export function ProtocolScreen({ protocol, onBack }: ProtocolScreenProps) {
               <div className="space-y-3">
                 {criteria
                   .filter(c => c.type === section.type)
-                  .map(criterion => (
+                  .map((criterion, idx) => (
                     <Card
                       key={criterion.id}
                       className={
@@ -433,7 +513,7 @@ export function ProtocolScreen({ protocol, onBack }: ProtocolScreenProps) {
                         <div className="flex items-start gap-4">
                           <div className="flex-shrink-0">
                             <span className={`inline-flex items-center justify-center w-8 h-8 rounded-md text-sm font-medium ${section.numClass}`}>
-                              {criterion.id}
+                              {idx + 1}
                             </span>
                           </div>
 

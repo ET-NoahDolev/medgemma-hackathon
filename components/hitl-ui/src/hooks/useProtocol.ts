@@ -9,5 +9,10 @@ export function useProtocol(protocolId: string | null) {
     queryKey: ['protocol', protocolId],
     queryFn: () => getProtocol(protocolId!),
     enabled: !!protocolId,
+    refetchInterval: query => {
+      const status = query.state.data?.processing_status;
+      if (!status) return 2000;
+      return status === 'extracting' || status === 'grounding' || status === 'pending' ? 2000 : false;
+    },
   });
 }

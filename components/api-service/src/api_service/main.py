@@ -11,7 +11,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum
 from pathlib import Path
-from typing import List
+from typing import Any, List
 
 from anyio import to_thread
 from data_pipeline.download_protocols import extract_text_from_pdf
@@ -264,6 +264,7 @@ class ProtocolListItem(BaseModel):
     phase: str | None = None
     processing_status: str
     processed_count: int
+    total_estimated: int
 
 
 class ProtocolListResponse(BaseModel):
@@ -287,6 +288,7 @@ class ProtocolDetailResponse(BaseModel):
     criteria_count: int
     processing_status: str
     processed_count: int
+    total_estimated: int
 
 
 def _reset_state() -> None:
@@ -309,102 +311,74 @@ def create_protocol(
     return ProtocolResponse(protocol_id=protocol.id, title=protocol.title)
 
 
-async def _run_extraction(protocol_id: str, document_text: str, storage: Storage) -> None:
+async def _run_extraction(
+    protocol_id: str, document_text: str, storage: Storage
+) -> None:
     """Run extraction in background task (streaming)."""
+    storage.update_protocol_status(
+        protocol_id=protocol_id,
+        processing_status="extracting",
+        processed_count=0,
+    )
+    # Clear existing criteria first to support re-runs.
+    storage.replace_criteria(protocol_id=protocol_id, extracted=[])
+
+    mlflow = _start_mlflow_run(protocol_id)
+
+    count = 0
     try:
-        storage.update_protocol_status(protocol_id=protocol_id, processing_status="extracting")
-        
-        # Clear existing criteria first to support re-runs
-        storage.replace_criteria(protocol_id=protocol_id, extracted=[])
-        
-        count = 0
-        use_ai_grounding = os.getenv("USE_AI_GROUNDING", "false").lower() == "true"
-        
-        # Use MLflow to track the extraction job if available
-        try:
-            import mlflow
-            # Ensure calling set_tracking_uri multiple times is safe or check if set
-            mlflow.set_tracking_uri("sqlite:///mlflow.db")
-            mlflow.set_experiment("medgemma-extraction")
-            mlflow_active = True
-        except ImportError:
-            mlflow_active = False
+        for item in extraction_pipeline.extract_criteria_stream(document_text):
+            storage.add_criterion_streaming(
+                protocol_id=protocol_id,
+                text=item.text,
+                criterion_type=item.criterion_type,
+                confidence=item.confidence,
+            )
+            count += 1
+            storage.update_protocol_status(
+                protocol_id=protocol_id,
+                processed_count=count,
+            )
 
-        if mlflow_active:
-            run = mlflow.start_run(run_name=f"extract_{protocol_id}")
+        storage.update_protocol_status(
+            protocol_id=protocol_id,
+            processing_status="completed",
+        )
+        _finish_mlflow_run(mlflow, count=count)
+    except Exception:
+        logger.exception("Extraction stream failed")
+        storage.update_protocol_status(
+            protocol_id=protocol_id,
+            processing_status="failed",
+        )
+        _finish_mlflow_run(mlflow, count=count, failed=True)
 
-        try:
-            # Stream criteria from pipeline
-            criteria_generator = extraction_pipeline.extract_criteria_stream(document_text)
-            
-            for item in criteria_generator:
-                # Add to DB
-                criterion = storage.add_criterion_streaming(
-                    protocol_id=protocol_id,
-                    text=item.text,
-                    criterion_type=item.criterion_type,
-                    confidence=item.confidence
-                )
-                count += 1
-                
-                # Update progress
-                storage.update_protocol_status(protocol_id=protocol_id, processed_count=count)
-                
-                # Auto-ground if enabled
-                if use_ai_grounding and AGENT_AVAILABLE:
-                    try:
-                        agent = get_grounding_agent()
-                        # We don't await here to keep extraction fast? 
-                        # Or we SHOULD await to ensure order and consistency?
-                        # Let's await for simplicity.
-                        result = await agent.ground(criterion.text, criterion.criterion_type)
-                        
-                        # Save grounding result
-                        storage.set_snomed_codes(
-                            criterion_id=criterion.id, 
-                            snomed_codes=result.snomed_codes
-                        )
-                        # Ignoring field mappings for now or adds overhead?
-                        # Let's simple check
-                        if result.field_mappings:
-                             # We'd need to store them. storage.py doesn't have `add_field_mapping` helper easily exposed?
-                             # It has Hitl edits but not direct field mapping storage on Criterion (it has JSON column).
-                             # But `storage.py` doesn't have a specific `set_field_mappings` method...
-                             # Wait, Criterion model has `evidence_spans` and `snomed_codes`. 
-                             # It DOES NOT seem to have `field_mappings` column in `Criterion` schema in `storage.py`.
-                             # Checking `storage.py`:
-                             # class Criterion(SQLModel, table=True): ... snomed_codes ... evidence_spans ...
-                             # No field_mappings.
-                             # Ah, `GroundingResponse` has it, but where is it stored?
-                             # Looking at `ground_criterion` endpoint... it just returns it dynamically?
-                             # No, `ground_criterion` in `main.py` (lines 518+) calculates it on the fly using UMLS client or AI!
-                             # It does NOT persist field mappings in the DB?
-                             # Line 563: storage.set_snomed_codes...
-                             # Line 570: field_mapping=field_mapping (returned in response).
-                             # So field mappings are transients? That's a discovery.
-                             # Okay, so we only persist SNOMED codes.
-                             pass
 
-                    except Exception as e:
-                        logger.error(f"Auto-grounding failed for {criterion.id}: {e}")
-            
-            storage.update_protocol_status(protocol_id=protocol_id, processing_status="completed")
-            
-        except Exception as e:
-            logger.error(f"Extraction stream failed: {e}")
-            storage.update_protocol_status(protocol_id=protocol_id, processing_status="failed")
-            if mlflow_active:
-                mlflow.log_param("error", str(e))
-                mlflow.end_run(status="FAILED")
-            raise e
-        
-        if mlflow_active:
-             mlflow.log_metric("criteria_count", count)
-             mlflow.end_run()
+def _start_mlflow_run(protocol_id: str) -> Any | None:
+    """Start an MLflow run if MLflow is installed."""
+    try:
+        import mlflow
+    except ImportError:
+        return None
 
-    except Exception as e:
-        logger.exception("Background extraction task failed")
-        storage.update_protocol_status(protocol_id=protocol_id, processing_status="failed")
+    mlflow.set_tracking_uri("sqlite:///mlflow.db")
+    mlflow.set_experiment("medgemma-extraction")
+    mlflow.start_run(run_name=f"extract_{protocol_id}")
+    return mlflow
+
+
+def _finish_mlflow_run(mlflow: Any | None, *, count: int, failed: bool = False) -> None:
+    """Finish an MLflow run, best-effort."""
+    if mlflow is None:
+        return
+    try:
+        mlflow.log_metric("criteria_count", count)
+        if failed:
+            mlflow.end_run(status="FAILED")
+        else:
+            mlflow.end_run()
+    except Exception:
+        logger.exception("MLflow logging failed")
 
 
 @app.post("/v1/protocols/upload")
@@ -512,6 +486,7 @@ def list_protocols(
                 phase=protocol.phase,
                 processing_status=getattr(protocol, "processing_status", "pending"),
                 processed_count=getattr(protocol, "processed_count", 0),
+                total_estimated=getattr(protocol, "total_estimated", 0),
             )
             for protocol in protocols
         ],
@@ -543,6 +518,7 @@ def get_protocol(
         criteria_count=criteria_count,
         processing_status=getattr(protocol, "processing_status", "pending"),
         processed_count=getattr(protocol, "processed_count", 0),
+        total_estimated=getattr(protocol, "total_estimated", 0),
     )
 
 

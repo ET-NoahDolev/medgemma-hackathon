@@ -237,7 +237,7 @@ class GroundingAgent:
         # Get agent and invoke
         # Get agent and invoke
         agent = self._get_agent()
-        
+
         # MLflow instrumentation
         if MLFLOW_AVAILABLE:
             with mlflow.start_run(run_name="ground_criterion"):
@@ -245,7 +245,7 @@ class GroundingAgent:
                 mlflow.log_param("criterion_type", criterion_type)
                 mlflow.log_text(system_prompt, "prompt_system.txt")
                 mlflow.log_text(user_prompt, "prompt_user.txt")
-                
+
                 start_time = logging.time.time()
                 try:
                     result = await agent.ainvoke(
@@ -258,7 +258,7 @@ class GroundingAgent:
                     )
                     duration = logging.time.time() - start_time
                     mlflow.log_metric("latency_seconds", duration)
-                    
+
                     # Log raw result if serializable, or string representation
                     mlflow.log_text(str(result), "agent_result_raw.txt")
                 except Exception as e:

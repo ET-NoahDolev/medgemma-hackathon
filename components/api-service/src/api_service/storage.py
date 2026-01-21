@@ -11,8 +11,9 @@ from typing import Any, Iterable, cast
 from typing import Protocol as TypingProtocol
 
 from shared.models import Protocol as SharedProtocol
-from sqlalchemy import JSON, Column, delete, func
+from sqlalchemy import JSON, Column, delete, func, text
 from sqlalchemy.engine import Engine
+from sqlalchemy.exc import OperationalError
 from sqlmodel import Field, Session, SQLModel, col, create_engine, select
 
 
@@ -36,7 +37,8 @@ class Protocol(SQLModel, table=True):
     source: str | None = None
     registry_id: str | None = None
     registry_type: str | None = None
-    processing_status: str = Field(default="pending")  # pending, extracting, grounding, completed, failed
+    # pending, extracting, grounding, completed, failed
+    processing_status: str = Field(default="pending")
     processed_count: int = Field(default=0)
     total_estimated: int = Field(default=0)
 
@@ -109,7 +111,57 @@ def get_engine() -> Engine:
 
 def init_db() -> None:
     """Initialize the database tables."""
-    SQLModel.metadata.create_all(get_engine())
+    engine = get_engine()
+    SQLModel.metadata.create_all(engine)
+    _ensure_sqlite_protocol_progress_columns(engine)
+
+
+def _ensure_sqlite_protocol_progress_columns(engine: Engine) -> None:
+    """Ensure progress/status columns exist on the Protocol table for SQLite.
+
+    SQLModel's `create_all()` does not add columns to existing tables. During
+    local development, the persisted SQLite DB can drift behind the model
+    definition, causing runtime 500s when selecting `Protocol` rows.
+    """
+    if engine.dialect.name != "sqlite":
+        return
+
+    with engine.connect() as conn:
+        try:
+            rows = conn.execute(text("PRAGMA table_info(protocol)")).fetchall()
+        except OperationalError:
+            # Table might not exist yet (should be rare because create_all runs first).
+            return
+
+        # PRAGMA table_info: (cid, name, type, notnull, dflt_value, pk)
+        existing = {row[1] for row in rows}
+
+        # NOTE: SQLite supports ADD COLUMN but has limitations; keep this minimal and
+        # additive.
+        migrations: list[str] = []
+        if "processing_status" not in existing:
+            migrations.append(
+                "ALTER TABLE protocol ADD COLUMN processing_status "
+                "TEXT NOT NULL DEFAULT 'pending'"
+            )
+        if "processed_count" not in existing:
+            migrations.append(
+                "ALTER TABLE protocol ADD COLUMN processed_count "
+                "INTEGER NOT NULL DEFAULT 0"
+            )
+        if "total_estimated" not in existing:
+            migrations.append(
+                "ALTER TABLE protocol ADD COLUMN total_estimated "
+                "INTEGER NOT NULL DEFAULT 0"
+            )
+
+        for statement in migrations:
+            try:
+                conn.execute(text(statement))
+            except OperationalError:
+                # If a concurrent process added the column first, ignore.
+                continue
+        conn.commit()
 
 
 def reset_storage() -> None:
@@ -395,14 +447,14 @@ class Storage:
             protocol = session.get(Protocol, protocol_id)
             if protocol is None:
                 return None
-            
+
             if processing_status is not None:
                 protocol.processing_status = processing_status
             if processed_count is not None:
                 protocol.processed_count = processed_count
             if total_estimated is not None:
                 protocol.total_estimated = total_estimated
-                
+
             session.add(protocol)
             session.commit()
             session.refresh(protocol)
