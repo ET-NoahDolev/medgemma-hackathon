@@ -385,4 +385,5 @@ mlruns/
 .npm-cache/
 
 .env.vertex
+.env
 scripts/gcp_config.json
