@@ -383,3 +383,5 @@ mlruns/*
 mlruns/
 
 .npm-cache/
+
+.env.vertex
