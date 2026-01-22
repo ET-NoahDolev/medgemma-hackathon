@@ -28,12 +28,31 @@ class AgentConfig:
     backend: str = "local"
     model_path: str = "google/medgemma-4b-it"
     quantization: str = "4bit"
-    max_new_tokens: int = 512
+    max_new_tokens: int = 4096
     gcp_project_id: str = ""
     gcp_region: str = "europe-west4"
     vertex_endpoint_id: str = ""
     vertex_model_name: str = ""
     vertex_endpoint_url: str = ""
+
+    @property
+    def supports_tools(self) -> bool:
+        """Check if the configured model backend supports native tool calling.
+
+        Returns:
+            True if using Vertex backend with vertex_model_name (Gemini models),
+            False otherwise (local models or Model Garden endpoints).
+
+        Note:
+            If both vertex_model_name and vertex_endpoint_id are set,
+            vertex_model_name takes precedence (per model_factory logic).
+        """
+        if self.backend != "vertex":
+            return False
+        # Gemini models (via vertex_model_name) support tools
+        # Model Garden endpoints (via vertex_endpoint_id only) don't
+        # If both are set, vertex_model_name takes precedence
+        return bool(self.vertex_model_name)
 
     @classmethod
     def from_env(cls) -> "AgentConfig":
