@@ -1,16 +1,16 @@
-Analyze this clinical trial criterion and extract field mappings:
+Ground this clinical trial criterion:
 
 Criterion: {{ criterion_text }}
 Type: {{ criterion_type }}
 
-Use the available tools to:
-1. Search for relevant UMLS/SNOMED concepts in the criterion text
-2. Get semantic types for identified concepts
-3. Determine the field category based on semantic type mapping
-4. Extract the relation (>, >=, <, <=, =, within) and value from the criterion text
-5. Provide SNOMED codes and field mappings with confidence scores
+Follow this workflow:
+1. Call interpret_medical_text to get MedGemma's clinical interpretation
+2. For each identified concept, call search_concepts to find UMLS matches
+3. Call get_semantic_type to determine field categories
+4. Map semantic types to field categories
+5. Extract relations (>, >=, <, <=, =) and values from the criterion text
 
-Return a structured response with:
-- List of SNOMED codes found
-- List of field mappings (field, relation, value, confidence, umls_cui)
-- Brief reasoning explaining your analysis
+Return a structured GroundingResult with:
+- snomed_codes: List of SNOMED CT codes found
+- field_mappings: List of field mappings (field, relation, value, confidence, umls_cui)
+- reasoning: Brief explanation of your analysis and tool usage
