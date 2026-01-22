@@ -16,7 +16,6 @@ try:
     from langchain_mcp_adapters.client import (  # type: ignore[import-not-found]
         MultiServerMCPClient,
     )
-    from langgraph.prebuilt import create_react_agent  # type: ignore[import-not-found]
 except ImportError:  # pragma: no cover
     # Minimal fallback so this module can be imported without LangChain installed.
     def _tool(func=None, **_kwargs):  # type: ignore[no-redef]
@@ -27,7 +26,6 @@ except ImportError:  # pragma: no cover
     tool = _tool  # type: ignore[assignment]
     ChatGoogleGenerativeAI = None  # type: ignore[assignment,misc]
     MultiServerMCPClient = None  # type: ignore[assignment,misc]
-    create_react_agent = None  # type: ignore[assignment,misc]
 
 from shared.field_schema import SEMANTIC_TYPE_MAPPING
 
@@ -159,14 +157,12 @@ class GroundingAgent:
         self._agent: Any | None = None
 
     async def _get_agent(self) -> Any:
-        """Get or create the Gemini orchestrator agent with tools."""
+        """Get or create the Gemini orchestrator agent with structured output."""
         if self._agent is not None:
             return self._agent
 
-        if create_react_agent is None:
-            raise ImportError(
-                "langgraph and langchain-google-genai are required for grounding agent"
-            )
+        from inference import create_react_agent
+        from grounding_service.schemas import GroundingResult
 
         # Get UMLS tools via MCP
         mcp_tools: list[Any] = []
@@ -190,29 +186,41 @@ class GroundingAgent:
         # Combine with MedGemma tool
         tools = [interpret_medical_text, *mcp_tools]
 
-        # Gemini 2.5 Pro as orchestrator (supports tool calling)
-        gemini_model_name = os.getenv("GEMINI_MODEL_NAME", "gemini-2.5-pro")
-        project_id = os.getenv("GCP_PROJECT_ID")
-        region = os.getenv("GCP_REGION", "europe-west4")
+        # Create Gemini model loader
+        def gemini_loader():
+            from langchain_google_genai import ChatGoogleGenerativeAI
 
-        if ChatGoogleGenerativeAI is None:
-            raise ImportError("langchain-google-genai is required")
+            gemini_model_name = os.getenv("GEMINI_MODEL_NAME", "gemini-2.5-pro")
+            project_id = os.getenv("GCP_PROJECT_ID")
+            region = os.getenv("GCP_REGION", "europe-west4")
 
-        model = ChatGoogleGenerativeAI(
-            model=gemini_model_name,
-            project=project_id,
-            location=region,
-            vertexai=True,  # Use Vertex AI backend
+            if ChatGoogleGenerativeAI is None:
+                raise ImportError("langchain-google-genai is required")
+
+            return ChatGoogleGenerativeAI(
+                model=gemini_model_name,
+                project=project_id,
+                location=region,
+                vertexai=True,
+            )
+
+        prompts_dir = Path(__file__).parent / "prompts"
+
+        # Create agent with GroundingResult schema enforced
+        self._agent = create_react_agent(
+            model_loader=gemini_loader,
+            prompts_dir=prompts_dir,
+            tools=tools,
+            response_schema=GroundingResult,  # Pydantic schema
+            system_template="grounding_system.j2",
+            user_template="grounding_user.j2",
         )
-
-        # Create agent with tools
-        self._agent = create_react_agent(model=model, tools=tools)
         return self._agent
 
     async def ground(
         self, criterion_text: str, criterion_type: str
     ) -> GroundingResult:
-        """Ground a criterion using the Gemini orchestrator agent.
+        """Ground a criterion using Gemini orchestrator with structured output.
 
         Args:
             criterion_text: The criterion text to ground.
@@ -223,61 +231,15 @@ class GroundingAgent:
         """
         agent = await self._get_agent()
 
-        # Build prompt for Gemini orchestrator
-        prompt = f"""Ground this clinical trial criterion:
+        # Invoke - returns validated GroundingResult
+        result = await agent(
+            {
+                "criterion_text": criterion_text,
+                "criterion_type": criterion_type,
+            }
+        )
 
-Criterion: {criterion_text}
-Type: {criterion_type}
-
-Use the available tools to:
-1. Call interpret_medical_text to get MedGemma's clinical interpretation
-2. For each identified concept, call search_concepts to find UMLS matches
-3. Call get_semantic_type to determine field categories
-4. Map semantic types to field categories using: {SEMANTIC_TYPE_MAPPING}
-5. Return a structured GroundingResult with SNOMED codes and field mappings
-
-Always use MedGemma for medical interpretation - it has specialized medical knowledge.
-Use UMLS tools for code lookups - they have the terminology database."""
-
-        async def _safe_invoke() -> GroundingResult:
-            try:
-                result = await agent.ainvoke(
-                    {"messages": [("user", prompt)]}
-                )
-                # Parse result - LangGraph returns messages
-                if isinstance(result, dict) and "messages" in result:
-                    messages = result["messages"]
-                    if messages:
-                        last_msg = messages[-1]
-                        content = getattr(last_msg, "content", "")
-                        # Try to parse as JSON or extract structured data
-                        import json
-
-                        try:
-                            # Look for JSON in content
-                            start = content.find("{")
-                            end = content.rfind("}") + 1
-                            if start >= 0 and end > start:
-                                data = json.loads(content[start:end])
-                                return GroundingResult(**data)
-                        except (json.JSONDecodeError, TypeError, ValueError):
-                            pass
-
-                # Fallback: return empty result with reasoning
-                return GroundingResult(
-                    snomed_codes=[],
-                    field_mappings=[],
-                    reasoning=content if isinstance(result, dict) else str(result),
-                )
-            except Exception as exc:
-                logger.warning("Grounding agent failed: %s", exc, exc_info=True)
-                return GroundingResult(
-                    snomed_codes=[],
-                    field_mappings=[],
-                    reasoning=(
-                        "Agent execution completed but structured output not available"
-                    ),
-                )
+        return result
 
         # MLflow instrumentation
         if MLFLOW_AVAILABLE and mlflow is not None:
