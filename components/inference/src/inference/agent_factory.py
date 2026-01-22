@@ -47,6 +47,32 @@ try:
     # Don't set experiment here - let the calling service set it
     # This allows nested runs to work correctly
     _MLFLOW_AVAILABLE = True
+
+    # Enable automatic tracing for LangChain and LangGraph
+    try:
+        mlflow.langchain.autolog()
+        logger.info("MLflow LangChain autologging enabled")
+    except Exception as e:
+        logger.warning("Failed to enable LangChain autologging: %s", e)
+
+    try:
+        # Check if LangGraph autologging is available
+        if hasattr(mlflow, "langgraph"):
+            mlflow.langgraph.autolog()
+            logger.info("MLflow LangGraph autologging enabled")
+        else:
+            logger.debug("MLflow LangGraph autologging not available in this version")
+    except Exception as e:
+        logger.warning("Failed to enable LangGraph autologging: %s", e)
+
+    # Configure tracing settings
+    try:
+        from inference.mlflow_config import configure_mlflow_tracing
+
+        configure_mlflow_tracing()
+    except Exception as e:
+        logger.debug("Failed to configure MLflow tracing: %s", e)
+
 except ImportError:
     pass
 except Exception as e:
@@ -177,15 +203,23 @@ def _log_mlflow_response(
             logger.debug("MLflow: Logged raw result")
 
         if should_end_run:
-            mlflow.end_run()
-            logger.debug("MLflow: Ended agent invocation run")
+            active_run = mlflow.active_run()
+            if active_run:
+                run_id = active_run.info.run_id
+                mlflow.end_run()
+                logger.debug(f"MLflow: Ended agent invocation run {run_id}")
+            else:
+                logger.warning("MLflow: No active run to end in _log_mlflow_response")
     except Exception as e:
         logger.warning(
             "MLflow response logging failed (non-fatal): %s", e, exc_info=True
         )
         if should_end_run:
             try:
-                mlflow.end_run()
+                active_run = mlflow.active_run()
+                if active_run:
+                    mlflow.end_run()
+                    logger.debug("MLflow: Ended run in exception handler")
             except Exception as end_error:
                 logger.warning("Failed to end MLflow run: %s", end_error)
 
@@ -272,11 +306,23 @@ def create_react_agent(
 
         agent = _get_agent()
 
-        # MLflow logging for prompts
-        should_end_run = _setup_mlflow_logging(
-            system_prompt, user_prompt, system_template, user_template
-        )
+        # MLflow autologging will automatically trace the agent invocation
+        # We can still add custom metadata if needed, but most tracing is automatic
+        if _MLFLOW_AVAILABLE:
+            try:
+                from inference.mlflow_config import set_trace_tags
 
+                # Add custom metadata to trace if available
+                set_trace_tags(
+                    {
+                        "system_template": system_template,
+                        "user_template": user_template,
+                    }
+                )
+            except Exception as e:
+                logger.debug("Failed to set trace tags: %s", e)
+
+        # Agent invocation will be automatically traced by MLflow autologging
         result = await agent.ainvoke(
             {
                 "messages": [
@@ -288,8 +334,16 @@ def create_react_agent(
 
         parsed = _parse_structured_response(result, response_schema)
 
-        # Log response if MLflow is available
-        _log_mlflow_response(parsed, result, should_end_run)
+        # Legacy manual logging (kept for backward compatibility and custom metadata)
+        # Autologging handles most of the tracing, but we keep this for:
+        # 1. Custom metadata that autologging might not capture
+        # 2. Backward compatibility with existing MLflow runs
+        # 3. Fallback if autologging is disabled
+        if _MLFLOW_AVAILABLE:
+            should_end_run = _setup_mlflow_logging(
+                system_prompt, user_prompt, system_template, user_template
+            )
+            _log_mlflow_response(parsed, result, should_end_run)
 
         if parsed is not None:
             return parsed

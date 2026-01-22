@@ -9,6 +9,7 @@ dependencies = [
     "extraction-service",
     "fastapi>=0.110.0",
     "grounding-service",
+    "mlflow>=3.8.1",
     "python-dotenv>=1.0.1",
     "python-multipart>=0.0.9",
     "pyyaml>=6.0.0",

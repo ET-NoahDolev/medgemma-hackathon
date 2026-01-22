@@ -1,5 +1,25 @@
 # MLflow Logging Troubleshooting Guide
 
+## Overview
+
+This project uses **MLflow Tracing** for LLM observability, which provides automatic instrumentation of LangChain and LangGraph calls. The system uses a hybrid approach:
+
+- **MLflow Traces**: For LLM/agent invocations (automatic via autologging)
+- **MLflow Runs**: For high-level extraction tracking (manual)
+
+## MLflow Tracing vs Runs
+
+### Traces (Recommended for LLM Observability)
+- **Automatic**: LangChain/LangGraph calls are automatically traced
+- **Detailed**: Captures token usage, latency, and execution flow
+- **Better Visualization**: Shows step-by-step agent execution in MLflow UI
+- **OpenTelemetry Compatible**: Integrates with observability stacks
+
+### Runs (Used for High-Level Tracking)
+- **Manual**: Explicitly started for extraction workflows
+- **Summary Metrics**: Tracks overall extraction statistics
+- **Experiment Organization**: Groups related extractions together
+
 ## Root Cause Analysis
 
 ### Issues Identified
@@ -27,6 +47,10 @@
 5. **Tracking URI Not Persisted**
    - Agent factory might lose tracking URI context between calls
    - **Fix**: Re-set tracking URI before each logging operation
+
+6. **Missing MLflow in Runtime Dependencies**
+   - MLflow was only in dev dependencies, causing silent failures in production
+   - **Fix**: Added MLflow to runtime dependencies for all services
 
 ## Verification Steps
 
@@ -64,8 +88,8 @@ Look for these log messages:
 ```
 INFO: Extraction: use_model=True, MLflow active=True
 INFO: MLflow: Started run <run_id> for protocol <protocol_id>
-DEBUG: MLflow: Logged prompts for agent invocation
-DEBUG: MLflow: Logged structured response
+INFO: MLflow LangChain autologging enabled
+INFO: MLflow LangGraph autologging enabled
 ```
 
 **For Grounding:**
@@ -75,7 +99,9 @@ INFO: Grounding: use_ai=True, AGENT_AVAILABLE=True
 
 **If you see warnings:**
 ```
+WARNING: MLflow not available - tracing disabled. Install mlflow for observability.
 WARNING: MLflow prompt logging failed (non-fatal): ...
+WARNING: Failed to enable LangChain autologging: ...
 ```
 
 This indicates MLflow is trying to log but failing. Check the full stack trace.
@@ -94,38 +120,51 @@ This indicates MLflow is trying to log but failing. Check the full stack trace.
    - `medgemma-grounding` (for grounding runs)
    - `medgemma-inference` (for standalone agent runs)
 
-4. Look for runs with:
-   - Parameters: `system_template`, `user_template`
-   - Artifacts: `system_prompt.txt`, `user_prompt.txt`, `response.json`, `raw_result.json`
+4. **View Traces** (for LLM observability):
+   - Navigate to the "Traces" tab in MLflow UI
+   - Look for traces from agent invocations
+   - Traces show detailed execution flow, token usage, and latency
+   - Traces are automatically created by autologging
+
+5. **View Runs** (for high-level tracking):
+   - Look for runs with:
+     - Parameters: `system_template`, `user_template`
+     - Artifacts: `system_prompt.txt`, `user_prompt.txt`, `response.json`, `raw_result.json`
+   - Runs show overall extraction statistics
 
 ### 5. Test Agent Invocation
 
 **Test Extraction:**
 1. Upload a protocol via API
 2. Trigger extraction
-3. Check logs for MLflow messages
-4. Check MLflow UI for new runs
+3. Check logs for MLflow messages (autologging enabled, traces created)
+4. Check MLflow UI for:
+   - **Traces**: Detailed LLM call traces with token usage
+   - **Runs**: High-level extraction tracking
 
 **Test Grounding:**
 1. Set `USE_AI_GROUNDING=true`
 2. Extract criteria first
 3. Ground a criterion
-4. Check logs and MLflow UI
+4. Check logs and MLflow UI for traces and runs
 
 ## Common Issues
 
-### No Runs Appearing in MLflow
+### No Traces or Runs Appearing in MLflow
 
 **Possible causes:**
-1. Environment variables not set (agents not running)
-2. MLflow not installed
+1. MLflow not installed in runtime dependencies
+2. Environment variables not set (agents not running)
 3. Database file permissions issue
 4. Tracking URI mismatch
+5. Autologging not enabled
 
 **Solution:**
-- Run diagnostic script
-- Check application logs for warnings
+- Verify MLflow is in runtime dependencies (not just dev)
+- Run diagnostic script: `uv run python scripts/diagnose_mlflow.py`
+- Check application logs for warnings about MLflow availability
 - Verify database file exists and is writable
+- Check logs for "MLflow LangChain autologging enabled" message
 
 ### Runs Appear But No Artifacts
 
@@ -151,6 +190,47 @@ This indicates MLflow is trying to log but failing. Check the full stack trace.
 - Check experiment names match
 - Verify MLflow version >= 3.8.1
 
+### Traces Not Appearing
+
+**Possible causes:**
+1. Autologging not enabled
+2. LangChain/LangGraph calls not being made
+3. MLflow tracing API not available in version
+
+**Solution:**
+- Check logs for "MLflow LangChain autologging enabled"
+- Verify agents are actually being invoked (check `USE_MODEL_EXTRACTION` and `USE_AI_GROUNDING`)
+- Ensure MLflow version >= 3.8.1 for tracing support
+- Check MLflow UI "Traces" tab (not just "Runs" tab)
+
+### Token Usage Not Tracked
+
+**Possible causes:**
+1. Autologging not capturing token metrics
+2. Model provider doesn't expose token counts
+3. MLflow version doesn't support token tracking
+
+**Solution:**
+- Verify autologging is enabled
+- Check trace details in MLflow UI for token metrics
+- Some model providers may not expose token counts
+
+## Configuration
+
+### Environment Variables
+
+- `MLFLOW_TRACING_ASYNC`: Enable async tracing (default: `true`)
+- `MLFLOW_TRACING_SAMPLING_RATIO`: Sampling ratio for high-throughput (0.0-1.0)
+- `USE_MODEL_EXTRACTION`: Enable model-based extraction (default: `true`)
+- `USE_AI_GROUNDING`: Enable AI-based grounding (default: `false`)
+
+### Tracing Configuration
+
+Tracing is configured in `components/inference/src/inference/mlflow_config.py`. This module:
+- Enables async logging for production
+- Configures sampling if needed
+- Provides utilities for trace context and tags
+
 ## Debugging Tips
 
 1. **Enable Debug Logging:**
@@ -166,17 +246,33 @@ This indicates MLflow is trying to log but failing. Check the full stack trace.
    print(f"Active run: {run}")
    ```
 
-3. **Verify Tracking URI:**
+3. **Check Active Trace:**
+   ```python
+   import mlflow
+   trace = mlflow.tracing.get_active_trace()
+   print(f"Active trace: {trace}")
+   ```
+
+4. **Verify Tracking URI:**
    ```python
    import mlflow
    print(f"Tracking URI: {mlflow.get_tracking_uri()}")
    ```
 
-4. **Test Direct Logging:**
+5. **Test Direct Logging:**
    ```python
    import mlflow
    mlflow.set_tracking_uri("sqlite:///path/to/mlflow.db")
    mlflow.set_experiment("test")
    with mlflow.start_run():
        mlflow.log_param("test", "value")
+   ```
+
+6. **Test Tracing:**
+   ```python
+   import mlflow
+   mlflow.set_tracking_uri("sqlite:///path/to/mlflow.db")
+   with mlflow.start_trace(name="test_trace"):
+       # Your code here
+       pass
    ```

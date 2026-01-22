@@ -387,9 +387,27 @@ async def _run_extraction(
     )
     storage.replace_criteria(protocol_id=protocol_id, extracted=[])
 
+    # Start MLflow run for high-level extraction tracking
+    # LLM calls within extraction will be automatically traced by autologging
     mlflow = _start_mlflow_run(protocol_id)
 
+    # Set up trace session/context for grouping related traces
+    # This helps group all traces from this extraction together
+    try:
+        from inference.mlflow_config import set_trace_tags
+
+        # Add session context to group traces by protocol extraction
+        set_trace_tags(
+            {
+                "protocol_id": protocol_id,
+                "extraction_session": f"extract_{protocol_id}",
+            }
+        )
+    except Exception as e:
+        logger.debug("Failed to set trace session context: %s", e)
+
     count = 0
+    failed = False
     try:
         # Prefer async extraction when model extraction is enabled to avoid
         # calling anyio.run() inside the running event loop thread.
@@ -429,15 +447,17 @@ async def _run_extraction(
             processing_status="completed",
             progress_message=f"Extraction completed ({count} criteria).",
         )
-        _finish_mlflow_run(mlflow, count=count)
     except Exception:
+        failed = True
         logger.exception("Extraction stream failed")
         storage.update_protocol_status(
             protocol_id=protocol_id,
             processing_status="failed",
             progress_message="Extraction failed.",
         )
-        _finish_mlflow_run(mlflow, count=count, failed=True)
+    finally:
+        # Always finish MLflow run, even if there was an exception
+        _finish_mlflow_run(mlflow, count=count, failed=failed)
 
 
 def _start_mlflow_run(protocol_id: str) -> Any | None:
@@ -445,7 +465,9 @@ def _start_mlflow_run(protocol_id: str) -> Any | None:
     try:
         import mlflow
     except ImportError:
-        logger.debug("MLflow not available, skipping logging")
+        logger.warning(
+            "MLflow not available - tracing disabled. Install mlflow for observability."
+        )
         return None
 
     try:
@@ -466,15 +488,38 @@ def _start_mlflow_run(protocol_id: str) -> Any | None:
 
 
 def _finish_mlflow_run(mlflow: Any | None, *, count: int, failed: bool = False) -> None:
-    """Finish an MLflow run, best-effort."""
+    """Finish an MLflow run, best-effort.
+
+    This ensures the parent extraction run is ended. Nested runs from agent
+    invocations should already be ended by _log_mlflow_response.
+    """
     if mlflow is None:
         return
     try:
+        active_run = mlflow.active_run()
+        if active_run is None:
+            logger.warning("MLflow: No active run to finish")
+            return
+
+        run_id = active_run.info.run_id
+        run_name = active_run.info.run_name or "unknown"
+
+        # Log the metric before ending
         mlflow.log_metric("criteria_count", count)
+
+        # End the run
         if failed:
             mlflow.end_run(status="FAILED")
+            logger.info(
+                f"MLflow: Ended run {run_name} ({run_id[:12]}...) "
+                f"with status FAILED (count={count})"
+            )
         else:
             mlflow.end_run()
+            logger.info(
+                f"MLflow: Ended run {run_name} ({run_id[:12]}...) "
+                f"successfully (count={count})"
+            )
     except Exception:
         logger.exception("MLflow logging failed")
 

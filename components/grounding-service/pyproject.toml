@@ -22,6 +22,7 @@ dependencies = [
     "inference",
     "shared",
     "langchain-mcp-adapters>=0.2.1",
+    "mlflow>=3.8.1",
 ]
 
 [build-system]

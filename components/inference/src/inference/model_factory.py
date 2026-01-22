@@ -370,7 +370,12 @@ def _build_vertex_endpoint_model(
             run_manager: CallbackManagerForLLMRun | None = None,
             **kwargs: Any,
         ) -> ChatResult:
+            import logging
+            import time
+
             from google.cloud import aiplatform
+
+            logger = logging.getLogger(__name__)
 
             # Initialize endpoint
             endpoint = aiplatform.Endpoint(self.endpoint_resource_name)
@@ -393,7 +398,28 @@ def _build_vertex_endpoint_model(
                 "temperature": kwargs.get("temperature", 0.1),
             }
 
-            response = endpoint.predict(instances=[instance], parameters=parameters)
+            # Track prediction call to detect retries
+            start_time = time.time()
+            try:
+                logger.debug(
+                    "Calling Vertex AI endpoint.predict for endpoint: %s",
+                    self.endpoint_resource_name,
+                )
+                response = endpoint.predict(instances=[instance], parameters=parameters)
+                duration = time.time() - start_time
+                logger.debug(
+                    "Vertex AI endpoint.predict succeeded in %.2f seconds",
+                    duration,
+                )
+            except Exception as e:
+                duration = time.time() - start_time
+                logger.warning(
+                    "Vertex AI endpoint.predict failed after %.2f seconds: %s",
+                    duration,
+                    e,
+                    exc_info=True,
+                )
+                raise
 
             # Parse response
             # MedGemma on Model Garden often returns the full prompt + completion

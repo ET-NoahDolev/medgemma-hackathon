@@ -170,7 +170,7 @@ UI will be available at `http://localhost:5173` (Vite default).
 
 #### 📊 MLflow UI
 
-To view MLflow experiment tracking and logged runs:
+To view MLflow experiment tracking, traces, and logged runs:
 
 ```bash
 ./scripts/start-mlflow-ui.sh
@@ -179,6 +179,13 @@ To view MLflow experiment tracking and logged runs:
 **Important:** Always use the script (`./scripts/start-mlflow-ui.sh`) rather than running `mlflow ui` directly. The script configures MLflow to use the SQLite database backend (`mlflow.db`) instead of the default filesystem backend.
 
 MLflow UI will be available at `http://localhost:5000`.
+
+**MLflow Tracing for LLM Observability:**
+- The system uses **MLflow Tracing** for automatic LLM observability
+- LangChain and LangGraph calls are automatically traced with token usage, latency, and execution flow
+- View traces in the "Traces" tab in MLflow UI
+- Runs are used for high-level extraction tracking
+- See [MLflow Troubleshooting Guide](docs/mlflow-troubleshooting.md) for more details
 
 The database contains experiments for:
 - `medgemma-extraction` - Extraction service runs

@@ -230,41 +230,103 @@ class GroundingAgent:
         """
         agent = await self._get_agent()
 
-        # MLflow instrumentation
+        # MLflow tracing: Autologging will automatically capture
+        # LangChain/LangGraph calls. We keep run-based logging as a fallback
+        # and for custom metrics.
         start_time = time.time()
         if MLFLOW_AVAILABLE and mlflow is not None:
-            with mlflow.start_run(run_name="grounding_agent", nested=True):
-                mlflow.log_params(
-                    {
-                        "criterion_text": criterion_text[:200],  # Truncate
-                        "criterion_type": criterion_type,
-                        "orchestrator_model": os.getenv(
-                            "GEMINI_MODEL_NAME", "gemini-2.5-pro"
-                        ),
-                    }
+            # Try to use trace-based approach if available, otherwise fall back to runs
+            # Autologging will handle detailed tracing of agent calls automatically
+            try:
+                # Check if tracing API is available
+                has_tracing = (
+                    hasattr(mlflow, "tracing")
+                    and hasattr(mlflow.tracing, "start_trace")
                 )
+                if has_tracing:
+                    # Use trace for better LLM observability
+                    with mlflow.tracing.start_trace(name="grounding_agent"):
+                        # Add custom metadata if API supports it
+                        try:
+                            if hasattr(mlflow.tracing, "set_tag"):
+                                mlflow.tracing.set_tag("criterion_type", criterion_type)
+                                mlflow.tracing.set_tag(
+                                    "orchestrator_model",
+                                    os.getenv("GEMINI_MODEL_NAME", "gemini-2.5-pro"),
+                                )
+                        except Exception as e:
+                            logger.debug("Failed to set trace tags: %s", e)
 
-                # Invoke - returns validated GroundingResult
+                        # Invoke - autologging will automatically trace this
+                        result = await agent(
+                            {
+                                "criterion_text": criterion_text,
+                                "criterion_type": criterion_type,
+                            }
+                        )
+
+                        # Log custom metrics if API supports it
+                        try:
+                            duration = time.time() - start_time
+                            if hasattr(mlflow.tracing, "set_metric"):
+                                mlflow.tracing.set_metric("latency_seconds", duration)
+                                mlflow.tracing.set_metric(
+                                    "snomed_codes_count", len(result.snomed_codes)
+                                )
+                                mlflow.tracing.set_metric(
+                                    "field_mappings_count", len(result.field_mappings)
+                                )
+                        except Exception as e:
+                            logger.debug("Failed to log trace metrics: %s", e)
+
+                        return result
+                else:
+                    # Fallback to run-based logging if tracing API not available
+                    raise AttributeError("Tracing API not available")
+            except (AttributeError, Exception) as e:
+                # Fallback to run-based logging
+                logger.debug("MLflow tracing not available, using runs: %s", e)
+                with mlflow.start_run(run_name="grounding_agent", nested=True):
+                    mlflow.log_params(
+                        {
+                            "criterion_text": criterion_text[:200],  # Truncate
+                            "criterion_type": criterion_type,
+                            "orchestrator_model": os.getenv(
+                                "GEMINI_MODEL_NAME", "gemini-2.5-pro"
+                            ),
+                        }
+                    )
+
+                    result = await agent(
+                        {
+                            "criterion_text": criterion_text,
+                            "criterion_type": criterion_type,
+                        }
+                    )
+
+                    try:
+                        duration = time.time() - start_time
+                        mlflow.log_metrics(
+                            {
+                                "latency_seconds": duration,
+                                "snomed_codes_count": len(result.snomed_codes),
+                                "field_mappings_count": len(result.field_mappings),
+                            }
+                        )
+                        mlflow.log_text(result.reasoning, "reasoning.txt")
+                    except Exception as e:
+                        mlflow.log_param("error", str(e))
+                        raise e
+                    return result
+            except Exception as e:
+                logger.warning("MLflow tracing failed (non-fatal): %s", e)
+                # Continue without MLflow if tracing fails
                 result = await agent(
                     {
                         "criterion_text": criterion_text,
                         "criterion_type": criterion_type,
                     }
                 )
-
-                try:
-                    duration = time.time() - start_time
-                    mlflow.log_metrics(
-                        {
-                            "latency_seconds": duration,
-                            "snomed_codes_count": len(result.snomed_codes),
-                            "field_mappings_count": len(result.field_mappings),
-                        }
-                    )
-                    mlflow.log_text(result.reasoning, "reasoning.txt")
-                except Exception as e:
-                    mlflow.log_param("error", str(e))
-                    raise e
                 return result
         else:
             # Invoke - returns validated GroundingResult
@@ -274,6 +336,7 @@ class GroundingAgent:
                     "criterion_type": criterion_type,
                 }
             )
+            return result
             return result
 
 
