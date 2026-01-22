@@ -9,6 +9,8 @@ from __future__ import annotations
 import os
 from typing import Any, Callable
 
+from shared.lazy_cache import lazy_singleton
+
 from inference.config import AgentConfig
 
 
@@ -205,122 +207,6 @@ def _build_gemma_prompt(messages: list[Any]) -> str:
     return "\n".join(prompt_parts) + "\n<start_of_turn>model\n"
 
 
-def _find_json_start(text: str) -> int:
-    """Find the start position of JSON in text.
-
-    Args:
-        text: Text that may contain JSON.
-
-    Returns:
-        Index of first '{' or '[', or -1 if not found.
-    """
-    brace_pos = text.find("{")
-    bracket_pos = text.find("[")
-    if brace_pos >= 0 and bracket_pos >= 0:
-        return min(brace_pos, bracket_pos)
-    if brace_pos >= 0:
-        return brace_pos
-    if bracket_pos >= 0:
-        return bracket_pos
-    return -1
-
-
-def _strip_model_prefixes(text: str, full_prompt: str) -> str:
-    """Strip MedGemma Model Garden prefixes and echoed prompt.
-
-    Args:
-        text: Raw model output text.
-        full_prompt: The full prompt that was sent to the model.
-
-    Returns:
-        Text with prefixes and echoed prompt removed.
-    """
-    import re
-
-    # Strip MedGemma Model Garden prefixes
-    for prefix in ["Prompt:\n", "Output:\n"]:
-        if text.startswith(prefix):
-            text = text[len(prefix) :].strip()
-
-    # Try to strip the prompt if the model echoed it
-    if text.startswith(full_prompt):
-        text = text[len(full_prompt) :].strip()
-
-    # Handle legacy markers and thought blocks
-    if "Assistant:" in text:
-        text = text.split("Assistant:")[-1].strip()
-    if "Output:\n" in text:
-        text = text.split("Output:\n")[-1].strip()
-
-    # Strip everything before the actual model turn if it echoed
-    if "<start_of_turn>model\n" in text:
-        text = text.split("<start_of_turn>model\n")[-1].strip()
-
-    # Strip <unusedNN>thought blocks (MedGemma chain-of-thought tokens)
-    text = re.sub(
-        r"<unused\d+>\s*thought.*?(?=\{|\[|```)",
-        "",
-        text,
-        flags=re.DOTALL | re.IGNORECASE,
-    )
-
-    # Handle thought blocks without the angle bracket pattern
-    if text.lower().startswith("thought"):
-        json_start = _find_json_start(text)
-        if json_start >= 0:
-            text = text[json_start:]
-
-    return text.strip()
-
-
-def _extract_json_from_response(text: str) -> str:
-    """Extract JSON object or array from model response.
-
-    Args:
-        text: Text that may contain JSON.
-
-    Returns:
-        Extracted JSON string.
-    """
-    import re
-
-    # Find the first { or [ (to support list schemas) and matching last char
-    json_match = re.search(r"(\{.*\})", text, re.DOTALL)
-    if not json_match:
-        # Try list if it's a list response
-        json_match = re.search(r"(\[.*\])", text, re.DOTALL)
-
-    if json_match:
-        text = json_match.group(1)
-
-    # Clean up markdown blocks
-    if "```json" in text:
-        text = text.split("```json")[-1].split("```")[0].strip()
-    elif "```" in text:
-        text = text.split("```")[-1].split("```")[0].strip()
-
-    return text
-
-
-def _clean_json_quotes(text: str) -> str:
-    """Fix single quotes to double quotes in JSON.
-
-    Args:
-        text: JSON string that may use single quotes.
-
-    Returns:
-        JSON string with double quotes.
-    """
-    if text.startswith("{") and text.endswith("}"):
-        import re
-
-        # Replace 'key': 'value' or 'key': ["value"] etc.
-        text = re.sub(r"'(\s*[\w\d_]+\s*)':", r'"\1":', text)  # Keys
-        text = re.sub(r":\s*'([^']*)'", r': "\1"', text)  # String values
-
-    return text
-
-
 def _build_vertex_endpoint_model(
     *,
     endpoint_id: str,
@@ -337,15 +223,11 @@ def _build_vertex_endpoint_model(
     the Gemini-specific ChatVertexAI class.
     """
     try:
-        from typing import Dict, Type, Union
-
         from langchain_core.callbacks.manager import CallbackManagerForLLMRun
-        from langchain_core.language_models import LanguageModelInput
         from langchain_core.language_models.chat_models import BaseChatModel
         from langchain_core.messages import AIMessage, BaseMessage
         from langchain_core.outputs import ChatGeneration, ChatResult
-        from langchain_core.runnables import Runnable
-        from pydantic import BaseModel, Field
+        from pydantic import Field
     except ImportError as exc:  # pragma: no cover
         raise ImportError(
             "Vertex AI backend requires langchain-core installed."
@@ -425,10 +307,8 @@ def _build_vertex_endpoint_model(
             # MedGemma on Model Garden often returns the full prompt + completion
             text = response.predictions[0]
 
-            # Clean up the response text
-            text = _strip_model_prefixes(text, full_prompt)
-            text = _extract_json_from_response(text)
-            text = _clean_json_quotes(text)
+            if text.startswith(full_prompt):
+                text = text[len(full_prompt) :].strip()
 
             message = AIMessage(content=text)
             generation = ChatGeneration(message=message)
@@ -437,31 +317,6 @@ def _build_vertex_endpoint_model(
         @property
         def _llm_type(self) -> str:
             return "vertex_model_garden"
-
-        def with_structured_output(
-            self,
-            schema: Union[Dict, Type[BaseModel]],
-            *,
-            include_raw: bool = False,
-            **kwargs: Any,
-        ) -> Runnable[LanguageModelInput, Union[Dict, BaseModel]]:
-            """Implement with_structured_output using a JSON parser.
-
-            This allows the model to be used with LangGraph's structured output
-            features even without native tool calling support.
-            """
-            from langchain_core.output_parsers import JsonOutputParser
-
-            parser = JsonOutputParser(
-                pydantic_object=schema
-                if isinstance(schema, type) and issubclass(schema, BaseModel)
-                else None
-            )
-            if include_raw:
-                from langchain_core.runnables import RunnablePassthrough
-
-                return RunnablePassthrough.assign(parsed=self | parser)  # type: ignore[arg-type,return-value]
-            return self | parser
 
     return ModelGardenChatModel(
         endpoint_resource_name=resolved_resource_name,
@@ -528,11 +383,8 @@ def _create_vertex_model_loader(cfg: AgentConfig) -> Callable[[], Any]:
     """
     project_id, region, endpoint_id, vertex_model_name = _validate_vertex_config(cfg)
 
-    cache: list[Any] = []
-
+    @lazy_singleton
     def load_model() -> Any:
-        if cache:
-            return cache[0]
 
         try:
             import vertexai
@@ -572,7 +424,6 @@ def _create_vertex_model_loader(cfg: AgentConfig) -> Callable[[], Any]:
                 endpoint_resource_name=resolved_resource_name,
             )
 
-        cache.append(model)
         return model
 
     return load_model
@@ -580,11 +431,8 @@ def _create_vertex_model_loader(cfg: AgentConfig) -> Callable[[], Any]:
 
 def _create_local_model_loader(cfg: AgentConfig) -> Callable[[], Any]:
     """Create a lazy local HuggingFace pipeline model loader."""
-    cache: list[Any] = []
-
+    @lazy_singleton
     def load_model() -> Any:
-        if cache:
-            return cache[0]
 
         _ensure_hf_auth_env()
         torch = _import_torch()
@@ -601,7 +449,6 @@ def _create_local_model_loader(cfg: AgentConfig) -> Callable[[], Any]:
         )
 
         model = chat_hf_cls(llm=llm)
-        cache.append(model)
         return model
 
     return load_model

@@ -22,5 +22,7 @@ class ExtractedCriterion(BaseModel):
 class ExtractionResult(BaseModel):
     """Structured extraction output."""
 
-    criteria: list[ExtractedCriterion] = Field(default_factory=list)
+    criteria: list[ExtractedCriterion] = Field(
+        default_factory=list, description="All extracted inclusion/exclusion criteria"
+    )
 

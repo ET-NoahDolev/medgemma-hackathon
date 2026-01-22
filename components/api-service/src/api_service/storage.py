@@ -74,17 +74,6 @@ class HitlEdit(SQLModel, table=True):
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 
-class IdCounter(SQLModel, table=True):
-    """Deprecated: Counter table no longer used.
-
-    Replaced with UUID-based identifiers for concurrency safety.
-    This table is kept for backward compatibility but is no longer populated.
-    """
-
-    key: str = Field(primary_key=True)
-    value: int = 0
-
-
 DEFAULT_DB_PATH = (
     Path(__file__).resolve().parents[2] / ".data" / "api_service.db"
 )

@@ -97,6 +97,3 @@ def train_model(
     trainer.save_model(output_dir)
 
 
-def _legacy_train_model_removed() -> None:  # pragma: no cover
-    """Placeholder to keep file structure stable."""
-    return None

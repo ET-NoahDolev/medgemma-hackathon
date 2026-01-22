@@ -7,7 +7,6 @@ with structured Pydantic outputs.
 from __future__ import annotations
 
 import logging
-from typing import Any
 
 try:
     from langchain_core.output_parsers import PydanticOutputParser
@@ -21,17 +20,6 @@ except ImportError:  # pragma: no cover
 
     tool = _tool  # type: ignore[assignment]
     PydanticOutputParser = None  # type: ignore[assignment, misc]
-
-# Try to import mlflow (optional dependency for dev/observability)
-mlflow: Any | None
-try:
-    import mlflow as _mlflow
-
-    MLFLOW_AVAILABLE = True
-    mlflow = _mlflow
-except ImportError:
-    mlflow = None
-    MLFLOW_AVAILABLE = False
 
 logger = logging.getLogger(__name__)
 
@@ -81,27 +69,6 @@ Return the structured output matching the schema above."""
             result = model.invoke([("user", prompt)])
             parsed = parser.parse(result.content)
             result_json = parsed.model_dump_json()
-
-        # MLflow logging
-        if MLFLOW_AVAILABLE and mlflow is not None:
-            with mlflow.start_run(run_name="medgemma_extract_field", nested=True):
-                mlflow.log_param("input_length", len(criterion_text))
-                mlflow.log_text(criterion_text, "input.txt")
-                mlflow.log_text(result_json, "output.json")
-
-                # Parse and log structured fields for easier querying
-                try:
-                    parsed = FieldMappingResult.model_validate_json(result_json)
-                    mlflow.log_params(
-                        {
-                            "field_name": parsed.field_name or "null",
-                            "relation_type": parsed.relation_type or "null",
-                            "confidence": parsed.confidence,
-                        }
-                    )
-                except Exception as e:
-                    mlflow.log_param("parse_error", str(e))
-                    mlflow.log_param("output_incomplete", True)
 
         return result_json
     except Exception as e:
@@ -155,29 +122,6 @@ Criterion: {criterion_text}
             parsed = parser.parse(result.content)
             result_json = parsed.model_dump_json()
 
-        # MLflow logging
-        if MLFLOW_AVAILABLE and mlflow is not None:
-            with mlflow.start_run(
-                run_name="medgemma_classify_criterion", nested=True
-            ):
-                mlflow.log_param("input_length", len(criterion_text))
-                mlflow.log_text(criterion_text, "input.txt")
-                mlflow.log_text(result_json, "output.json")
-
-                try:
-                    parsed = CriterionClassificationResult.model_validate_json(
-                        result_json
-                    )
-                    mlflow.log_params(
-                        {
-                            "criterion_type": parsed.criterion_type,
-                            "confidence": parsed.confidence,
-                        }
-                    )
-                except Exception as e:
-                    mlflow.log_param("parse_error", str(e))
-                    mlflow.log_param("output_incomplete", True)
-
         return result_json
     except Exception as e:
         logger.error("Error in classify_criterion: %s", e, exc_info=True)
@@ -230,21 +174,6 @@ def identify_medical_concepts(text: str) -> str:
             result_json = parsed.model_dump_json()
 
         # MLflow logging
-        if MLFLOW_AVAILABLE and mlflow is not None:
-            with mlflow.start_run(
-                run_name="medgemma_identify_concepts", nested=True
-            ):
-                mlflow.log_param("input_length", len(text))
-                mlflow.log_text(text, "input.txt")
-                mlflow.log_text(result_json, "output.json")
-
-                try:
-                    parsed = MedicalConceptsResult.model_validate_json(result_json)
-                    mlflow.log_param("concepts_count", len(parsed.concepts))
-                except Exception as e:
-                    mlflow.log_param("parse_error", str(e))
-                    mlflow.log_param("output_incomplete", True)
-
         return result_json
     except Exception as e:
         logger.error("Error in identify_medical_concepts: %s", e, exc_info=True)

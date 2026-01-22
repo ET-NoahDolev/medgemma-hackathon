@@ -11,7 +11,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum
 from pathlib import Path
-from typing import Any, List
+from typing import List
 
 from anyio import to_thread
 from data_pipeline.download_protocols import extract_text_from_pdf
@@ -29,6 +29,7 @@ from fastapi import (
 from fastapi.middleware.cors import CORSMiddleware
 from grounding_service import umls_client
 from pydantic import BaseModel
+from shared.mlflow_utils import configure_mlflow_once
 
 from api_service.dependencies import get_storage
 from api_service.storage import Criterion as StorageCriterion
@@ -74,36 +75,6 @@ try:
 except ImportError:
     AGENT_AVAILABLE = False
 
-# Configure MLflow tracking URI at module level to avoid filesystem backend warning
-# Use absolute path to SQLite database in repo root
-def _get_mlflow_tracking_uri() -> str:
-    """Get the MLflow tracking URI using absolute path to SQLite database.
-
-    Raises:
-        RuntimeError: If .env file cannot be found to determine repo root.
-    """
-    # Find repo root by looking for .env file (find_dotenv walks up to find it)
-    env_path = find_dotenv()
-    if not env_path:
-        raise RuntimeError(
-            "Cannot determine repo root: .env file not found. "
-            "Please ensure you're running from the repository root or have a .env file."
-        )
-    repo_root = Path(env_path).parent.absolute()
-    db_path = repo_root / "mlflow.db"
-    return f"sqlite:///{db_path}"
-
-
-# Set environment variable before import so MLflow reads it during initialization
-_mlflow_uri = _get_mlflow_tracking_uri()
-os.environ.setdefault("MLFLOW_TRACKING_URI", _mlflow_uri)
-try:
-    import mlflow
-
-    mlflow.set_tracking_uri(_mlflow_uri)
-except ImportError:
-    pass
-
 DEFAULT_MAX_UPLOAD_SIZE_BYTES = 20 * 1024 * 1024
 # Expose for backward compatibility with tests
 MAX_UPLOAD_SIZE_BYTES = DEFAULT_MAX_UPLOAD_SIZE_BYTES
@@ -137,6 +108,7 @@ def get_config() -> ApiConfig:
 async def lifespan(app_instance: FastAPI) -> AsyncIterator[None]:
     """Initialize and teardown app state for the lifespan scope."""
     init_db()
+    configure_mlflow_once("medgemma-extraction")
     # Validate required configuration
     api_key = os.getenv("GROUNDING_SERVICE_UMLS_API_KEY") or os.getenv("UMLS_API_KEY")
     if not api_key:
@@ -387,34 +359,12 @@ async def _run_extraction(
     )
     storage.replace_criteria(protocol_id=protocol_id, extracted=[])
 
-    # Start MLflow run for high-level extraction tracking
-    # LLM calls within extraction will be automatically traced by autologging
-    mlflow = _start_mlflow_run(protocol_id)
-
-    # Set up trace session/context for grouping related traces
-    # This helps group all traces from this extraction together
-    try:
-        from inference.mlflow_config import set_trace_tags
-
-        # Add session context to group traces by protocol extraction
-        set_trace_tags(
-            {
-                "protocol_id": protocol_id,
-                "extraction_session": f"extract_{protocol_id}",
-            }
-        )
-    except Exception as e:
-        logger.debug("Failed to set trace session context: %s", e)
-
     count = 0
-    failed = False
     try:
         # Prefer async extraction when model extraction is enabled to avoid
         # calling anyio.run() inside the running event loop thread.
         use_model = os.getenv("USE_MODEL_EXTRACTION", "true").lower() == "true"
-        logger.info(
-            f"Extraction: use_model={use_model}, MLflow active={mlflow is not None}"
-        )
+        logger.info("Extraction: use_model=%s", use_model)
         if use_model and hasattr(extraction_pipeline, "extract_criteria_async"):
             logger.info("Extraction: Using async model extraction")
             items = await extraction_pipeline.extract_criteria_async(document_text)
@@ -448,80 +398,12 @@ async def _run_extraction(
             progress_message=f"Extraction completed ({count} criteria).",
         )
     except Exception:
-        failed = True
         logger.exception("Extraction stream failed")
         storage.update_protocol_status(
             protocol_id=protocol_id,
             processing_status="failed",
             progress_message="Extraction failed.",
         )
-    finally:
-        # Always finish MLflow run, even if there was an exception
-        _finish_mlflow_run(mlflow, count=count, failed=failed)
-
-
-def _start_mlflow_run(protocol_id: str) -> Any | None:
-    """Start an MLflow run if MLflow is installed."""
-    try:
-        import mlflow
-    except ImportError:
-        logger.warning(
-            "MLflow not available - tracing disabled. Install mlflow for observability."
-        )
-        return None
-
-    try:
-        # Use absolute path for mlflow.db to ensure consistency regardless of CWD.
-        mlflow.set_tracking_uri(_get_mlflow_tracking_uri())
-        mlflow.set_experiment("medgemma-extraction")
-        mlflow.start_run(run_name=f"extract_{protocol_id}")
-        active_run = mlflow.active_run()
-        run_id = active_run.info.run_id if active_run else "unknown"
-        logger.info(f"MLflow: Started run {run_id} for protocol {protocol_id}")
-        return mlflow
-    except Exception as e:
-        logger.warning(
-            f"MLflow: Failed to start run for protocol {protocol_id}: {e}",
-            exc_info=True,
-        )
-        return None
-
-
-def _finish_mlflow_run(mlflow: Any | None, *, count: int, failed: bool = False) -> None:
-    """Finish an MLflow run, best-effort.
-
-    This ensures the parent extraction run is ended. Nested runs from agent
-    invocations should already be ended by _log_mlflow_response.
-    """
-    if mlflow is None:
-        return
-    try:
-        active_run = mlflow.active_run()
-        if active_run is None:
-            logger.warning("MLflow: No active run to finish")
-            return
-
-        run_id = active_run.info.run_id
-        run_name = active_run.info.run_name or "unknown"
-
-        # Log the metric before ending
-        mlflow.log_metric("criteria_count", count)
-
-        # End the run
-        if failed:
-            mlflow.end_run(status="FAILED")
-            logger.info(
-                f"MLflow: Ended run {run_name} ({run_id[:12]}...) "
-                f"with status FAILED (count={count})"
-            )
-        else:
-            mlflow.end_run()
-            logger.info(
-                f"MLflow: Ended run {run_name} ({run_id[:12]}...) "
-                f"successfully (count={count})"
-            )
-    except Exception:
-        logger.exception("MLflow logging failed")
 
 
 @app.post("/v1/protocols/upload")

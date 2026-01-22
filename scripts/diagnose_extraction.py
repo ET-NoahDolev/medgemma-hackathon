@@ -142,7 +142,9 @@ try:
     if pipeline.config.use_model:
         print("   Attempting to create iterative agent...")
         try:
-            agent, tool_factory = pipeline._create_iterative_agent()
+            agent, tool_factory = pipeline._create_agent(
+                mode=ExtractionPipeline.AgentMode.ITERATIVE
+            )
             print("   ✓ Iterative agent created successfully")
         except Exception as e:
             print(f"   ✗ Failed to create iterative agent: {e}")

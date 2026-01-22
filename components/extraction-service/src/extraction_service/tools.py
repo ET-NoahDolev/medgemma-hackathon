@@ -117,16 +117,6 @@ class ExtractionToolFactory:
         """
         return self._accumulated.copy()
 
-    def get_results_as_schema(self) -> list[Any]:
-        """Get accumulated criteria as ExtractedCriterion objects.
-
-        Returns:
-            List of ExtractedCriterion instances.
-        """
-        from extraction_service.schemas import ExtractedCriterion
-
-        return [ExtractedCriterion(**c) for c in self._accumulated]
-
     def clear(self) -> None:
         """Reset the accumulator for a new extraction."""
         self._accumulated.clear()

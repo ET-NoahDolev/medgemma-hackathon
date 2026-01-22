@@ -2,81 +2,16 @@
 
 from __future__ import annotations
 
-import json
 import logging
-import os
 from pathlib import Path
 from typing import Any, Awaitable, Callable, Mapping, TypeVar
 
-from dotenv import find_dotenv
 from jinja2 import Environment, FileSystemLoader
 from pydantic import BaseModel
+from shared.lazy_cache import lazy_singleton
 
 logger = logging.getLogger(__name__)
 
-
-def _get_mlflow_tracking_uri() -> str:
-    """Get the MLflow tracking URI using absolute path to SQLite database.
-
-    Raises:
-        RuntimeError: If .env file cannot be found to determine repo root.
-    """
-    # Find repo root by looking for .env file (find_dotenv walks up to find it)
-    env_path = find_dotenv()
-    if not env_path:
-        raise RuntimeError(
-            "Cannot determine repo root: .env file not found. "
-            "Please ensure you're running from the repository root or have a .env file."
-        )
-    repo_root = Path(env_path).parent.absolute()
-    db_path = repo_root / "mlflow.db"
-    return f"sqlite:///{db_path}"
-
-
-# Configure MLflow tracking URI at module level to avoid filesystem backend warning
-# Set environment variable before import so MLflow reads it during initialization
-_mlflow_uri = _get_mlflow_tracking_uri()
-os.environ.setdefault("MLFLOW_TRACKING_URI", _mlflow_uri)
-
-# Optional MLflow support for logging prompts and responses
-_MLFLOW_AVAILABLE = False
-try:
-    import mlflow
-
-    mlflow.set_tracking_uri(_mlflow_uri)
-    # Don't set experiment here - let the calling service set it
-    # This allows nested runs to work correctly
-    _MLFLOW_AVAILABLE = True
-
-    # Enable automatic tracing for LangChain and LangGraph
-    try:
-        mlflow.langchain.autolog()
-        logger.info("MLflow LangChain autologging enabled")
-    except Exception as e:
-        logger.warning("Failed to enable LangChain autologging: %s", e)
-
-    try:
-        # Check if LangGraph autologging is available
-        if hasattr(mlflow, "langgraph"):
-            mlflow.langgraph.autolog()
-            logger.info("MLflow LangGraph autologging enabled")
-        else:
-            logger.debug("MLflow LangGraph autologging not available in this version")
-    except Exception as e:
-        logger.warning("Failed to enable LangGraph autologging: %s", e)
-
-    # Configure tracing settings
-    try:
-        from inference.mlflow_config import configure_mlflow_tracing
-
-        configure_mlflow_tracing()
-    except Exception as e:
-        logger.debug("Failed to configure MLflow tracing: %s", e)
-
-except ImportError:
-    pass
-except Exception as e:
-    logger.warning("Failed to initialize MLflow in agent_factory: %s", e, exc_info=True)
 
 TModel = TypeVar("TModel", bound=BaseModel)
 
@@ -93,156 +28,6 @@ def _load_langgraph_create_react_agent() -> Any:
     return lg_create_react_agent
 
 
-def _create_agent_with_structured_output(
-    lg_create: Any,
-    model: Any,
-    tools: list[Any],
-    response_schema: type[TModel],
-) -> Any:
-    """Create agent with structured output support."""
-    try:
-        structured_model = model.with_structured_output(response_schema)
-        return lg_create(
-            model=structured_model,
-            tools=tools,
-        )
-    except (AttributeError, TypeError):
-        # Fallback: use response_format (LangGraph handles it)
-        return lg_create(
-            model=model,
-            tools=tools,
-            response_format=response_schema,
-        )
-
-
-def _parse_structured_response(
-    result: object,
-    response_schema: type[TModel],
-) -> TModel | None:
-    """Parse a LangGraph result into a structured response if possible."""
-    if isinstance(result, dict) and "structured_response" in result:
-        structured = result["structured_response"]
-        if isinstance(structured, response_schema):
-            return structured
-        if isinstance(structured, dict):
-            return response_schema(**structured)
-
-    if isinstance(result, dict) and "messages" in result:
-        messages = result.get("messages")
-        if isinstance(messages, list) and messages:
-            last_msg = messages[-1]
-            content = getattr(last_msg, "content", None)
-            if isinstance(content, str):
-                try:
-                    start = content.find("{")
-                    end = content.rfind("}") + 1
-                    if start >= 0 and end > start:
-                        return response_schema(**json.loads(content[start:end]))
-                except (json.JSONDecodeError, TypeError, ValueError):
-                    logger.warning("Failed to parse structured response from content")
-    return None
-
-
-def _setup_mlflow_logging(
-    system_prompt: str,
-    user_prompt: str,
-    system_template: str,
-    user_template: str,
-) -> bool:
-    """Set up MLflow logging for prompts. Returns True if run should be ended."""
-    if not _MLFLOW_AVAILABLE:
-        return False
-
-    try:
-        mlflow.set_tracking_uri(_mlflow_uri)
-        active_run = mlflow.active_run()
-        if active_run is None:
-            try:
-                mlflow.set_experiment("medgemma-inference")
-            except Exception:
-                pass  # Experiment will be created automatically
-            mlflow.start_run(run_name="agent_invoke")
-            should_end_run = True
-        else:
-            mlflow.start_run(run_name="agent_invoke", nested=True)
-            should_end_run = True
-
-        mlflow.log_text(system_prompt, artifact_file="system_prompt.txt")
-        mlflow.log_text(user_prompt, artifact_file="user_prompt.txt")
-        mlflow.log_params({
-            "system_template": system_template,
-            "user_template": user_template,
-        })
-        logger.debug("MLflow: Logged prompts for agent invocation")
-        return should_end_run
-    except Exception as e:
-        logger.warning(
-            "MLflow prompt logging failed (non-fatal): %s", e, exc_info=True
-        )
-        return False
-
-
-def _log_mlflow_response(
-    parsed: TModel | None,
-    result: object,
-    should_end_run: bool,
-) -> None:
-    """Log MLflow response and end run if needed."""
-    if not _MLFLOW_AVAILABLE:
-        return
-
-    try:
-        if parsed is not None:
-            response_json = parsed.model_dump_json(indent=2)
-            mlflow.log_text(response_json, artifact_file="response.json")
-            logger.debug("MLflow: Logged structured response")
-
-        if isinstance(result, dict):
-            result_str = json.dumps(result, indent=2, default=str)
-            mlflow.log_text(result_str, artifact_file="raw_result.json")
-            logger.debug("MLflow: Logged raw result")
-
-        if should_end_run:
-            active_run = mlflow.active_run()
-            if active_run:
-                run_id = active_run.info.run_id
-                mlflow.end_run()
-                logger.debug(f"MLflow: Ended agent invocation run {run_id}")
-            else:
-                logger.warning("MLflow: No active run to end in _log_mlflow_response")
-    except Exception as e:
-        logger.warning(
-            "MLflow response logging failed (non-fatal): %s", e, exc_info=True
-        )
-        if should_end_run:
-            try:
-                active_run = mlflow.active_run()
-                if active_run:
-                    mlflow.end_run()
-                    logger.debug("MLflow: Ended run in exception handler")
-            except Exception as end_error:
-                logger.warning("Failed to end MLflow run: %s", end_error)
-
-
-def _try_fallback_parsing(
-    result: object,
-    parser: Any,
-    response_schema: type[TModel],
-) -> TModel | None:
-    """Try fallback parsing using PydanticOutputParser."""
-    if isinstance(result, dict) and "messages" in result:
-        messages = result.get("messages", [])
-        if messages:
-            last_msg = messages[-1]
-            content = getattr(last_msg, "content", "")
-            if isinstance(content, str):
-                try:
-                    return parser.parse(content)
-                except Exception as e:
-                    logger.warning("PydanticOutputParser failed: %s", e)
-    return None
-
-
 def create_react_agent(
     *,
     model_loader: Callable[[], Any],
@@ -252,12 +37,11 @@ def create_react_agent(
     system_template: str,
     user_template: str,
 ) -> Callable[[Mapping[str, Any]], Awaitable[TModel]]:
-    """Create a reusable ReAct agent invocation function with Pydantic-enforced output.
+    """Create a reusable ReAct agent invocation function.
 
     This function composes:
     - lazy model loading (shared across services)
     - Jinja2 prompt rendering (service-specific templates)
-    - Pydantic format instructions injection into prompts
     - LangGraph ReAct agent execution with structured output
 
     Args:
@@ -271,58 +55,27 @@ def create_react_agent(
     Returns:
         Async function that takes prompt variables and returns a structured response.
     """
-    from langchain_core.output_parsers import PydanticOutputParser
-
     jinja_env = Environment(loader=FileSystemLoader(str(prompts_dir)))
-    cache: list[Any] = []
 
-    # Get format instructions from Pydantic schema
-    parser = PydanticOutputParser(pydantic_object=response_schema)
-    format_instructions = parser.get_format_instructions()
-
+    @lazy_singleton
     def _get_agent() -> Any:
-        if cache:
-            return cache[0]
         lg_create = _load_langgraph_create_react_agent()
         model = model_loader()
-        agent = _create_agent_with_structured_output(
-            lg_create, model, tools, response_schema
+        return lg_create(
+            model=model,
+            tools=tools,
+            response_format=response_schema,
         )
-        cache.append(agent)
-        return agent
 
     async def invoke(prompt_vars: Mapping[str, Any]) -> TModel:
         system_tpl = jinja_env.get_template(system_template)
         user_tpl = jinja_env.get_template(user_template)
 
-        # Inject format instructions into prompt variables
-        prompt_vars_with_format = {
-            **prompt_vars,
-            "format_instructions": format_instructions,
-        }
-
-        system_prompt = system_tpl.render(**prompt_vars_with_format)
-        user_prompt = user_tpl.render(**prompt_vars_with_format)
+        system_prompt = system_tpl.render(**prompt_vars)
+        user_prompt = user_tpl.render(**prompt_vars)
 
         agent = _get_agent()
 
-        # MLflow autologging will automatically trace the agent invocation
-        # We can still add custom metadata if needed, but most tracing is automatic
-        if _MLFLOW_AVAILABLE:
-            try:
-                from inference.mlflow_config import set_trace_tags
-
-                # Add custom metadata to trace if available
-                set_trace_tags(
-                    {
-                        "system_template": system_template,
-                        "user_template": user_template,
-                    }
-                )
-            except Exception as e:
-                logger.debug("Failed to set trace tags: %s", e)
-
-        # Agent invocation will be automatically traced by MLflow autologging
         result = await agent.ainvoke(
             {
                 "messages": [
@@ -331,30 +84,19 @@ def create_react_agent(
                 ]
             }
         )
+        structured = None
+        if isinstance(result, dict):
+            structured = result.get("structured_response")
 
-        parsed = _parse_structured_response(result, response_schema)
+        if isinstance(structured, response_schema):
+            return structured
+        if isinstance(structured, dict):
+            return response_schema(**structured)
 
-        # Legacy manual logging (kept for backward compatibility and custom metadata)
-        # Autologging handles most of the tracing, but we keep this for:
-        # 1. Custom metadata that autologging might not capture
-        # 2. Backward compatibility with existing MLflow runs
-        # 3. Fallback if autologging is disabled
-        if _MLFLOW_AVAILABLE:
-            should_end_run = _setup_mlflow_logging(
-                system_prompt, user_prompt, system_template, user_template
-            )
-            _log_mlflow_response(parsed, result, should_end_run)
-
-        if parsed is not None:
-            return parsed
-
-        # If parsing failed, try using PydanticOutputParser directly
-        parsed = _try_fallback_parsing(result, parser, response_schema)
-        if parsed is not None:
-            return parsed
-
-        logger.warning("No structured response available; returning default schema")
-        return response_schema()
+        raise ValueError(
+            "Model did not return structured output. Ensure the model supports "
+            "response_format (Gemini, GPT-4o, etc.) and prompts are compatible."
+        )
 
     return invoke
 

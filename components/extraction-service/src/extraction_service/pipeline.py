@@ -13,6 +13,7 @@ import logging
 import os
 import re
 from dataclasses import dataclass
+from enum import Enum
 from pathlib import Path
 from typing import Any, Dict, Iterator
 
@@ -120,13 +121,20 @@ class ExtractionPipeline:
         self._agent_cfg = agent_cfg
         return self._model_loader, prompts_dir, agent_cfg
 
-    def _create_iterative_agent(
+    class AgentMode(Enum):
+        """Extraction agent mode."""
+
+        ITERATIVE = "iterative"
+        LEGACY = "legacy"
+
+    def _create_agent(
         self,
-    ) -> tuple[Any, Any]:
-        """Create an agent with iterative extraction tools.
+        mode: "ExtractionPipeline.AgentMode" = AgentMode.ITERATIVE,
+    ) -> tuple[Any, Any | None]:
+        """Create an extraction agent in the specified mode.
 
         Returns:
-            Tuple of (agent_invoke_fn, tool_factory).
+            Tuple of (agent_invoke_fn, tool_factory) where tool_factory may be None.
         """
         from inference import create_react_agent
 
@@ -134,35 +142,25 @@ class ExtractionPipeline:
         from extraction_service.tools import ExtractionToolFactory
 
         model_loader, prompts_dir, _ = self._get_model_loader()
-        tool_factory = ExtractionToolFactory()
-        tools = tool_factory.create_tools()
+
+        tools: list[Any] = []
+        tool_factory = None
+        system_template = "extraction_system.j2"
+
+        if mode is self.AgentMode.ITERATIVE:
+            tool_factory = ExtractionToolFactory()
+            tools = tool_factory.create_tools()
+            system_template = "extraction_system_iterative.j2"
 
         agent = create_react_agent(
             model_loader=model_loader,
             prompts_dir=prompts_dir,
             tools=tools,
             response_schema=ExtractionResult,
-            system_template="extraction_system_iterative.j2",
+            system_template=system_template,
             user_template="extraction_user.j2",
         )
         return agent, tool_factory
-
-    def _create_legacy_agent(self) -> Any:
-        """Create a legacy agent without tools (single-shot extraction)."""
-        from inference import create_react_agent
-
-        from extraction_service.schemas import ExtractionResult
-
-        model_loader, prompts_dir, _ = self._get_model_loader()
-
-        return create_react_agent(
-            model_loader=model_loader,
-            prompts_dir=prompts_dir,
-            tools=[],
-            response_schema=ExtractionResult,
-            system_template="extraction_system.j2",
-            user_template="extraction_user.j2",
-        )
 
     def extract_criteria_stream(self, document_text: str) -> Iterator[Criterion]:
         """Stream atomic inclusion/exclusion criteria from protocol text."""
@@ -229,7 +227,7 @@ class ExtractionPipeline:
     async def _extract_iterative_async(self, document_text: str) -> list[Criterion]:
         """Extract criteria using iterative tool-based approach."""
         try:
-            agent, tool_factory = self._create_iterative_agent()
+            agent, tool_factory = self._create_agent(mode=self.AgentMode.ITERATIVE)
         except Exception as e:
             logger.error(
                 "Failed to create iterative agent: %s", e, exc_info=True
@@ -246,7 +244,7 @@ class ExtractionPipeline:
             raise
 
         # Collect results from the tool factory
-        if tool_factory.has_results:
+        if tool_factory is not None and tool_factory.has_results:
             extracted = []
             for item in tool_factory.get_results():
                 text = _normalize_candidate(item.get("text", ""))
@@ -268,9 +266,10 @@ class ExtractionPipeline:
                 )
                 return extracted
 
-        # Fallback: no tool results, try baseline
-        logger.warning("Iterative extraction produced no tool results")
-        return _extract_criteria_baseline(document_text)
+        raise RuntimeError(
+            "Iterative extraction completed but agent produced no tool results. "
+            "This indicates a prompt/tool integration issue."
+        )
 
     async def _extract_with_gemini_orchestrator(
         self, document_text: str
@@ -313,7 +312,7 @@ class ExtractionPipeline:
 
     async def _extract_legacy_async(self, document_text: str) -> list[Criterion]:
         """Extract criteria using legacy single-shot approach."""
-        agent = self._create_legacy_agent()
+        agent, _ = self._create_agent(mode=self.AgentMode.LEGACY)
         result = await agent({"document_text": document_text})
         extracted = _criteria_from_extraction_result(result)
         if extracted:

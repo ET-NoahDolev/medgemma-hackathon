@@ -36,7 +36,7 @@ class TestExtractFieldMapping:
 
         with patch("inference.create_model_loader") as mock_loader, patch(
             "inference.AgentConfig"
-        ) as mock_config, patch("inference.tools.MLFLOW_AVAILABLE", False):
+        ) as mock_config:
             mock_config.from_env.return_value = MagicMock()
             mock_loader.return_value = lambda: mock_model
             result = extract_field_mapping.invoke({"criterion_text": "Age >= 18 years"})
@@ -63,7 +63,7 @@ class TestExtractFieldMapping:
 
         with patch("inference.create_model_loader") as mock_loader, patch(
             "inference.AgentConfig"
-        ) as mock_config, patch("inference.tools.MLFLOW_AVAILABLE", False):
+        ) as mock_config:
             mock_config.from_env.return_value = MagicMock()
             mock_loader.return_value = lambda: mock_model
             result = extract_field_mapping.invoke({"criterion_text": "BMI < 30 kg/m²"})
@@ -110,7 +110,7 @@ class TestClassifyCriterion:
 
         with patch("inference.create_model_loader") as mock_loader, patch(
             "inference.AgentConfig"
-        ) as mock_config, patch("inference.tools.MLFLOW_AVAILABLE", False):
+        ) as mock_config:
             mock_config.from_env.return_value = MagicMock()
             mock_loader.return_value = lambda: mock_model
             result = classify_criterion.invoke({"criterion_text": "Age >= 18 years"})
@@ -137,7 +137,7 @@ class TestClassifyCriterion:
 
         with patch("inference.create_model_loader") as mock_loader, patch(
             "inference.AgentConfig"
-        ) as mock_config, patch("inference.tools.MLFLOW_AVAILABLE", False):
+        ) as mock_config:
             mock_config.from_env.return_value = MagicMock()
             mock_loader.return_value = lambda: mock_model
             result = classify_criterion.invoke(
@@ -182,7 +182,7 @@ class TestIdentifyMedicalConcepts:
 
         with patch("inference.create_model_loader") as mock_loader, patch(
             "inference.AgentConfig"
-        ) as mock_config, patch("inference.tools.MLFLOW_AVAILABLE", False):
+        ) as mock_config:
             mock_config.from_env.return_value = MagicMock()
             mock_loader.return_value = lambda: mock_model
             result = identify_medical_concepts.invoke(
@@ -212,7 +212,7 @@ class TestIdentifyMedicalConcepts:
 
         with patch("inference.create_model_loader") as mock_loader, patch(
             "inference.AgentConfig"
-        ) as mock_config, patch("inference.tools.MLFLOW_AVAILABLE", False):
+        ) as mock_config:
             mock_config.from_env.return_value = MagicMock()
             mock_loader.return_value = lambda: mock_model
             result = identify_medical_concepts.invoke({"text": "This is general text"})

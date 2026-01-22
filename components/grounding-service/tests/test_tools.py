@@ -15,9 +15,7 @@ async def test_interpret_medical_text_calls_medgemma() -> None:
     mock_response.content = '{"concepts": ["diabetes"], "thresholds": []}'
     mock_model.invoke.return_value = mock_response
 
-    with patch("inference.create_model_loader") as mock_loader, patch(
-        "grounding_service.tools.MLFLOW_AVAILABLE", False
-    ):
+    with patch("inference.create_model_loader") as mock_loader:
         mock_loader.return_value = lambda: mock_model
         result = interpret_medical_text.invoke(
             {"text": "Age >= 18 years", "context": "criterion"}

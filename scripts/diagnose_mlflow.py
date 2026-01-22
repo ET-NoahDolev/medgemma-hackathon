@@ -112,11 +112,7 @@ print()
 
 # Check 6: Agent factory MLflow availability
 print("6. Agent Factory MLflow Check:")
-try:
-    from inference.agent_factory import _MLFLOW_AVAILABLE
-    print(f"   Agent factory MLflow available: {_MLFLOW_AVAILABLE}")
-except Exception as e:
-    print(f"   ✗ Error importing agent factory: {e}")
+print("   Agent factory does not initialize MLflow; use shared.mlflow_utils.")
 print()
 
 # Check 7: Logging level
