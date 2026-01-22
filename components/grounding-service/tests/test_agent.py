@@ -1,6 +1,6 @@
 """Tests for grounding agent."""
 
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -31,34 +31,55 @@ def mock_invoke():
 
 
 @pytest.mark.asyncio
-async def test_ground_returns_structured_result(mock_invoke):
+async def test_ground_returns_structured_result():
     """Test that ground() returns a structured GroundingResult."""
-    with patch("grounding_service.agent.create_react_agent") as mock_create:
-        mock_create.return_value = mock_invoke
-        agent = GroundingAgent(model_path="test-model", quantization="none")
-        result = await agent.ground("Age >= 18", "inclusion")
+    mock_agent = MagicMock()
+    mock_message = MagicMock()
+    mock_message.content = (
+        '{"snomed_codes": ["123456789"], "field_mappings": '
+        '[{"field": "demographics.age", "relation": ">=", "value": "18", '
+        '"confidence": 0.9, "umls_cui": "123456789"}], '
+        '"reasoning": "Test reasoning"}'
+    )
+    mock_agent.ainvoke = AsyncMock(
+        return_value={"messages": [mock_message]}
+    )
 
-        assert isinstance(result, GroundingResult)
-        assert len(result.snomed_codes) > 0
-        assert len(result.field_mappings) > 0
-        assert result.field_mappings[0].field == "demographics.age"
+    with patch("grounding_service.agent.MultiServerMCPClient") as mock_mcp:
+        mock_mcp_instance = MagicMock()
+        mock_mcp_instance.get_tools = AsyncMock(return_value=[])
+        mock_mcp.return_value = mock_mcp_instance
+        with patch("grounding_service.agent.ChatGoogleGenerativeAI"):
+            with patch("grounding_service.agent.create_react_agent") as mock_create:
+                mock_create.return_value = mock_agent
+                agent = GroundingAgent()
+                result = await agent.ground("Age >= 18", "inclusion")
+
+                assert isinstance(result, GroundingResult)
+                assert len(result.snomed_codes) > 0
+                assert len(result.field_mappings) > 0
+                assert result.field_mappings[0].field == "demographics.age"
 
 
 @pytest.mark.asyncio
 async def test_ground_fallback_on_invoke_error():
     """Test that ground() handles invoke errors gracefully."""
+    mock_agent = MagicMock()
+    mock_agent.ainvoke = AsyncMock(side_effect=ValueError("Invalid JSON"))
 
-    async def bad_invoke(_prompt_vars):
-        raise ValueError("Invalid JSON")
+    with patch("grounding_service.agent.MultiServerMCPClient") as mock_mcp:
+        mock_mcp_instance = MagicMock()
+        mock_mcp_instance.get_tools = AsyncMock(return_value=[])
+        mock_mcp.return_value = mock_mcp_instance
+        with patch("grounding_service.agent.ChatGoogleGenerativeAI"):
+            with patch("grounding_service.agent.create_react_agent") as mock_create:
+                mock_create.return_value = mock_agent
+                agent = GroundingAgent()
+                result = await agent.ground("Age >= 18", "inclusion")
 
-    with patch("grounding_service.agent.create_react_agent") as mock_create:
-        mock_create.return_value = bad_invoke
-        agent = GroundingAgent(model_path="test-model", quantization="none")
-        result = await agent.ground("Age >= 18", "inclusion")
-
-        assert isinstance(result, GroundingResult)
-        assert result.snomed_codes == []
-        assert "not available" in result.reasoning
+                assert isinstance(result, GroundingResult)
+                assert result.snomed_codes == []
+                assert "not available" in result.reasoning
 
 
 def test_get_grounding_agent_singleton():
