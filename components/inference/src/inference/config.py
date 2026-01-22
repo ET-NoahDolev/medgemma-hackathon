@@ -64,13 +64,13 @@ class AgentConfig:
         if backend not in {"local", "vertex"}:
             backend = "local"
 
-        raw_max_tokens = os.getenv("MEDGEMMA_MAX_TOKENS", "512")
+        raw_max_tokens = os.getenv("MEDGEMMA_MAX_TOKENS", "2048")
         try:
             max_tokens = int(raw_max_tokens)
         except ValueError:
-            max_tokens = 512
+            max_tokens = 2048
         if max_tokens <= 0:
-            max_tokens = 512
+            max_tokens = 2048
         return cls(
             backend=backend,
             model_path=os.getenv("MEDGEMMA_MODEL_PATH", cls.model_path),
