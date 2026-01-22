@@ -385,6 +385,11 @@ VERTEX_ENDPOINT_ID=${endpoint_id}
 # If VERTEX_MODEL_NAME is set, VERTEX_ENDPOINT_ID is ignored.
 # VERTEX_MODEL_NAME=gemini-1.5-pro
 
+# Gemini 2.5 Pro for orchestrator agent (supports tool calling)
+# Used by grounding service to coordinate MedGemma + UMLS tools
+# No endpoint needed - accessed directly via model name
+GEMINI_MODEL_NAME=gemini-2.5-pro
+
 # GCS Bucket for training data and model artifacts
 GCS_BUCKET=gs://${bucket_name}
 
@@ -402,6 +407,7 @@ EOF
         update_env_var "${env_path}" "GCP_PROJECT_ID" "${GCP_PROJECT_ID}"
         update_env_var "${env_path}" "GCP_REGION" "${region}"
         update_env_var "${env_path}" "VERTEX_ENDPOINT_ID" "${endpoint_id}"
+        update_env_var "${env_path}" "GEMINI_MODEL_NAME" "gemini-2.5-pro"
         update_env_var "${env_path}" "GCS_BUCKET" "gs://${bucket_name}"
       fi
       echo "✅ Updated .env with Vertex settings"
