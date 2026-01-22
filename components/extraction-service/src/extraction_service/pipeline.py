@@ -199,6 +199,16 @@ class ExtractionPipeline:
             return _extract_criteria_baseline(document_text)
 
         try:
+            # Try Gemini orchestrator first (if GEMINI_MODEL_NAME is set)
+            if os.getenv("GEMINI_MODEL_NAME"):
+                try:
+                    return await self._extract_with_gemini_orchestrator(document_text)
+                except Exception as e:
+                    logger.warning(
+                        "Gemini orchestrator failed, falling back: %s", e, exc_info=True
+                    )
+                    # Fall through to iterative/legacy modes
+
             if self.use_iterative:
                 # Check if model supports tools before attempting iterative mode
                 _, _, agent_cfg = self._get_model_loader()
@@ -261,6 +271,45 @@ class ExtractionPipeline:
         # Fallback: no tool results, try baseline
         logger.warning("Iterative extraction produced no tool results")
         return _extract_criteria_baseline(document_text)
+
+    async def _extract_with_gemini_orchestrator(
+        self, document_text: str
+    ) -> list[Criterion]:
+        """Extract criteria using Gemini as orchestrator calling MedGemma tools."""
+        from inference import create_react_agent
+        from inference.tools import classify_criterion, extract_field_mapping
+
+        from extraction_service.schemas import ExtractionResult
+
+        # Create Gemini model loader
+        def gemini_loader():
+            from langchain_google_genai import ChatGoogleGenerativeAI
+
+            return ChatGoogleGenerativeAI(
+                model=os.getenv("GEMINI_MODEL_NAME", "gemini-2.5-pro"),
+                project=os.getenv("GCP_PROJECT_ID"),
+                location=os.getenv("GCP_REGION", "europe-west4"),
+                vertexai=True,
+            )
+
+        tools = [extract_field_mapping, classify_criterion]
+        prompts_dir = Path(__file__).parent / "prompts"
+
+        # Create agent with structured output enforced
+        agent = create_react_agent(
+            model_loader=gemini_loader,
+            prompts_dir=prompts_dir,
+            tools=tools,
+            response_schema=ExtractionResult,  # Pydantic schema
+            system_template="extraction_system_orchestrator.j2",
+            user_template="extraction_user_orchestrator.j2",
+        )
+
+        # Invoke agent - returns validated ExtractionResult
+        result = await agent({"document_text": document_text})
+
+        # Convert to Criterion list
+        return _criteria_from_extraction_result(result)
 
     async def _extract_legacy_async(self, document_text: str) -> list[Criterion]:
         """Extract criteria using legacy single-shot approach."""
