@@ -387,3 +387,5 @@ mlruns/
 .env.vertex
 .env
 scripts/gcp_config.json
+mlruns/
+mlflow-artifacts/
