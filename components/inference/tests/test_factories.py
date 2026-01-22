@@ -79,7 +79,7 @@ def test_vertex_loader_initializes_and_builds_resource_name(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     # Full offline test: env selects vertex backend; loader initializes vertexai and
-    # constructs ChatVertexAI with endpoint resource name.
+    # constructs ModelGardenChatModel with endpoint resource name.
     monkeypatch.setenv("MODEL_BACKEND", "vertex")
     monkeypatch.setenv("GCP_PROJECT_ID", "my-project")
     monkeypatch.setenv("GCP_REGION", "europe-west4")
@@ -87,16 +87,23 @@ def test_vertex_loader_initializes_and_builds_resource_name(
     monkeypatch.delenv("VERTEX_MODEL_NAME", raising=False)
 
     init_args: tuple[str, str] | None = None
-    chat_args: tuple[str, int] | None = None
 
     def _init(*, project: str, location: str) -> None:
         nonlocal init_args
         init_args = (project, location)
 
-    class _ChatVertexAI:
-        def __init__(self, *, model_name: str, max_output_tokens: int) -> None:
-            nonlocal chat_args
-            chat_args = (model_name, max_output_tokens)
+    class _MockEndpoint:
+        """Mock aiplatform.Endpoint for testing."""
+
+        def __init__(self, resource_name: str) -> None:
+            self.resource_name = resource_name
+
+        def predict(
+            self, instances: list[dict[str, Any]], parameters: dict[str, Any]
+        ) -> Any:  # noqa: ANN401
+            class _MockResponse:
+                predictions = ['{"test": "response"}']
+            return _MockResponse()
 
     import sys
     import types
@@ -104,8 +111,8 @@ def test_vertex_loader_initializes_and_builds_resource_name(
     monkeypatch.setitem(sys.modules, "vertexai", types.SimpleNamespace(init=_init))
     monkeypatch.setitem(
         sys.modules,
-        "langchain_google_vertexai",
-        types.SimpleNamespace(ChatVertexAI=_ChatVertexAI),
+        "google.cloud.aiplatform",
+        types.SimpleNamespace(Endpoint=_MockEndpoint),
     )
 
     loader = create_model_loader()
@@ -113,12 +120,14 @@ def test_vertex_loader_initializes_and_builds_resource_name(
     assert model is not None
 
     assert init_args == ("my-project", "europe-west4")
-    assert chat_args is not None
-    model_name, max_tokens = chat_args
-    assert max_tokens == 512
-    assert model_name == (
+    # Verify ModelGardenChatModel properties
+    assert hasattr(model, "endpoint_resource_name")
+    assert model.endpoint_resource_name == (
         "projects/my-project/locations/europe-west4/endpoints/987654321"
     )
+    assert model.project == "my-project"
+    assert model.location == "europe-west4"
+    assert model.max_output_tokens == 512
 
 
 def test_vertex_loader_uses_genai_model_name(

@@ -88,7 +88,9 @@ echo "📡 Starting API server on port ${API_PORT}..."
 echo "   API docs: http://localhost:${API_PORT}/docs"
 (
     cd "$REPO_ROOT/components/api-service"
-    uv run uvicorn api_service.main:app --reload --host "${API_HOST}" --port "${API_PORT}"
+    # Set log level to INFO to see MLflow logging messages
+    export LOG_LEVEL="${LOG_LEVEL:-INFO}"
+    uv run uvicorn api_service.main:app --reload --host "${API_HOST}" --port "${API_PORT}" --log-level info
 ) &
 BACKEND_PID=$!
 

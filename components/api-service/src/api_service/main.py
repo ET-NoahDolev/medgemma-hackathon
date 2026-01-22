@@ -37,6 +37,33 @@ from api_service.storage import Storage, init_db, reset_storage
 # Load .env from repo root (find_dotenv walks up to find it)
 load_dotenv(find_dotenv())
 
+# Configure logging level from environment or default to INFO
+# This ensures MLflow logging messages are visible
+# Note: uvicorn may have already set up logging, so we need to override it
+log_level_str = os.getenv("LOG_LEVEL", "INFO").upper()
+try:
+    log_level = getattr(logging, log_level_str, logging.INFO)
+except AttributeError:
+    log_level = logging.INFO
+
+# Force reconfiguration of logging to ensure our level is used
+# This overrides uvicorn's default configuration
+logging.basicConfig(
+    level=log_level,
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+    force=True,  # Override any existing configuration (including uvicorn's)
+)
+
+# Set level for common loggers used by the application
+# These may have been created before basicConfig, so set explicitly
+logging.getLogger("api_service").setLevel(log_level)
+logging.getLogger("extraction_service").setLevel(log_level)
+logging.getLogger("grounding_service").setLevel(log_level)
+logging.getLogger("inference").setLevel(log_level)
+logging.getLogger("uvicorn").setLevel(log_level)
+logging.getLogger("uvicorn.access").setLevel(log_level)
+logging.getLogger("uvicorn.error").setLevel(log_level)
+
 logger = logging.getLogger(__name__)
 
 # Try to import agent (optional dependency)
@@ -48,12 +75,32 @@ except ImportError:
     AGENT_AVAILABLE = False
 
 # Configure MLflow tracking URI at module level to avoid filesystem backend warning
+# Use absolute path to SQLite database in repo root
+def _get_mlflow_tracking_uri() -> str:
+    """Get the MLflow tracking URI using absolute path to SQLite database.
+
+    Raises:
+        RuntimeError: If .env file cannot be found to determine repo root.
+    """
+    # Find repo root by looking for .env file (find_dotenv walks up to find it)
+    env_path = find_dotenv()
+    if not env_path:
+        raise RuntimeError(
+            "Cannot determine repo root: .env file not found. "
+            "Please ensure you're running from the repository root or have a .env file."
+        )
+    repo_root = Path(env_path).parent.absolute()
+    db_path = repo_root / "mlflow.db"
+    return f"sqlite:///{db_path}"
+
+
 # Set environment variable before import so MLflow reads it during initialization
-os.environ.setdefault("MLFLOW_TRACKING_URI", "sqlite:///mlflow.db")
+_mlflow_uri = _get_mlflow_tracking_uri()
+os.environ.setdefault("MLFLOW_TRACKING_URI", _mlflow_uri)
 try:
     import mlflow
 
-    mlflow.set_tracking_uri("sqlite:///mlflow.db")
+    mlflow.set_tracking_uri(_mlflow_uri)
 except ImportError:
     pass
 
@@ -347,7 +394,9 @@ async def _run_extraction(
         # Prefer async extraction when model extraction is enabled to avoid
         # calling anyio.run() inside the running event loop thread.
         use_model = os.getenv("USE_MODEL_EXTRACTION", "true").lower() == "true"
+        logger.info(f"Extraction: use_model={use_model}, MLflow active={mlflow is not None}")
         if use_model and hasattr(extraction_pipeline, "extract_criteria_async"):
+            logger.info("Extraction: Using async model extraction")
             items = await extraction_pipeline.extract_criteria_async(document_text)
             iterator = iter(items)
         else:
@@ -394,16 +443,20 @@ def _start_mlflow_run(protocol_id: str) -> Any | None:
     try:
         import mlflow
     except ImportError:
+        logger.debug("MLflow not available, skipping logging")
         return None
 
-    # Use absolute path for mlflow.db to ensure consistency regardless of CWD.
-    # find_dotenv() returns the path to the .env file in the repo root.
-    repo_root = Path(find_dotenv()).parent
-    db_path = repo_root.absolute() / "mlflow.db"
-    mlflow.set_tracking_uri(f"sqlite:///{db_path}")
-    mlflow.set_experiment("medgemma-extraction")
-    mlflow.start_run(run_name=f"extract_{protocol_id}")
-    return mlflow
+    try:
+        # Use absolute path for mlflow.db to ensure consistency regardless of CWD.
+        mlflow.set_tracking_uri(_get_mlflow_tracking_uri())
+        mlflow.set_experiment("medgemma-extraction")
+        mlflow.start_run(run_name=f"extract_{protocol_id}")
+        run_id = mlflow.active_run().info.run_id if mlflow.active_run() else "unknown"
+        logger.info(f"MLflow: Started run {run_id} for protocol {protocol_id}")
+        return mlflow
+    except Exception as e:
+        logger.warning(f"MLflow: Failed to start run for protocol {protocol_id}: {e}", exc_info=True)
+        return None
 
 
 def _finish_mlflow_run(mlflow: Any | None, *, count: int, failed: bool = False) -> None:
@@ -652,6 +705,7 @@ async def ground_criterion(
 
     # Try AI grounding if enabled
     use_ai = os.getenv("USE_AI_GROUNDING", "false").lower() == "true"
+    logger.info(f"Grounding: use_ai={use_ai}, AGENT_AVAILABLE={AGENT_AVAILABLE}")
     if use_ai and AGENT_AVAILABLE:
         try:
             agent = get_grounding_agent()
@@ -661,11 +715,13 @@ async def ground_criterion(
 
             # Convert agent result to API response format
             response_candidates = []
-            for code in result.snomed_codes:
-                # Try to get display name from UMLS
-                with umls_client.UmlsClient(api_key=_get_umls_api_key()) as client:
-                    candidates = client.search_snomed(criterion.text, limit=1)
-                    if candidates:
+            with umls_client.UmlsClient(api_key=_get_umls_api_key()) as client:
+                for code in result.snomed_codes:
+                    # Try to get display name from UMLS by searching for the code
+                    # UMLS search may accept codes as queries, or we search by code
+                    candidates = client.search_snomed(code, limit=1)
+                    if candidates and candidates[0].code == code:
+                        # Found exact match for the AI-provided code
                         response_candidates.append(
                             GroundingCandidateResponse(
                                 code=candidates[0].code,
@@ -673,6 +729,13 @@ async def ground_criterion(
                                 ontology=candidates[0].ontology,
                                 confidence=candidates[0].confidence,
                             )
+                        )
+                    else:
+                        # Code not found in UMLS - log warning and skip
+                        # We only include codes that can be validated
+                        logger.warning(
+                            "AI-provided SNOMED code %s not found in UMLS, skipping",
+                            code,
                         )
 
             field_mapping = None
@@ -685,11 +748,18 @@ async def ground_criterion(
                     confidence=mapping.confidence,
                 )
 
-            # Store SNOMED codes
-            snomed_codes = result.snomed_codes
+            # Store SNOMED codes (only validated ones that made it into response)
+            validated_codes = [c.code for c in response_candidates]
             storage.set_snomed_codes(
-                criterion_id=criterion_id, snomed_codes=snomed_codes
+                criterion_id=criterion_id, snomed_codes=validated_codes
             )
+
+            # If no candidates were found/validated, make it clear
+            if not response_candidates:
+                logger.warning(
+                    "AI grounding returned %d codes but none were validated in UMLS",
+                    len(result.snomed_codes),
+                )
 
             return GroundingResponse(
                 criterion_id=criterion_id,

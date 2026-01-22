@@ -17,6 +17,7 @@ dependencies = [
     "langchain-google-vertexai>=3.2.1",
     "google-cloud-aiplatform>=1.130.0",
     "langchain-google-genai>=4.1.1",
+    "python-dotenv>=1.2.1",
 ]
 
 [build-system]

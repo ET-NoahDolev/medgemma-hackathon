@@ -12,8 +12,6 @@ Enable with:
 from __future__ import annotations
 
 import os
-import json
-import time
 
 import pytest
 from langchain_core.messages import HumanMessage
@@ -29,27 +27,6 @@ def _required_env_vars_present() -> bool:
         (os.getenv("VERTEX_ENDPOINT_ID") or "").strip()
         or (os.getenv("VERTEX_MODEL_NAME") or "").strip()
     )
-
-
-def _debug_log(*, hypothesis_id: str, location: str, message: str, data: dict[str, object]) -> None:
-    payload = {
-        "sessionId": "debug-session",
-        "runId": "pre-fix",
-        "hypothesisId": hypothesis_id,
-        "location": location,
-        "message": message,
-        "data": data,
-        "timestamp": int(time.time() * 1000),
-    }
-    try:
-        with open(
-            "/Users/noahdolevelixir/Code/gemma-hackathon/.cursor/debug.log",
-            "a",
-            encoding="utf-8",
-        ) as log_file:
-            log_file.write(json.dumps(payload) + "\n")
-    except OSError:
-        return
 
 
 @pytest.mark.integration
@@ -88,39 +65,11 @@ def test_vertex_e2e_chat_invoke() -> None:
 
     loader = create_model_loader(cfg)
     model = loader()
-    # #region agent log
-    _debug_log(
-        hypothesis_id="E",
-        location="test_vertex_e2e.py:test_vertex_e2e_chat_invoke",
-        message="Loaded model instance",
-        data={
-            "model_type": type(model).__name__,
-            "api_endpoint": getattr(model, "api_endpoint", None),
-            "model_name": getattr(model, "model_name", None),
-            "client_endpoint": getattr(
-                getattr(model, "_client", None), "_client_options", None
-            )
-            and getattr(
-                getattr(model, "_client", None)._client_options,
-                "api_endpoint",
-                None,
-            ),
-        },
-    )
-    # #endregion
 
     prompt = os.getenv("VERTEX_E2E_PROMPT", "Reply with 'ok' only.")
     try:
         response = model.invoke([HumanMessage(content=prompt)])
-    except Exception as exc:  # pragma: no cover - debug instrumentation
-        # #region agent log
-        _debug_log(
-            hypothesis_id="E",
-            location="test_vertex_e2e.py:test_vertex_e2e_chat_invoke",
-            message="Invocation failed",
-            data={"error_type": type(exc).__name__, "error": str(exc)},
-        )
-        # #endregion
+    except Exception:  # pragma: no cover
         raise
 
     content = getattr(response, "content", None)

@@ -378,14 +378,11 @@ gcp-url-to-gcs-logs/
 components/hitl-ui/node_modules/
 
 scripts/tmp/
-mlruns/mlflow.db
-mlruns/*
+mlflow.db
 mlruns/
-
+mlflow-artifacts/
 .npm-cache/
 
 .env.vertex
 .env
 scripts/gcp_config.json
-mlruns/
-mlflow-artifacts/

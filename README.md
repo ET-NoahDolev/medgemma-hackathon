@@ -168,6 +168,23 @@ npm run dev
 
 UI will be available at `http://localhost:5173` (Vite default).
 
+#### 📊 MLflow UI
+
+To view MLflow experiment tracking and logged runs:
+
+```bash
+./scripts/start-mlflow-ui.sh
+```
+
+**Important:** Always use the script (`./scripts/start-mlflow-ui.sh`) rather than running `mlflow ui` directly. The script configures MLflow to use the SQLite database backend (`mlflow.db`) instead of the default filesystem backend.
+
+MLflow UI will be available at `http://localhost:5000`.
+
+The database contains experiments for:
+- `medgemma-extraction` - Extraction service runs
+- `medgemma-grounding` - Grounding service runs
+- `medgemma-inference` - Agent inference runs
+
 ---
 
 ## 🧩 Components
@@ -292,3 +309,7 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines on contributing to this pr
 - 📖 [Full Documentation](https://et-noahdolev.github.io/medgemma-hackathon/hackathon/docs/)
 - 🐛 [Report Issues](https://github.com/elixirtrials/gemma-hackathon/issues)
 - 💬 [Discussions](https://github.com/elixirtrials/gemma-hackathon/discussions)
+
+
+## TODO:
+ - Setup mlflow.genai.optimize_prompts() once we have HITL inputs so we can do this as a first pass optimization before fine tuning
