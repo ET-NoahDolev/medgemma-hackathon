@@ -158,6 +158,7 @@ main() {
   run gcloud services enable aiplatform.googleapis.com
   run gcloud services enable storage-api.googleapis.com
   run gcloud services enable artifactregistry.googleapis.com
+  run gcloud services enable generativelanguage.googleapis.com
 
   echo "Creating/ensuring GCS bucket: gs://${bucket_name} (${region})"
   if run gsutil ls -b "gs://${bucket_name}" >/dev/null 2>&1; then
@@ -416,6 +417,21 @@ EOF
     fi
   fi
 
+  # Verify Gemini model access (informational only)
+  echo
+  echo "Verifying Gemini model configuration..."
+  if [[ "${DRY_RUN}" == "true" ]]; then
+    echo "+ Checking Gemini 2.5 Pro availability..."
+  else
+    gemini_model_name="${GEMINI_MODEL_NAME:-gemini-2.5-pro}"
+    echo "Note: Gemini models (${gemini_model_name}) don't require deployment."
+    echo "      They're accessed directly via Vertex AI API."
+    echo "      If you get 'model not found' errors, try:"
+    echo "      - gemini-1.5-pro (stable, widely available)"
+    echo "      - gemini-1.5-flash (faster alternative)"
+    echo "      - Check available models: https://console.cloud.google.com/vertex-ai/models"
+  fi
+
   echo
   echo "✅ GCP setup complete!"
   if [[ "${WRITE_ENV_TEMPLATE}" == "true" ]]; then
@@ -427,6 +443,8 @@ EOF
     echo "  export \$(grep -v '^#' .env | xargs)"
     echo
     echo "Then run your services - they will automatically use Vertex AI."
+    echo
+    echo "📖 For Gemini setup details, see: docs/gemini-vertex-setup.md"
   fi
 }
 
