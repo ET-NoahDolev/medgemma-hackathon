@@ -67,19 +67,41 @@ class ExtractionConfig:
 
 
 class ExtractionPipeline:
-    """Extraction pipeline with optional MedGemma-based extraction."""
+    """Extraction pipeline with optional MedGemma-based extraction.
 
-    def __init__(self, config: ExtractionConfig | None = None) -> None:
-        """Initialize the extraction pipeline."""
+    Supports two extraction modes:
+    - Iterative extraction (default): Uses tools to extract criteria in batches,
+      allowing the agent to iterate and handle large documents without token limits.
+    - Legacy extraction: Single-shot extraction without tools.
+    """
+
+    def __init__(
+        self,
+        config: ExtractionConfig | None = None,
+        use_iterative: bool = True,
+    ) -> None:
+        """Initialize the extraction pipeline.
+
+        Args:
+            config: Extraction configuration. Defaults to from_env().
+            use_iterative: If True, use iterative extraction with tools.
+        """
         self.config = config or ExtractionConfig.from_env()
-        self._extract_agent: Any | None = None
+        self.use_iterative = use_iterative
+        self._model_loader: Any | None = None
+        self._prompts_dir: Path | None = None
+        self._agent_cfg: Any | None = None
 
-    def _get_extract_agent(self) -> Any:
-        """Lazily create the MedGemma extraction agent."""
-        if self._extract_agent is not None:
-            return self._extract_agent
+    def _get_model_loader(self) -> tuple[Any, Path, Any]:
+        """Lazily create and cache the model loader.
 
-        from inference import AgentConfig, create_model_loader, create_react_agent
+        Returns:
+            Tuple of (model_loader, prompts_dir, agent_cfg).
+        """
+        if self._model_loader is not None:
+            return self._model_loader, self._prompts_dir, self._agent_cfg  # type: ignore[return-value]
+
+        from inference import AgentConfig, create_model_loader
 
         prompts_dir = Path(__file__).parent / "prompts"
         base_cfg = AgentConfig.from_env()
@@ -91,12 +113,49 @@ class ExtractionPipeline:
             gcp_project_id=base_cfg.gcp_project_id,
             gcp_region=base_cfg.gcp_region,
             vertex_endpoint_id=base_cfg.vertex_endpoint_id,
+            vertex_model_name=base_cfg.vertex_model_name,
         )
-        model_loader = create_model_loader(agent_cfg)
-        # Import locally to keep baseline users lightweight.
+        self._model_loader = create_model_loader(agent_cfg)
+        self._prompts_dir = prompts_dir
+        self._agent_cfg = agent_cfg
+        return self._model_loader, prompts_dir, agent_cfg
+
+    def _create_iterative_agent(
+        self,
+    ) -> tuple[Any, Any]:
+        """Create an agent with iterative extraction tools.
+
+        Returns:
+            Tuple of (agent_invoke_fn, tool_factory).
+        """
+        from inference import create_react_agent
+
+        from extraction_service.schemas import ExtractionResult
+        from extraction_service.tools import ExtractionToolFactory
+
+        model_loader, prompts_dir, _ = self._get_model_loader()
+        tool_factory = ExtractionToolFactory()
+        tools = tool_factory.create_tools()
+
+        agent = create_react_agent(
+            model_loader=model_loader,
+            prompts_dir=prompts_dir,
+            tools=tools,
+            response_schema=ExtractionResult,
+            system_template="extraction_system_iterative.j2",
+            user_template="extraction_user.j2",
+        )
+        return agent, tool_factory
+
+    def _create_legacy_agent(self) -> Any:
+        """Create a legacy agent without tools (single-shot extraction)."""
+        from inference import create_react_agent
+
         from extraction_service.schemas import ExtractionResult
 
-        self._extract_agent = create_react_agent(
+        model_loader, prompts_dir, _ = self._get_model_loader()
+
+        return create_react_agent(
             model_loader=model_loader,
             prompts_dir=prompts_dir,
             tools=[],
@@ -104,7 +163,6 @@ class ExtractionPipeline:
             system_template="extraction_system.j2",
             user_template="extraction_user.j2",
         )
-        return self._extract_agent
 
     def extract_criteria_stream(self, document_text: str) -> Iterator[Criterion]:
         """Stream atomic inclusion/exclusion criteria from protocol text."""
@@ -118,7 +176,9 @@ class ExtractionPipeline:
                 yield from criteria
                 return
             except Exception as exc:
-                logger.warning("Model extraction failed; using baseline: %s", exc)
+                logger.warning(
+                    "Model extraction failed; using baseline: %s", exc, exc_info=True
+                )
 
         yield from _extract_criteria_baseline_stream(document_text)
 
@@ -128,6 +188,9 @@ class ExtractionPipeline:
         This is the preferred entrypoint when already running inside an asyncio loop
         (e.g., FastAPI background tasks). It avoids calling `anyio.run()`, which
         raises "Already running asyncio in this thread".
+
+        Uses iterative extraction by default, falling back to legacy mode if the
+        model doesn't support tools or if iterative mode fails.
         """
         if not document_text.strip():
             raise ValueError("document_text is required")
@@ -136,18 +199,83 @@ class ExtractionPipeline:
             return _extract_criteria_baseline(document_text)
 
         try:
-            agent = self._get_extract_agent()
-            result = await agent({"document_text": document_text})
-            extracted = _criteria_from_extraction_result(result)
-            if extracted:
-                return extracted
+            if self.use_iterative:
+                # Check if model supports tools before attempting iterative mode
+                _, _, agent_cfg = self._get_model_loader()
+                if not agent_cfg.supports_tools:
+                    logger.info(
+                        "Model doesn't support tools; using legacy extraction mode"
+                    )
+                    return await self._extract_legacy_async(document_text)
+                return await self._extract_iterative_async(document_text)
+            return await self._extract_legacy_async(document_text)
         except Exception as exc:
-            logger.warning("Model extraction failed; using baseline: %s", exc)
+            logger.warning(
+                "Model extraction failed; using baseline: %s", exc, exc_info=True
+            )
 
         return _extract_criteria_baseline(document_text)
 
+    async def _extract_iterative_async(self, document_text: str) -> list[Criterion]:
+        """Extract criteria using iterative tool-based approach."""
+        try:
+            agent, tool_factory = self._create_iterative_agent()
+        except Exception as e:
+            logger.error(
+                "Failed to create iterative agent: %s", e, exc_info=True
+            )
+            raise
+
+        # Run the agent - it will call tools to submit criteria
+        try:
+            await agent({"document_text": document_text})
+        except Exception as e:
+            logger.error(
+                "Agent invocation failed: %s", e, exc_info=True
+            )
+            raise
+
+        # Collect results from the tool factory
+        if tool_factory.has_results:
+            extracted = []
+            for item in tool_factory.get_results():
+                text = _normalize_candidate(item.get("text", ""))
+                if not is_valid_criterion_candidate(text):
+                    continue
+                extracted.append(
+                    Criterion(
+                        id="",
+                        text=text,
+                        criterion_type=item.get("criterion_type", "inclusion"),
+                        confidence=float(item.get("confidence", 0.8)),
+                        snomed_codes=[],
+                        evidence_spans=[],
+                    )
+                )
+            if extracted:
+                logger.info(
+                    "Iterative extraction found %d criteria via tools", len(extracted)
+                )
+                return extracted
+
+        # Fallback: no tool results, try baseline
+        logger.warning("Iterative extraction produced no tool results")
+        return _extract_criteria_baseline(document_text)
+
+    async def _extract_legacy_async(self, document_text: str) -> list[Criterion]:
+        """Extract criteria using legacy single-shot approach."""
+        agent = self._create_legacy_agent()
+        result = await agent({"document_text": document_text})
+        extracted = _criteria_from_extraction_result(result)
+        if extracted:
+            return extracted
+        return _extract_criteria_baseline(document_text)
+
     def extract_criteria(self, document_text: str) -> list[Criterion]:
-        """Extract atomic inclusion/exclusion criteria from protocol text."""
+        """Extract atomic inclusion/exclusion criteria from protocol text.
+
+        Uses iterative extraction by default for better handling of large documents.
+        """
         if not document_text.strip():
             raise ValueError("document_text is required")
 
@@ -155,20 +283,14 @@ class ExtractionPipeline:
             return _extract_criteria_baseline(document_text)
 
         try:
-            agent = self._get_extract_agent()
-            # The agent is an async callable; run it via anyio from sync context.
+            # Run the async extraction via anyio from sync context.
             from anyio import run  # type: ignore[import-not-found]
 
-            from extraction_service.schemas import ExtractionResult
-
-            result: ExtractionResult = run(  # type: ignore[no-untyped-call]
-                agent, {"document_text": document_text}
-            )
-            extracted = _criteria_from_extraction_result(result)
-            if extracted:
-                return extracted
+            return run(self.extract_criteria_async, document_text)  # type: ignore[no-untyped-call]
         except Exception as exc:
-            logger.warning("Model extraction failed; using baseline: %s", exc)
+            logger.warning(
+                "Model extraction failed; using baseline: %s", exc, exc_info=True
+            )
 
         return _extract_criteria_baseline(document_text)
 

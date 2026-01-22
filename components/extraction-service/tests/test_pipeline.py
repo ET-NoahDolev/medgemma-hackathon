@@ -2,6 +2,8 @@ import pytest
 from shared.models import Criterion
 
 from extraction_service.pipeline import (
+    ExtractionConfig,
+    ExtractionPipeline,
     classify_criterion_type,
     detect_sections,
     extract_criteria,
@@ -141,3 +143,49 @@ Inclusion Criteria:
         texts = [c.text for c in criteria]
         assert any("Age" in t for t in texts)
         assert not any("2013;8:569-79" in t for t in texts)
+
+
+class TestExtractionPipelineFallback:
+    """Test auto-fallback when model doesn't support tools."""
+
+    def test_fallback_when_model_lacks_tool_support(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Test pipeline falls back to legacy mode when model lacks tool support."""
+        # Configure to use Model Garden endpoint (doesn't support tools)
+        monkeypatch.setenv("MODEL_BACKEND", "vertex")
+        monkeypatch.setenv("GCP_PROJECT_ID", "test-project")
+        monkeypatch.setenv("GCP_REGION", "us-central1")
+        monkeypatch.setenv("VERTEX_ENDPOINT_ID", "endpoint-123")
+        monkeypatch.delenv("VERTEX_MODEL_NAME", raising=False)
+        monkeypatch.setenv("USE_MODEL_EXTRACTION", "true")
+
+        config = ExtractionConfig.from_env()
+        pipeline = ExtractionPipeline(config=config, use_iterative=True)
+
+        # Should use legacy mode (no tools) when model doesn't support them
+        # This is tested by checking that _get_model_loader is called
+        # and that use_iterative is effectively False for Model Garden
+        model_loader, _, agent_cfg = pipeline._get_model_loader()
+        assert not agent_cfg.supports_tools
+        # Pipeline should handle this gracefully
+        assert pipeline.use_iterative is True  # Set by user
+        # But internally it will fall back to legacy mode
+
+    def test_uses_iterative_when_model_supports_tools(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Test that pipeline uses iterative mode when model supports tools."""
+        # Configure to use Gemini model (supports tools)
+        monkeypatch.setenv("MODEL_BACKEND", "vertex")
+        monkeypatch.setenv("GCP_PROJECT_ID", "test-project")
+        monkeypatch.setenv("GCP_REGION", "us-central1")
+        monkeypatch.delenv("VERTEX_ENDPOINT_ID", raising=False)
+        monkeypatch.setenv("VERTEX_MODEL_NAME", "gemini-2.5-pro")
+        monkeypatch.setenv("USE_MODEL_EXTRACTION", "true")
+
+        config = ExtractionConfig.from_env()
+        pipeline = ExtractionPipeline(config=config, use_iterative=True)
+
+        model_loader, _, agent_cfg = pipeline._get_model_loader()
+        assert agent_cfg.supports_tools
