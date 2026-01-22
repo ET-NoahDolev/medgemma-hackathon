@@ -212,11 +212,12 @@ def identify_medical_concepts(text: str) -> str:
     parser = PydanticOutputParser(pydantic_object=MedicalConceptsResult)
     format_instructions = parser.get_format_instructions()
 
-    prompt = f"""Identify medical concepts in this text that should be grounded to UMLS/SNOMED.
-
-Text: {text}
-
-{format_instructions}"""
+    prompt = (
+        "Identify medical concepts in this text that should be grounded to "
+        "UMLS/SNOMED.\n\n"
+        f"Text: {text}\n\n"
+        f"{format_instructions}"
+    )
 
     try:
         try:

@@ -394,7 +394,9 @@ async def _run_extraction(
         # Prefer async extraction when model extraction is enabled to avoid
         # calling anyio.run() inside the running event loop thread.
         use_model = os.getenv("USE_MODEL_EXTRACTION", "true").lower() == "true"
-        logger.info(f"Extraction: use_model={use_model}, MLflow active={mlflow is not None}")
+        logger.info(
+            f"Extraction: use_model={use_model}, MLflow active={mlflow is not None}"
+        )
         if use_model and hasattr(extraction_pipeline, "extract_criteria_async"):
             logger.info("Extraction: Using async model extraction")
             items = await extraction_pipeline.extract_criteria_async(document_text)
@@ -451,11 +453,15 @@ def _start_mlflow_run(protocol_id: str) -> Any | None:
         mlflow.set_tracking_uri(_get_mlflow_tracking_uri())
         mlflow.set_experiment("medgemma-extraction")
         mlflow.start_run(run_name=f"extract_{protocol_id}")
-        run_id = mlflow.active_run().info.run_id if mlflow.active_run() else "unknown"
+        active_run = mlflow.active_run()
+        run_id = active_run.info.run_id if active_run else "unknown"
         logger.info(f"MLflow: Started run {run_id} for protocol {protocol_id}")
         return mlflow
     except Exception as e:
-        logger.warning(f"MLflow: Failed to start run for protocol {protocol_id}: {e}", exc_info=True)
+        logger.warning(
+            f"MLflow: Failed to start run for protocol {protocol_id}: {e}",
+            exc_info=True,
+        )
         return None
 
 
@@ -693,90 +699,88 @@ def suggest_field_mapping(
     return FieldMappingSuggestionResponse(suggestions=suggestions)
 
 
-@app.post("/v1/criteria/{criterion_id}/ground")
-async def ground_criterion(
+async def _try_ai_grounding(
+    criterion_text: str,
+    criterion_type: str,
     criterion_id: str,
-    storage: Storage = Depends(get_storage),
-) -> GroundingResponse:
-    """Retrieve SNOMED candidates and field mappings for a criterion."""
-    criterion = storage.get_criterion(criterion_id)
-    if criterion is None:
-        raise HTTPException(status_code=404, detail="Criterion not found")
+    storage: Storage,
+) -> GroundingResponse | None:
+    """Try AI grounding and return result if successful, None otherwise."""
+    try:
+        agent = get_grounding_agent()
+        result = await agent.ground(criterion_text, criterion_type)
+        if not result.snomed_codes and not result.field_mappings:
+            raise RuntimeError("AI grounding returned empty result")
 
-    # Try AI grounding if enabled
-    use_ai = os.getenv("USE_AI_GROUNDING", "false").lower() == "true"
-    logger.info(f"Grounding: use_ai={use_ai}, AGENT_AVAILABLE={AGENT_AVAILABLE}")
-    if use_ai and AGENT_AVAILABLE:
-        try:
-            agent = get_grounding_agent()
-            result = await agent.ground(criterion.text, criterion.criterion_type)
-            if not result.snomed_codes and not result.field_mappings:
-                raise RuntimeError("AI grounding returned empty result")
-
-            # Convert agent result to API response format
-            response_candidates = []
-            with umls_client.UmlsClient(api_key=_get_umls_api_key()) as client:
-                for code in result.snomed_codes:
-                    # Try to get display name from UMLS by searching for the code
-                    # UMLS search may accept codes as queries, or we search by code
-                    candidates = client.search_snomed(code, limit=1)
-                    if candidates and candidates[0].code == code:
-                        # Found exact match for the AI-provided code
-                        response_candidates.append(
-                            GroundingCandidateResponse(
-                                code=candidates[0].code,
-                                display=candidates[0].display,
-                                ontology=candidates[0].ontology,
-                                confidence=candidates[0].confidence,
-                            )
+        # Convert agent result to API response format
+        response_candidates = []
+        with umls_client.UmlsClient(api_key=_get_umls_api_key()) as client:
+            for code in result.snomed_codes:
+                # Try to get display name from UMLS by searching for the code
+                candidates = client.search_snomed(code, limit=1)
+                if candidates and candidates[0].code == code:
+                    # Found exact match for the AI-provided code
+                    response_candidates.append(
+                        GroundingCandidateResponse(
+                            code=candidates[0].code,
+                            display=candidates[0].display,
+                            ontology=candidates[0].ontology,
+                            confidence=candidates[0].confidence,
                         )
-                    else:
-                        # Code not found in UMLS - log warning and skip
-                        # We only include codes that can be validated
-                        logger.warning(
-                            "AI-provided SNOMED code %s not found in UMLS, skipping",
-                            code,
-                        )
+                    )
+                else:
+                    # Code not found in UMLS - log warning and skip
+                    logger.warning(
+                        "AI-provided SNOMED code %s not found in UMLS, skipping",
+                        code,
+                    )
 
-            field_mapping = None
-            if result.field_mappings:
-                mapping = result.field_mappings[0]
-                field_mapping = FieldMappingResponse(
-                    field=mapping.field,
-                    relation=mapping.relation,
-                    value=mapping.value,
-                    confidence=mapping.confidence,
-                )
-
-            # Store SNOMED codes (only validated ones that made it into response)
-            validated_codes = [c.code for c in response_candidates]
-            storage.set_snomed_codes(
-                criterion_id=criterion_id, snomed_codes=validated_codes
+        field_mapping = None
+        if result.field_mappings:
+            mapping = result.field_mappings[0]
+            field_mapping = FieldMappingResponse(
+                field=mapping.field,
+                relation=mapping.relation,
+                value=mapping.value,
+                confidence=mapping.confidence,
             )
 
-            # If no candidates were found/validated, make it clear
-            if not response_candidates:
-                logger.warning(
-                    "AI grounding returned %d codes but none were validated in UMLS",
-                    len(result.snomed_codes),
-                )
+        # Store SNOMED codes (only validated ones that made it into response)
+        validated_codes = [c.code for c in response_candidates]
+        storage.set_snomed_codes(
+            criterion_id=criterion_id, snomed_codes=validated_codes
+        )
 
-            return GroundingResponse(
-                criterion_id=criterion_id,
-                candidates=response_candidates,
-                field_mapping=field_mapping,
-            )
-        except Exception as e:
+        # If no candidates were found/validated, make it clear
+        if not response_candidates:
             logger.warning(
-                "AI grounding failed for criterion %s: %s, falling back to baseline",
-                criterion_id,
-                e,
+                "AI grounding returned %d codes but none were validated in UMLS",
+                len(result.snomed_codes),
             )
 
-    # Fallback to baseline regex-based grounding
+        return GroundingResponse(
+            criterion_id=criterion_id,
+            candidates=response_candidates,
+            field_mapping=field_mapping,
+        )
+    except Exception as e:
+        logger.warning(
+            "AI grounding failed for criterion %s: %s, falling back to baseline",
+            criterion_id,
+            e,
+        )
+        return None
+
+
+def _baseline_grounding(
+    criterion_text: str,
+    criterion_id: str,
+    storage: Storage,
+) -> GroundingResponse:
+    """Perform baseline regex-based grounding."""
     with umls_client.UmlsClient(api_key=_get_umls_api_key()) as client:
-        candidates = client.search_snomed(criterion.text)
-        field_mappings = umls_client.propose_field_mapping(criterion.text)
+        candidates = client.search_snomed(criterion_text)
+        field_mappings = umls_client.propose_field_mapping(criterion_text)
 
         if not candidates:
             storage.set_snomed_codes(criterion_id=criterion_id, snomed_codes=[])
@@ -817,6 +821,30 @@ async def ground_criterion(
             candidates=response_candidates,
             field_mapping=field_mapping,
         )
+
+
+@app.post("/v1/criteria/{criterion_id}/ground")
+async def ground_criterion(
+    criterion_id: str,
+    storage: Storage = Depends(get_storage),
+) -> GroundingResponse:
+    """Retrieve SNOMED candidates and field mappings for a criterion."""
+    criterion = storage.get_criterion(criterion_id)
+    if criterion is None:
+        raise HTTPException(status_code=404, detail="Criterion not found")
+
+    # Try AI grounding if enabled
+    use_ai = os.getenv("USE_AI_GROUNDING", "false").lower() == "true"
+    logger.info(f"Grounding: use_ai={use_ai}, AGENT_AVAILABLE={AGENT_AVAILABLE}")
+    if use_ai and AGENT_AVAILABLE:
+        result = await _try_ai_grounding(
+            criterion.text, criterion.criterion_type, criterion_id, storage
+        )
+        if result is not None:
+            return result
+
+    # Fallback to baseline regex-based grounding
+    return _baseline_grounding(criterion.text, criterion_id, storage)
 
 
 def _criterion_to_response(criterion: StorageCriterion) -> CriterionResponse:

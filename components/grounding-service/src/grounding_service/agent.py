@@ -27,8 +27,6 @@ except ImportError:  # pragma: no cover
     ChatGoogleGenerativeAI = None  # type: ignore[assignment,misc]
     MultiServerMCPClient = None  # type: ignore[assignment,misc]
 
-from shared.field_schema import SEMANTIC_TYPE_MAPPING
-
 from grounding_service.schemas import GroundingResult
 from grounding_service.tools import interpret_medical_text
 from grounding_service.umls_client import UmlsClient
@@ -162,6 +160,7 @@ class GroundingAgent:
             return self._agent
 
         from inference import create_react_agent
+
         from grounding_service.schemas import GroundingResult
 
         # Get UMLS tools via MCP
@@ -231,19 +230,10 @@ class GroundingAgent:
         """
         agent = await self._get_agent()
 
-        # Invoke - returns validated GroundingResult
-        result = await agent(
-            {
-                "criterion_text": criterion_text,
-                "criterion_type": criterion_type,
-            }
-        )
-
-        return result
-
         # MLflow instrumentation
+        start_time = time.time()
         if MLFLOW_AVAILABLE and mlflow is not None:
-            with mlflow.start_run(run_name="grounding_agent"):
+            with mlflow.start_run(run_name="grounding_agent", nested=True):
                 mlflow.log_params(
                     {
                         "criterion_text": criterion_text[:200],  # Truncate
@@ -254,8 +244,14 @@ class GroundingAgent:
                     }
                 )
 
-                start_time = time.time()
-                result = await _safe_invoke()
+                # Invoke - returns validated GroundingResult
+                result = await agent(
+                    {
+                        "criterion_text": criterion_text,
+                        "criterion_type": criterion_type,
+                    }
+                )
+
                 try:
                     duration = time.time() - start_time
                     mlflow.log_metrics(
@@ -271,7 +267,14 @@ class GroundingAgent:
                     raise e
                 return result
         else:
-            return await _safe_invoke()
+            # Invoke - returns validated GroundingResult
+            result = await agent(
+                {
+                    "criterion_text": criterion_text,
+                    "criterion_type": criterion_type,
+                }
+            )
+            return result
 
 
 # Singleton instance

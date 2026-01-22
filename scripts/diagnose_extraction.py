@@ -5,13 +5,13 @@ import os
 import sys
 from pathlib import Path
 
+from dotenv import find_dotenv, load_dotenv
+
 # Add repo root to path
 repo_root = Path(__file__).parent.parent
 sys.path.insert(0, str(repo_root))
 
 # Load environment variables from .env file
-from dotenv import find_dotenv, load_dotenv
-
 load_dotenv(find_dotenv())
 
 print("=" * 60)
@@ -76,9 +76,13 @@ try:
             print("   ✗ Transformers not installed")
         
         try:
-            import bitsandbytes
-            print(f"   ✓ bitsandbytes available (for quantization)")
-        except ImportError:
+            import importlib.util
+            spec = importlib.util.find_spec("bitsandbytes")
+            if spec is not None:
+                print("   ✓ bitsandbytes available (for quantization)")
+            else:
+                print("   ⚠ bitsandbytes not installed (quantization may not work)")
+        except Exception:
             print("   ⚠ bitsandbytes not installed (quantization may not work)")
     
     model_loader = create_model_loader(cfg)

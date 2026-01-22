@@ -1,17 +1,18 @@
 #!/usr/bin/env python3
 """Diagnostic script to check MLflow configuration and logging."""
 
+import logging
 import os
 import sys
 from pathlib import Path
+
+from dotenv import find_dotenv, load_dotenv
 
 # Add repo root to path
 repo_root = Path(__file__).parent.parent
 sys.path.insert(0, str(repo_root))
 
 # Load environment variables from .env file
-from dotenv import find_dotenv, load_dotenv
-
 load_dotenv(find_dotenv())
 
 print("=" * 60)
@@ -59,7 +60,7 @@ try:
         actual_uri = mlflow.get_tracking_uri()
         print(f"   MLflow tracking URI: {actual_uri}")
         if actual_uri != tracking_uri:
-            print(f"   ⚠ WARNING: Tracking URI mismatch!")
+            print("   ⚠ WARNING: Tracking URI mismatch!")
 except Exception as e:
     print(f"   ✗ Error: {e}")
 print()
@@ -93,13 +94,14 @@ try:
         mlflow.log_param("test_param", "test_value")
         mlflow.log_metric("test_metric", 1.0)
         mlflow.log_text("test text", artifact_file="test.txt")
-        run_id = mlflow.active_run().info.run_id
+        active_run = mlflow.active_run()
+        run_id = active_run.info.run_id if active_run else "unknown"
     print(f"   ✓ Successfully logged test run: {run_id}")
     
     # Try to retrieve it
     client = mlflow.tracking.MlflowClient()
     run = client.get_run(run_id)
-    print(f"   ✓ Successfully retrieved run from database")
+    print("   ✓ Successfully retrieved run from database")
     print(f"   Run ID: {run.info.run_id}")
     print(f"   Status: {run.info.status}")
 except Exception as e:
@@ -119,7 +121,6 @@ print()
 
 # Check 7: Logging level
 print("7. Logging Configuration:")
-import logging
 
 # Configure logging based on LOG_LEVEL environment variable
 log_level_str = os.getenv("LOG_LEVEL", "INFO").upper()

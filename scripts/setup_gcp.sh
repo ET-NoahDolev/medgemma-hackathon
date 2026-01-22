@@ -21,6 +21,7 @@ set -euo pipefail
 DRY_RUN=false
 WRITE_ENV_TEMPLATE=true
 WRITE_CONFIG=true
+TEST_GEMINI=true
 
 usage() {
   cat <<'EOF'
@@ -30,10 +31,12 @@ Options:
   --dry-run        Print commands without executing them
   --no-env         Do not update .env with Vertex settings
   --no-config      Do not write scripts/gcp_config.json
+  --no-test        Do not run Gemini smoke test at the end
   -h, --help       Show this help
 
 Environment variables:
-  GCP_PROJECT_ID          GCP project ID (required; will prompt if missing)
+  GCP_PROJECT_ID          GCP project ID (required; will read from .env if present,
+                          otherwise will prompt if missing)
   GCP_REGION              GCP region (default: europe-west4)
   GCS_BUCKET_NAME         Bucket name (default: ${GCP_PROJECT_ID}-medgemma)
   VERTEX_PUBLISHER_MODEL  Model Garden model (default: google/medgemma@medgemma-1.5-4b-it)
@@ -98,24 +101,75 @@ ensure_gcloud_auth() {
   fi
   
   # Check if Application Default Credentials are set up
+  # This is REQUIRED for gsutil to work properly
   if ! gcloud auth application-default print-access-token >/dev/null 2>&1; then
-    echo "⚠️  Application Default Credentials not configured." >&2
-    echo "   Run: gcloud auth application-default login" >&2
+    echo "❌ Application Default Credentials not configured." >&2
     echo "" >&2
-    echo "   Continuing anyway (some operations may fail)..." >&2
+    echo "Application Default Credentials are required for gsutil operations." >&2
+    echo "Please run:" >&2
+    echo "  gcloud auth application-default login" >&2
+    echo "" >&2
+    echo "This will configure credentials that gsutil and other tools can use." >&2
+    exit 1
+  fi
+  
+  # Verify gsutil can access GCS (test with a simple operation)
+  if ! gsutil ls >/dev/null 2>&1; then
+    echo "⚠️  Warning: gsutil authentication test failed." >&2
+    echo "   This may cause bucket operations to fail." >&2
+    echo "   Try running: gcloud auth application-default login" >&2
     echo "" >&2
   fi
 }
 
+load_env_var() {
+  local env_file="$1"
+  local key="$2"
+  
+  if [[ ! -f "${env_file}" ]]; then
+    return 1
+  fi
+  
+  # Read the value from .env file, handling comments and empty lines
+  # This extracts the value after the = sign, trimming whitespace
+  local value
+  value=$(grep -E "^${key}=" "${env_file}" 2>/dev/null | head -n1 | cut -d'=' -f2- | sed 's/^[[:space:]]*//;s/[[:space:]]*$//' || true)
+  
+  if [[ -n "${value}" ]]; then
+    echo "${value}"
+    return 0
+  fi
+  return 1
+}
+
 prompt_project_id() {
   local current="${GCP_PROJECT_ID:-}"
+  
+  # If already set via environment variable, use it
   if [[ -n "${current}" ]]; then
     return 0
   fi
+  
+  # Try to load from .env file
+  local script_dir
+  script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+  local repo_root
+  repo_root="$(cd "${script_dir}/.." && pwd)"
+  local env_path="${repo_root}/.env"
+  
+  if current=$(load_env_var "${env_path}" "GCP_PROJECT_ID"); then
+    export GCP_PROJECT_ID="${current}"
+    echo "Using GCP_PROJECT_ID from .env: ${current}"
+    return 0
+  fi
+  
+  # If still not set and in dry-run mode, fail
   if [[ "${DRY_RUN}" == "true" ]]; then
-    echo "GCP_PROJECT_ID is required (set it via env var)."
+    echo "GCP_PROJECT_ID is required (set it via env var or .env file)."
     exit 1
   fi
+  
+  # Prompt user for project ID
   read -r -p "Enter GCP project id (GCP_PROJECT_ID): " current
   current="${current//[[:space:]]/}"
   if [[ -z "${current}" ]]; then
@@ -131,6 +185,7 @@ main() {
       --dry-run) DRY_RUN=true ;;
       --no-env) WRITE_ENV_TEMPLATE=false ;;
       --no-config) WRITE_CONFIG=false ;;
+      --no-test) TEST_GEMINI=false ;;
       -h|--help) usage; exit 0 ;;
       *)
         echo "Unknown option: $1" >&2
@@ -161,10 +216,27 @@ main() {
   run gcloud services enable generativelanguage.googleapis.com
 
   echo "Creating/ensuring GCS bucket: gs://${bucket_name} (${region})"
-  if run gsutil ls -b "gs://${bucket_name}" >/dev/null 2>&1; then
-    echo "Bucket already exists."
+  if [[ "${DRY_RUN}" == "true" ]]; then
+    echo "+ gsutil ls -b gs://${bucket_name}"
+    echo "+ gsutil mb -p ${GCP_PROJECT_ID} -l ${region} gs://${bucket_name} (if needed)"
   else
-    run gsutil mb -p "${GCP_PROJECT_ID}" -l "${region}" "gs://${bucket_name}"
+    if gsutil ls -b "gs://${bucket_name}" >/dev/null 2>&1; then
+      echo "Bucket already exists."
+    else
+      if ! gsutil mb -p "${GCP_PROJECT_ID}" -l "${region}" "gs://${bucket_name}" 2>&1; then
+        echo "" >&2
+        echo "❌ Failed to create GCS bucket. This is likely an authentication issue." >&2
+        echo "" >&2
+        echo "Please ensure Application Default Credentials are configured:" >&2
+        echo "  gcloud auth application-default login" >&2
+        echo "" >&2
+        echo "If the problem persists, verify:" >&2
+        echo "  1. You have the Storage Admin role on project ${GCP_PROJECT_ID}" >&2
+        echo "  2. The Storage API is enabled (this script should have enabled it)" >&2
+        echo "  3. Your gcloud account has access: gcloud auth list" >&2
+        exit 1
+      fi
+    fi
   fi
 
   # Create placeholder objects to establish common prefixes.
@@ -417,23 +489,21 @@ EOF
     fi
   fi
 
-  # Verify Gemini model access (informational only)
-  echo
-  echo "Verifying Gemini model configuration..."
-  if [[ "${DRY_RUN}" == "true" ]]; then
-    echo "+ Checking Gemini 2.5 Pro availability..."
-  else
-    gemini_model_name="${GEMINI_MODEL_NAME:-gemini-2.5-pro}"
-    echo "Note: Gemini models (${gemini_model_name}) don't require deployment."
-    echo "      They're accessed directly via Vertex AI API."
-    echo "      If you get 'model not found' errors, try:"
-    echo "      - gemini-1.5-pro (stable, widely available)"
-    echo "      - gemini-1.5-flash (faster alternative)"
-    echo "      - Check available models: https://console.cloud.google.com/vertex-ai/models"
-  fi
-
   echo
   echo "✅ GCP setup complete!"
+  
+  # Run Gemini smoke test if enabled
+  if [[ "${TEST_GEMINI}" == "true" ]] && [[ "${DRY_RUN}" != "true" ]]; then
+    echo
+    echo "🧪 Running Gemini smoke test..."
+    if uv run python scripts/test_gemini_vertex.py; then
+      echo "   ✅ Gemini model is accessible and working!"
+    else
+      echo "   ⚠️  Gemini smoke test failed, but setup completed."
+      echo "   💡 You can run the test manually: uv run python scripts/test_gemini_vertex.py"
+    fi
+  fi
+  
   if [[ "${WRITE_ENV_TEMPLATE}" == "true" ]]; then
     echo
     echo "To use Vertex AI backend, source the environment file:"
