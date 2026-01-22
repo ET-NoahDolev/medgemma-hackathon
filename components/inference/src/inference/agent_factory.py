@@ -104,11 +104,12 @@ def create_react_agent(
     system_template: str,
     user_template: str,
 ) -> Callable[[Mapping[str, Any]], Awaitable[TModel]]:
-    """Create a reusable ReAct agent invocation function.
+    """Create a reusable ReAct agent invocation function with Pydantic-enforced output.
 
     This function composes:
     - lazy model loading (shared across services)
     - Jinja2 prompt rendering (service-specific templates)
+    - Pydantic format instructions injection into prompts
     - LangGraph ReAct agent execution with structured output
 
     Args:
@@ -122,18 +123,36 @@ def create_react_agent(
     Returns:
         Async function that takes prompt variables and returns a structured response.
     """
+    from langchain_core.output_parsers import PydanticOutputParser
+
     jinja_env = Environment(loader=FileSystemLoader(str(prompts_dir)))
     cache: list[Any] = []
+
+    # Get format instructions from Pydantic schema
+    parser = PydanticOutputParser(pydantic_object=response_schema)
+    format_instructions = parser.get_format_instructions()
 
     def _get_agent() -> Any:
         if cache:
             return cache[0]
         lg_create = _load_langgraph_create_react_agent()
-        agent = lg_create(
-            model=model_loader(),
-            tools=tools,
-            response_format=response_schema,
-        )
+        model = model_loader()
+
+        # Use with_structured_output if model supports it (Gemini does)
+        try:
+            structured_model = model.with_structured_output(response_schema)
+            agent = lg_create(
+                model=structured_model,
+                tools=tools,
+            )
+        except (AttributeError, TypeError):
+            # Fallback: use response_format (LangGraph handles it)
+            agent = lg_create(
+                model=model,
+                tools=tools,
+                response_format=response_schema,
+            )
+
         cache.append(agent)
         return agent
 
@@ -141,8 +160,14 @@ def create_react_agent(
         system_tpl = jinja_env.get_template(system_template)
         user_tpl = jinja_env.get_template(user_template)
 
-        system_prompt = system_tpl.render(**prompt_vars)
-        user_prompt = user_tpl.render(**prompt_vars)
+        # Inject format instructions into prompt variables
+        prompt_vars_with_format = {
+            **prompt_vars,
+            "format_instructions": format_instructions,
+        }
+
+        system_prompt = system_tpl.render(**prompt_vars_with_format)
+        user_prompt = user_tpl.render(**prompt_vars_with_format)
 
         agent = _get_agent()
 
@@ -220,6 +245,19 @@ def create_react_agent(
 
         if parsed is not None:
             return parsed
+
+        # If parsing failed, try using PydanticOutputParser directly
+        if isinstance(result, dict) and "messages" in result:
+            messages = result.get("messages", [])
+            if messages:
+                last_msg = messages[-1]
+                content = getattr(last_msg, "content", "")
+                if isinstance(content, str):
+                    try:
+                        parsed = parser.parse(content)
+                        return parsed
+                    except Exception as e:
+                        logger.warning("PydanticOutputParser failed: %s", e)
 
         logger.warning("No structured response available; returning default schema")
         return response_schema()
