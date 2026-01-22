@@ -20,8 +20,6 @@ except ImportError:  # pragma: no cover
     tool = _tool  # type: ignore[assignment]
     ChatGoogleGenerativeAI = None  # type: ignore[assignment,misc]
 
-from shared.mlflow_utils import configure_mlflow_once
-
 from grounding_service.schemas import GroundingResult
 from grounding_service.tools import interpret_medical_text
 from grounding_service.umls_client import UmlsClient
@@ -113,7 +111,6 @@ class GroundingAgent:
             quantization: Quantization level (unused, kept for compatibility).
         """
         self._agent: Any | None = None
-        configure_mlflow_once("medgemma-grounding")
 
     async def _get_agent(self) -> Any:
         """Get or create the Gemini orchestrator agent with structured output."""
