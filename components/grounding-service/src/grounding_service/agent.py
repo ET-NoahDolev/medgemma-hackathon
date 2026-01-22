@@ -61,8 +61,15 @@ try:
     # database backend (SQLite) with absolute path
     mlflow = _mlflow
     mlflow.set_tracking_uri(_mlflow_uri)
-    mlflow.set_experiment("medgemma-grounding")
+    # Don't set experiment at module import time - it may not exist or may be deleted.
+    # The experiment will be set lazily when needed in the ground() method.
+    # This prevents import-time failures during tests.
 except ImportError:
+    mlflow = None
+    MLFLOW_AVAILABLE = False
+except Exception:
+    # Handle any other MLflow initialization errors gracefully
+    # (e.g., if set_tracking_uri fails) - fail silently at import time
     mlflow = None
     MLFLOW_AVAILABLE = False
 
@@ -216,6 +223,133 @@ class GroundingAgent:
         )
         return self._agent
 
+    async def _ground_with_tracing(
+        self,
+        agent: Any,
+        criterion_text: str,
+        criterion_type: str,
+        start_time: float,
+    ) -> GroundingResult:
+        """Ground with MLflow tracing support.
+
+        Args:
+            agent: The agent to invoke.
+            criterion_text: The criterion text to ground.
+            criterion_type: Type of criterion ("inclusion" or "exclusion").
+            start_time: Start time for latency calculation.
+
+        Returns:
+            GroundingResult with SNOMED codes and field mappings.
+        """
+        assert mlflow is not None  # Type narrowing for mypy
+        with mlflow.tracing.start_trace(name="grounding_agent"):
+            # Add custom metadata if API supports it
+            try:
+                if hasattr(mlflow.tracing, "set_tag"):
+                    mlflow.tracing.set_tag("criterion_type", criterion_type)
+                    gemini_model = os.getenv(
+                        "GEMINI_MODEL_NAME", "gemini-2.5-pro"
+                    )
+                    mlflow.tracing.set_tag("orchestrator_model", gemini_model)
+            except Exception as e:
+                logger.debug("Failed to set trace tags: %s", e)
+
+            # Invoke - autologging will automatically trace this
+            result = await agent(
+                {
+                    "criterion_text": criterion_text,
+                    "criterion_type": criterion_type,
+                }
+            )
+
+            # Log custom metrics if API supports it
+            try:
+                duration = time.time() - start_time
+                if hasattr(mlflow.tracing, "set_metric"):
+                    mlflow.tracing.set_metric("latency_seconds", duration)
+                    mlflow.tracing.set_metric(
+                        "snomed_codes_count", len(result.snomed_codes)
+                    )
+                    mlflow.tracing.set_metric(
+                        "field_mappings_count", len(result.field_mappings)
+                    )
+            except Exception as e:
+                logger.debug("Failed to log trace metrics: %s", e)
+
+            return result
+
+    async def _ground_with_runs(
+        self,
+        agent: Any,
+        criterion_text: str,
+        criterion_type: str,
+        start_time: float,
+    ) -> GroundingResult:
+        """Ground with MLflow run-based logging.
+
+        Args:
+            agent: The agent to invoke.
+            criterion_text: The criterion text to ground.
+            criterion_type: Type of criterion ("inclusion" or "exclusion").
+            start_time: Start time for latency calculation.
+
+        Returns:
+            GroundingResult with SNOMED codes and field mappings.
+        """
+        assert mlflow is not None  # Type narrowing for mypy
+        with mlflow.start_run(run_name="grounding_agent", nested=True):
+            mlflow.log_params(
+                {
+                    "criterion_text": criterion_text[:200],  # Truncate
+                    "criterion_type": criterion_type,
+                    "orchestrator_model": os.getenv(
+                        "GEMINI_MODEL_NAME", "gemini-2.5-pro"
+                    ),
+                }
+            )
+
+            result = await agent(
+                {
+                    "criterion_text": criterion_text,
+                    "criterion_type": criterion_type,
+                }
+            )
+
+            try:
+                duration = time.time() - start_time
+                mlflow.log_metrics(
+                    {
+                        "latency_seconds": duration,
+                        "snomed_codes_count": len(result.snomed_codes),
+                        "field_mappings_count": len(result.field_mappings),
+                    }
+                )
+                mlflow.log_text(result.reasoning, "reasoning.txt")
+            except Exception as e:
+                mlflow.log_param("error", str(e))
+                raise e
+            return result
+
+    async def _ground_without_mlflow(
+        self, agent: Any, criterion_text: str, criterion_type: str
+    ) -> GroundingResult:
+        """Ground without MLflow logging.
+
+        Args:
+            agent: The agent to invoke.
+            criterion_text: The criterion text to ground.
+            criterion_type: Type of criterion ("inclusion" or "exclusion").
+
+        Returns:
+            GroundingResult with SNOMED codes and field mappings.
+        """
+        return await agent(
+            {
+                "criterion_text": criterion_text,
+                "criterion_type": criterion_type,
+            }
+        )
+
     async def ground(
         self, criterion_text: str, criterion_type: str
     ) -> GroundingResult:
@@ -229,115 +363,48 @@ class GroundingAgent:
             GroundingResult with SNOMED codes and field mappings.
         """
         agent = await self._get_agent()
-
-        # MLflow tracing: Autologging will automatically capture
-        # LangChain/LangGraph calls. We keep run-based logging as a fallback
-        # and for custom metrics.
         start_time = time.time()
-        if MLFLOW_AVAILABLE and mlflow is not None:
-            # Try to use trace-based approach if available, otherwise fall back to runs
-            # Autologging will handle detailed tracing of agent calls automatically
-            try:
-                # Check if tracing API is available
-                has_tracing = (
-                    hasattr(mlflow, "tracing")
-                    and hasattr(mlflow.tracing, "start_trace")
-                )
-                if has_tracing:
-                    # Use trace for better LLM observability
-                    with mlflow.tracing.start_trace(name="grounding_agent"):
-                        # Add custom metadata if API supports it
-                        try:
-                            if hasattr(mlflow.tracing, "set_tag"):
-                                mlflow.tracing.set_tag("criterion_type", criterion_type)
-                                mlflow.tracing.set_tag(
-                                    "orchestrator_model",
-                                    os.getenv("GEMINI_MODEL_NAME", "gemini-2.5-pro"),
-                                )
-                        except Exception as e:
-                            logger.debug("Failed to set trace tags: %s", e)
 
-                        # Invoke - autologging will automatically trace this
-                        result = await agent(
-                            {
-                                "criterion_text": criterion_text,
-                                "criterion_type": criterion_type,
-                            }
-                        )
-
-                        # Log custom metrics if API supports it
-                        try:
-                            duration = time.time() - start_time
-                            if hasattr(mlflow.tracing, "set_metric"):
-                                mlflow.tracing.set_metric("latency_seconds", duration)
-                                mlflow.tracing.set_metric(
-                                    "snomed_codes_count", len(result.snomed_codes)
-                                )
-                                mlflow.tracing.set_metric(
-                                    "field_mappings_count", len(result.field_mappings)
-                                )
-                        except Exception as e:
-                            logger.debug("Failed to log trace metrics: %s", e)
-
-                        return result
-                else:
-                    # Fallback to run-based logging if tracing API not available
-                    raise AttributeError("Tracing API not available")
-            except (AttributeError, Exception) as e:
-                # Fallback to run-based logging
-                logger.debug("MLflow tracing not available, using runs: %s", e)
-                with mlflow.start_run(run_name="grounding_agent", nested=True):
-                    mlflow.log_params(
-                        {
-                            "criterion_text": criterion_text[:200],  # Truncate
-                            "criterion_type": criterion_type,
-                            "orchestrator_model": os.getenv(
-                                "GEMINI_MODEL_NAME", "gemini-2.5-pro"
-                            ),
-                        }
-                    )
-
-                    result = await agent(
-                        {
-                            "criterion_text": criterion_text,
-                            "criterion_type": criterion_type,
-                        }
-                    )
-
-                    try:
-                        duration = time.time() - start_time
-                        mlflow.log_metrics(
-                            {
-                                "latency_seconds": duration,
-                                "snomed_codes_count": len(result.snomed_codes),
-                                "field_mappings_count": len(result.field_mappings),
-                            }
-                        )
-                        mlflow.log_text(result.reasoning, "reasoning.txt")
-                    except Exception as e:
-                        mlflow.log_param("error", str(e))
-                        raise e
-                    return result
-            except Exception as e:
-                logger.warning("MLflow tracing failed (non-fatal): %s", e)
-                # Continue without MLflow if tracing fails
-                result = await agent(
-                    {
-                        "criterion_text": criterion_text,
-                        "criterion_type": criterion_type,
-                    }
-                )
-                return result
-        else:
-            # Invoke - returns validated GroundingResult
-            result = await agent(
-                {
-                    "criterion_text": criterion_text,
-                    "criterion_type": criterion_type,
-                }
+        if not (MLFLOW_AVAILABLE and mlflow is not None):
+            return await self._ground_without_mlflow(
+                agent, criterion_text, criterion_type
             )
-            return result
-            return result
+
+        # Set experiment lazily when needed (not at import time to avoid failures)
+        try:
+            mlflow.set_experiment("medgemma-grounding")
+        except Exception as e:
+            # If experiment is deleted or doesn't exist, continue without MLflow
+            logger.debug("Failed to set MLflow experiment (non-fatal): %s", e)
+            return await self._ground_without_mlflow(
+                agent, criterion_text, criterion_type
+            )
+
+        # Try to use trace-based approach if available, otherwise fall back to runs
+        # Autologging will handle detailed tracing of agent calls automatically
+        try:
+            has_tracing = (
+                hasattr(mlflow, "tracing")
+                and hasattr(mlflow.tracing, "start_trace")
+            )
+            if has_tracing:
+                return await self._ground_with_tracing(
+                    agent, criterion_text, criterion_type, start_time
+                )
+            raise AttributeError("Tracing API not available")
+        except (AttributeError, Exception) as e:
+            # Fallback to run-based logging
+            logger.debug("MLflow tracing not available, using runs: %s", e)
+            try:
+                return await self._ground_with_runs(
+                    agent, criterion_text, criterion_type, start_time
+                )
+            except Exception as e:
+                logger.warning("MLflow logging failed (non-fatal): %s", e)
+                # Continue without MLflow if all logging fails
+                return await self._ground_without_mlflow(
+                    agent, criterion_text, criterion_type
+                )
 
 
 # Singleton instance

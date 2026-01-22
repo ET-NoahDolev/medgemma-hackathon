@@ -33,7 +33,6 @@ def mock_invoke():
 @pytest.mark.asyncio
 async def test_ground_returns_structured_result():
     """Test that ground() returns a structured GroundingResult."""
-    mock_agent = MagicMock()
     mock_message = MagicMock()
     mock_message.content = (
         '{"snomed_codes": ["123456789"], "field_mappings": '
@@ -41,8 +40,21 @@ async def test_ground_returns_structured_result():
         '"confidence": 0.9, "umls_cui": "123456789"}], '
         '"reasoning": "Test reasoning"}'
     )
-    mock_agent.ainvoke = AsyncMock(
-        return_value={"messages": [mock_message]}
+    # The agent is called directly with await, so it needs to be an AsyncMock
+    mock_agent = AsyncMock(
+        return_value=GroundingResult(
+            snomed_codes=["123456789"],
+            field_mappings=[
+                FieldMappingResult(
+                    field="demographics.age",
+                    relation=">=",
+                    value="18",
+                    confidence=0.9,
+                    umls_cui="123456789",
+                )
+            ],
+            reasoning="Test reasoning",
+        )
     )
 
     with patch("grounding_service.agent.MultiServerMCPClient") as mock_mcp:
@@ -50,7 +62,7 @@ async def test_ground_returns_structured_result():
         mock_mcp_instance.get_tools = AsyncMock(return_value=[])
         mock_mcp.return_value = mock_mcp_instance
         with patch("grounding_service.agent.ChatGoogleGenerativeAI"):
-            with patch("grounding_service.agent.create_react_agent") as mock_create:
+            with patch("inference.create_react_agent") as mock_create:
                 mock_create.return_value = mock_agent
                 agent = GroundingAgent()
                 result = await agent.ground("Age >= 18", "inclusion")
@@ -63,23 +75,21 @@ async def test_ground_returns_structured_result():
 
 @pytest.mark.asyncio
 async def test_ground_fallback_on_invoke_error():
-    """Test that ground() handles invoke errors gracefully."""
-    mock_agent = MagicMock()
-    mock_agent.ainvoke = AsyncMock(side_effect=ValueError("Invalid JSON"))
+    """Test that ground() raises errors when agent invoke fails."""
+    # The agent is called directly with await, so it needs to be an AsyncMock
+    mock_agent = AsyncMock(side_effect=ValueError("Invalid JSON"))
 
     with patch("grounding_service.agent.MultiServerMCPClient") as mock_mcp:
         mock_mcp_instance = MagicMock()
         mock_mcp_instance.get_tools = AsyncMock(return_value=[])
         mock_mcp.return_value = mock_mcp_instance
         with patch("grounding_service.agent.ChatGoogleGenerativeAI"):
-            with patch("grounding_service.agent.create_react_agent") as mock_create:
+            with patch("inference.create_react_agent") as mock_create:
                 mock_create.return_value = mock_agent
                 agent = GroundingAgent()
-                result = await agent.ground("Age >= 18", "inclusion")
-
-                assert isinstance(result, GroundingResult)
-                assert result.snomed_codes == []
-                assert "not available" in result.reasoning
+                # Error should be raised, not caught
+                with pytest.raises(ValueError, match="Invalid JSON"):
+                    await agent.ground("Age >= 18", "inclusion")
 
 
 def test_get_grounding_agent_singleton():

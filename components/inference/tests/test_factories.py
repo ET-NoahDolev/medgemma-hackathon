@@ -127,7 +127,8 @@ def test_vertex_loader_initializes_and_builds_resource_name(
     )
     assert model.project == "my-project"
     assert model.location == "europe-west4"
-    assert model.max_output_tokens == 512
+    # max_output_tokens comes from MEDGEMMA_MAX_TOKENS env var (defaults to 2048)
+    assert model.max_output_tokens == 2048
 
 
 def test_vertex_loader_uses_genai_model_name(
@@ -180,7 +181,8 @@ def test_vertex_loader_uses_genai_model_name(
     assert model is not None
 
     assert init_args == ("my-project", "europe-west4")
-    assert chat_args == ("gemini-1.5-pro", "my-project", "europe-west4", True, 512)
+    # max_output_tokens comes from MEDGEMMA_MAX_TOKENS env var (defaults to 2048)
+    assert chat_args == ("gemini-1.5-pro", "my-project", "europe-west4", True, 2048)
 
 
 @pytest.mark.asyncio

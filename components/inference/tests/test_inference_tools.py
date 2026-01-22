@@ -20,7 +20,6 @@ class TestExtractFieldMapping:
     def test_extract_field_mapping_returns_valid_json(self) -> None:
         """Test that extract_field_mapping returns valid JSON."""
         mock_model = MagicMock()
-        mock_response = MagicMock()
         # Simulate structured output
         mock_result = FieldMappingResult(
             field_name="age",
@@ -29,14 +28,15 @@ class TestExtractFieldMapping:
             unit="years",
             confidence=0.95,
         )
-        mock_response.model_dump_json.return_value = mock_result.model_dump_json()
-        mock_model.with_structured_output.return_value.invoke.return_value = (
-            mock_result
-        )
+        # with_structured_output returns a model that has invoke
+        # which returns the result
+        mock_structured_model = MagicMock()
+        mock_structured_model.invoke.return_value = mock_result
+        mock_model.with_structured_output.return_value = mock_structured_model
 
-        with patch("inference.tools.create_model_loader") as mock_loader, patch(
-            "inference.tools.AgentConfig"
-        ) as mock_config:
+        with patch("inference.create_model_loader") as mock_loader, patch(
+            "inference.AgentConfig"
+        ) as mock_config, patch("inference.tools.MLFLOW_AVAILABLE", False):
             mock_config.from_env.return_value = MagicMock()
             mock_loader.return_value = lambda: mock_model
             result = extract_field_mapping.invoke({"criterion_text": "Age >= 18 years"})
@@ -61,9 +61,9 @@ class TestExtractFieldMapping:
         mock_model.with_structured_output.side_effect = AttributeError("Not supported")
         mock_model.invoke.return_value = mock_response
 
-        with patch("inference.tools.create_model_loader") as mock_loader, patch(
-            "inference.tools.AgentConfig"
-        ) as mock_config:
+        with patch("inference.create_model_loader") as mock_loader, patch(
+            "inference.AgentConfig"
+        ) as mock_config, patch("inference.tools.MLFLOW_AVAILABLE", False):
             mock_config.from_env.return_value = MagicMock()
             mock_loader.return_value = lambda: mock_model
             result = extract_field_mapping.invoke({"criterion_text": "BMI < 30 kg/m²"})
@@ -79,8 +79,8 @@ class TestExtractFieldMapping:
         mock_model.with_structured_output.side_effect = Exception("Model error")
         mock_model.invoke.side_effect = Exception("Model error")
 
-        with patch("inference.tools.create_model_loader") as mock_loader, patch(
-            "inference.tools.AgentConfig"
+        with patch("inference.create_model_loader") as mock_loader, patch(
+            "inference.AgentConfig"
         ) as mock_config:
             mock_config.from_env.return_value = MagicMock()
             mock_loader.return_value = lambda: mock_model
@@ -102,13 +102,15 @@ class TestClassifyCriterion:
             confidence=0.92,
             reasoning="Age requirement is an inclusion criterion",
         )
-        mock_model.with_structured_output.return_value.invoke.return_value = (
-            mock_result
-        )
+        # with_structured_output returns a model that has invoke
+        # which returns the result
+        mock_structured_model = MagicMock()
+        mock_structured_model.invoke.return_value = mock_result
+        mock_model.with_structured_output.return_value = mock_structured_model
 
-        with patch("inference.tools.create_model_loader") as mock_loader, patch(
-            "inference.tools.AgentConfig"
-        ) as mock_config:
+        with patch("inference.create_model_loader") as mock_loader, patch(
+            "inference.AgentConfig"
+        ) as mock_config, patch("inference.tools.MLFLOW_AVAILABLE", False):
             mock_config.from_env.return_value = MagicMock()
             mock_loader.return_value = lambda: mock_model
             result = classify_criterion.invoke({"criterion_text": "Age >= 18 years"})
@@ -127,13 +129,15 @@ class TestClassifyCriterion:
             confidence=0.88,
             reasoning="Pregnancy is an exclusion criterion",
         )
-        mock_model.with_structured_output.return_value.invoke.return_value = (
-            mock_result
-        )
+        # with_structured_output returns a model that has invoke
+        # which returns the result
+        mock_structured_model = MagicMock()
+        mock_structured_model.invoke.return_value = mock_result
+        mock_model.with_structured_output.return_value = mock_structured_model
 
-        with patch("inference.tools.create_model_loader") as mock_loader, patch(
-            "inference.tools.AgentConfig"
-        ) as mock_config:
+        with patch("inference.create_model_loader") as mock_loader, patch(
+            "inference.AgentConfig"
+        ) as mock_config, patch("inference.tools.MLFLOW_AVAILABLE", False):
             mock_config.from_env.return_value = MagicMock()
             mock_loader.return_value = lambda: mock_model
             result = classify_criterion.invoke(
@@ -148,8 +152,8 @@ class TestClassifyCriterion:
         mock_model = MagicMock()
         mock_model.with_structured_output.side_effect = Exception("Model error")
 
-        with patch("inference.tools.create_model_loader") as mock_loader, patch(
-            "inference.tools.AgentConfig"
+        with patch("inference.create_model_loader") as mock_loader, patch(
+            "inference.AgentConfig"
         ) as mock_config:
             mock_config.from_env.return_value = MagicMock()
             mock_loader.return_value = lambda: mock_model
@@ -170,13 +174,15 @@ class TestIdentifyMedicalConcepts:
             concepts=["diabetes", "HbA1c", "glucose"],
             interpretation="Diabetes-related concepts requiring UMLS grounding",
         )
-        mock_model.with_structured_output.return_value.invoke.return_value = (
-            mock_result
-        )
+        # with_structured_output returns a model that has invoke
+        # which returns the result
+        mock_structured_model = MagicMock()
+        mock_structured_model.invoke.return_value = mock_result
+        mock_model.with_structured_output.return_value = mock_structured_model
 
-        with patch("inference.tools.create_model_loader") as mock_loader, patch(
-            "inference.tools.AgentConfig"
-        ) as mock_config:
+        with patch("inference.create_model_loader") as mock_loader, patch(
+            "inference.AgentConfig"
+        ) as mock_config, patch("inference.tools.MLFLOW_AVAILABLE", False):
             mock_config.from_env.return_value = MagicMock()
             mock_loader.return_value = lambda: mock_model
             result = identify_medical_concepts.invoke(
@@ -198,13 +204,15 @@ class TestIdentifyMedicalConcepts:
             concepts=[],
             interpretation="No specific medical concepts identified",
         )
-        mock_model.with_structured_output.return_value.invoke.return_value = (
-            mock_result
-        )
+        # with_structured_output returns a model that has invoke
+        # which returns the result
+        mock_structured_model = MagicMock()
+        mock_structured_model.invoke.return_value = mock_result
+        mock_model.with_structured_output.return_value = mock_structured_model
 
-        with patch("inference.tools.create_model_loader") as mock_loader, patch(
-            "inference.tools.AgentConfig"
-        ) as mock_config:
+        with patch("inference.create_model_loader") as mock_loader, patch(
+            "inference.AgentConfig"
+        ) as mock_config, patch("inference.tools.MLFLOW_AVAILABLE", False):
             mock_config.from_env.return_value = MagicMock()
             mock_loader.return_value = lambda: mock_model
             result = identify_medical_concepts.invoke({"text": "This is general text"})
@@ -218,8 +226,8 @@ class TestIdentifyMedicalConcepts:
         mock_model = MagicMock()
         mock_model.with_structured_output.side_effect = Exception("Model error")
 
-        with patch("inference.tools.create_model_loader") as mock_loader, patch(
-            "inference.tools.AgentConfig"
+        with patch("inference.create_model_loader") as mock_loader, patch(
+            "inference.AgentConfig"
         ) as mock_config:
             mock_config.from_env.return_value = MagicMock()
             mock_loader.return_value = lambda: mock_model
