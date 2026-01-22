@@ -47,6 +47,16 @@ try:
 except ImportError:
     AGENT_AVAILABLE = False
 
+# Configure MLflow tracking URI at module level to avoid filesystem backend warning
+# Set environment variable before import so MLflow reads it during initialization
+os.environ.setdefault("MLFLOW_TRACKING_URI", "sqlite:///mlflow.db")
+try:
+    import mlflow
+
+    mlflow.set_tracking_uri("sqlite:///mlflow.db")
+except ImportError:
+    pass
+
 DEFAULT_MAX_UPLOAD_SIZE_BYTES = 20 * 1024 * 1024
 # Expose for backward compatibility with tests
 MAX_UPLOAD_SIZE_BYTES = DEFAULT_MAX_UPLOAD_SIZE_BYTES
@@ -386,7 +396,11 @@ def _start_mlflow_run(protocol_id: str) -> Any | None:
     except ImportError:
         return None
 
-    mlflow.set_tracking_uri("sqlite:///mlflow.db")
+    # Use absolute path for mlflow.db to ensure consistency regardless of CWD.
+    # find_dotenv() returns the path to the .env file in the repo root.
+    repo_root = Path(find_dotenv()).parent
+    db_path = repo_root.absolute() / "mlflow.db"
+    mlflow.set_tracking_uri(f"sqlite:///{db_path}")
     mlflow.set_experiment("medgemma-extraction")
     mlflow.start_run(run_name=f"extract_{protocol_id}")
     return mlflow

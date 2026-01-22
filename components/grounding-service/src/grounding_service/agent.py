@@ -25,6 +25,8 @@ from grounding_service.schemas import GroundingResult
 from grounding_service.umls_client import UmlsClient
 
 # Try to import mlflow (optional dependency for dev/observability)
+# Set environment variable before import so MLflow reads it during initialization
+os.environ.setdefault("MLFLOW_TRACKING_URI", "sqlite:///mlflow.db")
 mlflow: Any | None
 try:
     import mlflow as _mlflow

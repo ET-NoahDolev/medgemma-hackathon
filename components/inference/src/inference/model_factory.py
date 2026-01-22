@@ -252,42 +252,138 @@ def _build_vertex_endpoint_model(
         ) -> ChatResult:
             from google.cloud import aiplatform
 
-            # Initialize endpoint if not already done
+            # Initialize endpoint
             endpoint = aiplatform.Endpoint(self.endpoint_resource_name)
 
-            # Simple prompt construction
-            prompt = messages[-1].content
-            if not isinstance(prompt, str):
-                prompt = str(prompt)
+            # Construct prompt from all messages using Gemma chat template
+            # Some MedGemma containers also respond well to "### Instruction:"
+            prompt_parts = []
+            for msg in messages:
+                role = "user"
+                if msg.type == "ai":
+                    role = "model"
+                
+                content = msg.content
+                if not isinstance(content, str):
+                    content = str(content)
+                
+                if role == "user":
+                    content = f"### Instruction:\n{content}"
+                
+                prompt_parts.append(f"<start_of_turn>{role}\n{content}<end_of_turn>")
+            
+            # Combine and append the starter for the model's output
+            full_prompt = "\n".join(prompt_parts) + "\n<start_of_turn>model\n"
 
-            instances = [{"prompt": prompt}]
-            parameters = {
-                "max_new_tokens": self.max_output_tokens,
+            # MedGemma containers often expect parameters INSIDE the instance
+            instance = {
+                "prompt": full_prompt,
+                "max_tokens": self.max_output_tokens,
+                "temperature": kwargs.get("temperature", 0.1),
+                "top_p": 0.95,
+                "top_k": 40,
             }
-            if stop:
-                parameters["stop_sequences"] = stop
+            # For backward compatibility with some containers, we still pass some in parameters too
+            parameters = {
+                "max_output_tokens": self.max_output_tokens,
+                "temperature": kwargs.get("temperature", 0.1),
+            }
 
             # #region agent log
             _debug_log(
-                hypothesis_id="FIX",
+                hypothesis_id="FIX-PARAM-NESTING",
                 location="ModelGardenChatModel._generate",
-                message="Invocating Model Garden endpoint via SDK",
+                message="Invoking Model Garden endpoint with nested parameters",
                 data={
                     "endpoint": self.endpoint_resource_name,
-                    "max_tokens": self.max_output_tokens,
+                    "instance_keys": list(instance.keys()),
                 },
             )
             # #endregion
 
-            response = endpoint.predict(instances=instances, parameters=parameters)
+            response = endpoint.predict(instances=[instance], parameters=parameters)
+
+            # #region agent log
+            _debug_log(
+                hypothesis_id="FIX-RAW-FULL",
+                location="ModelGardenChatModel._generate",
+                message="Full model response payload",
+                data={"predictions": list(response.predictions), "metadata": getattr(response, "metadata", {})},
+            )
+            # #endregion
 
             # Parse response
             # MedGemma on Model Garden often returns the full prompt + completion
             text = response.predictions[0]
+
+            # #region agent log
+            _debug_log(
+                hypothesis_id="FIX-RAW",
+                location="ModelGardenChatModel._generate",
+                message="Raw model output",
+                data={"text": text, "full_prompt_sample": full_prompt[:100]},
+            )
+            # #endregion
+            
+            # 1. Strip MedGemma Model Garden prefixes
+            for prefix in ["Prompt:\n", "Output:\n"]:
+                if text.startswith(prefix):
+                    text = text[len(prefix):].strip()
+            
+            # 2. Try to strip the prompt if the model echo's it
+            if text.startswith(full_prompt):
+                text = text[len(full_prompt):].strip()
+            
+            # 3. Handle legacy markers and thought blocks
+            if "Assistant:" in text:
+                 text = text.split("Assistant:")[-1].strip()
             if "Output:\n" in text:
                 text = text.split("Output:\n")[-1].strip()
-            elif prompt in text:
-                text = text.replace(prompt, "", 1).strip()
+            
+            # 4. Strip everything before the actual model turn if it echoed
+            if "<start_of_turn>model\n" in text:
+                text = text.split("<start_of_turn>model\n")[-1].strip()
+            
+            # Strip <unused94>thought ... blocks which are common in some models
+            # These often contain reasoning before the actual output
+            if "thought" in text.lower() and ("<unused" in text or "```" not in text):
+                # Heuristic: if JSON is present later, strip the thought part
+                if "{" in text:
+                    text = text[text.find("{"):].strip()
+
+            # 4. ROBUST JSON EXTRACTION
+            # Find the first { or [ (to support list schemas) and matching last char
+            import re
+            # Matches from the first { to the last } greedily
+            json_match = re.search(r"(\{.*\})", text, re.DOTALL)
+            if not json_match:
+                # Try list if it's a list response
+                json_match = re.search(r"(\[.*\])", text, re.DOTALL)
+            
+            if json_match:
+                text = json_match.group(1)
+            
+            # 5. Clean up markdown blocks
+            if "```json" in text:
+                text = text.split("```json")[-1].split("```")[0].strip()
+            elif "```" in text:
+                text = text.split("```")[-1].split("```")[0].strip()
+            
+            # 6. Basic fix for single quotes in JSON
+            if text.startswith("{") and text.endswith("}"):
+                # Replace 'key': 'value' or 'key': ["value"] etc.
+                # Use a slightly more careful regex
+                text = re.sub(r"'(\s*[\w\d_]+\s*)':", r'"\1":', text) # Keys
+                text = re.sub(r":\s*'([^']*)'", r': "\1"', text)      # String values
+
+            # #region agent log
+            _debug_log(
+                hypothesis_id="FIX-CLEANED",
+                location="ModelGardenChatModel._generate",
+                message="Cleaned model output",
+                data={"text": text},
+            )
+            # #endregion
 
             message = AIMessage(content=text)
             generation = ChatGeneration(message=message)
