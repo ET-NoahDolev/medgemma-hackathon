@@ -8,7 +8,7 @@ Follow this workflow:
 2. For each identified concept, call search_concepts to find UMLS matches
 3. Call get_semantic_type to determine field categories
 4. Map semantic types to field categories
-5. Extract relations (>, >=, <, <=, =) and values from the criterion text
+5. Extract relations (>, >=, <, <=, =, within, IS, IS NOT, AND, OR) and values from the criterion text
 6. If the criterion implies a computed field (e.g., age), include a computed_as expression:
    - Example: "Age >= 18 years" -> concept "Date of birth", computed_as "today() - birthDate"
 7. Always attempt to ground demographic or lab terms to a SNOMED concept via UMLS

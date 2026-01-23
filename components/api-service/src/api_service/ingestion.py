@@ -15,6 +15,7 @@ from grounding_service.computed_fields import detect_computed_field
 
 from api_service.storage import Criterion as StorageCriterion
 from api_service.storage import Storage
+from shared.mlflow_utils import set_trace_metadata
 
 logger = logging.getLogger(__name__)
 
@@ -38,7 +39,11 @@ def _select_primary_triplet(payload: dict[str, Any]) -> dict[str, Any]:
     return payload
 
 
-async def _extract_triplet(text: str) -> dict[str, Any]:
+async def _extract_triplet(
+    text: str, session_id: str | None = None, user_id: str | None = None
+) -> dict[str, Any]:
+    # Set trace metadata before tool invocation
+    set_trace_metadata(user_id=user_id, session_id=session_id)
     raw: str = await to_thread.run_sync(_run_extract_triplet, text)
     payload = _parse_triplet_payload(raw)
     return _select_primary_triplet(payload)
@@ -55,7 +60,10 @@ def _run_extract_triplet(text: str) -> str:
 
 
 async def _ground_with_ai(
-    text: str, criterion_type: str
+    text: str,
+    criterion_type: str,
+    session_id: str | None = None,
+    user_id: str | None = None,
 ) -> tuple[dict[str, Any], list[str]]:
     try:
         from grounding_service.agent import get_grounding_agent
@@ -63,7 +71,8 @@ async def _ground_with_ai(
         return {}, []
 
     agent = get_grounding_agent()
-    result = await agent.ground(text, criterion_type)
+    # Pass session/user IDs to grounding agent which will set trace metadata
+    result = await agent.ground(text, criterion_type, session_id, user_id)
     if not result.terms:
         return {}, []
     term = result.terms[0]
@@ -132,8 +141,10 @@ async def _build_criterion_payload(
     criterion_type: str,
     use_ai_grounding: bool,
     umls_api_key: str,
+    session_id: str | None = None,
+    user_id: str | None = None,
 ) -> tuple[dict[str, Any], list[str]]:
-    triplet = await _extract_triplet(text)
+    triplet = await _extract_triplet(text, session_id=session_id, user_id=user_id)
 
     computed_as = None
     entity = triplet.get("entity")
@@ -148,7 +159,9 @@ async def _build_criterion_payload(
     grounding_payload: dict[str, Any] = {}
     snomed_codes: list[str] = []
     if use_ai_grounding:
-        grounding_payload, snomed_codes = await _ground_with_ai(text, criterion_type)
+        grounding_payload, snomed_codes = await _ground_with_ai(
+            text, criterion_type, session_id=session_id, user_id=user_id
+        )
     if not grounding_payload:
         grounding_payload, snomed_codes = _ground_baseline(text, umls_api_key)
 
@@ -166,15 +179,28 @@ async def ingest_protocol_document_text(
     document_text: str,
     storage: Storage,
     umls_api_key: str,
+    session_id: str | None = None,
+    user_id: str | None = None,
 ) -> list[StorageCriterion]:
-    """Extract criteria, ground them, and store results in the database."""
+    """Extract criteria, ground them, and store results in the database.
+
+    Args:
+        protocol_id: Protocol identifier.
+        document_text: Document text to extract from.
+        storage: Storage instance for persistence.
+        umls_api_key: UMLS API key for grounding.
+        session_id: Optional session ID for trace grouping.
+        user_id: Optional user ID for trace grouping.
+    """
     use_ai_grounding = os.getenv("USE_AI_GROUNDING", "false").lower() == "true"
     logger.info("Ingestion: use_ai_grounding=%s", use_ai_grounding)
 
     if not hasattr(extraction_pipeline, "extract_criteria_async"):
         raise RuntimeError("Extraction pipeline does not support async extraction.")
 
-    items = await extraction_pipeline.extract_criteria_async(document_text)
+    items = await extraction_pipeline.extract_criteria_async(
+        document_text, session_id=session_id, user_id=user_id
+    )
     iterator = iter(items)
 
     stored: list[StorageCriterion] = []
@@ -184,6 +210,8 @@ async def ingest_protocol_document_text(
             criterion_type=item.criterion_type,
             use_ai_grounding=use_ai_grounding,
             umls_api_key=umls_api_key,
+            session_id=session_id,
+            user_id=user_id,
         )
         entity = payload.get("entity")
         stored.append(

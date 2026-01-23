@@ -3,7 +3,10 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any, Callable
+
+from jinja2 import Environment, FileSystemLoader
 
 try:
     # Optional dependency (used in real training runs)
@@ -58,6 +61,12 @@ def load_training_data(path: str) -> Dataset:
                 examples.append(json.loads(line))
     return Dataset.from_list(examples)
 
+
+# Initialize Jinja2 environment for prompt templates
+_PROMPTS_DIR = Path(__file__).parent / "prompts"
+_JINJA_ENV = Environment(loader=FileSystemLoader(str(_PROMPTS_DIR)))
+
+
 def format_extraction_prompt(example: dict[str, Any]) -> dict[str, str]:
     """Format prompt for the extraction task (Task A).
 
@@ -67,14 +76,22 @@ def format_extraction_prompt(example: dict[str, Any]) -> dict[str, str]:
     Returns:
         A dictionary with a single key 'text' containing the formatted prompt.
     """
+    system_tpl = _JINJA_ENV.get_template("extraction_system.j2")
+    user_tpl = _JINJA_ENV.get_template("extraction_user.j2")
+    assistant_tpl = _JINJA_ENV.get_template("extraction_assistant.j2")
+
+    system_content = system_tpl.render()
+    user_content = user_tpl.render(criterion_text=example["criterion_text"])
+    assistant_content = assistant_tpl.render(criterion_type=example["criterion_type"])
+
     prompt = f"""<|im_start|>system
-You are a clinical trial criteria extraction assistant. Extract and classify the criterion.
+{system_content}
 <|im_end|>
 <|im_start|>user
-Criterion text: {example['criterion_text']}
+{user_content}
 <|im_end|>
 <|im_start|>assistant
-Type: {example['criterion_type']}
+{assistant_content}
 <|im_end|>"""
     return {"text": prompt}
 
@@ -96,16 +113,26 @@ def format_grounding_prompt(example: dict[str, Any]) -> dict[str, str]:
 
     mapping_str = example.get("field_mapping") or "None"
 
+    system_tpl = _JINJA_ENV.get_template("grounding_system.j2")
+    user_tpl = _JINJA_ENV.get_template("grounding_user.j2")
+    assistant_tpl = _JINJA_ENV.get_template("grounding_assistant.j2")
+
+    system_content = system_tpl.render()
+    user_content = user_tpl.render(
+        criterion_text=example["criterion_text"], criterion_type=example["criterion_type"]
+    )
+    assistant_content = assistant_tpl.render(
+        snomed_codes=snomed_str, field_mapping=mapping_str
+    )
+
     prompt = f"""<|im_start|>system
-You are a clinical terminology mapping assistant. Map the criterion to SNOMED codes and field mappings.
+{system_content}
 <|im_end|>
 <|im_start|>user
-Criterion: {example['criterion_text']}
-Type: {example['criterion_type']}
+{user_content}
 <|im_end|>
 <|im_start|>assistant
-SNOMED codes: {snomed_str}
-Field mapping: {mapping_str}
+{assistant_content}
 <|im_end|>"""
     return {"text": prompt}
 
@@ -139,17 +166,24 @@ def _format_extraction_for_vertex(example: dict[str, Any]) -> dict[str, Any]:
     if not str(example.get("criterion_type", "")).strip():
         raise ValueError("criterion_type is required for extraction examples")
 
+    system_tpl = _JINJA_ENV.get_template("extraction_system.j2")
+    user_tpl = _JINJA_ENV.get_template("extraction_user.j2")
+    assistant_tpl = _JINJA_ENV.get_template("extraction_assistant.j2")
+
     return {
         "messages": [
             {
                 "role": "system",
-                "content": (
-                    "You are a clinical trial criteria extraction assistant. "
-                    "Extract and classify the criterion."
-                ),
+                "content": system_tpl.render(),
             },
-            {"role": "user", "content": f"Criterion text: {example['criterion_text']}"},
-            {"role": "assistant", "content": f"Type: {example['criterion_type']}"},
+            {
+                "role": "user",
+                "content": user_tpl.render(criterion_text=example["criterion_text"]),
+            },
+            {
+                "role": "assistant",
+                "content": assistant_tpl.render(criterion_type=example["criterion_type"]),
+            },
         ]
     }
 
@@ -166,25 +200,28 @@ def _format_grounding_for_vertex(example: dict[str, Any]) -> dict[str, Any]:
         snomed_str = "None"
     mapping_str = str(example.get("field_mapping") or "None")
 
+    system_tpl = _JINJA_ENV.get_template("grounding_system.j2")
+    user_tpl = _JINJA_ENV.get_template("grounding_user.j2")
+    assistant_tpl = _JINJA_ENV.get_template("grounding_assistant.j2")
+
     return {
         "messages": [
             {
                 "role": "system",
-                "content": (
-                    "You are a clinical terminology mapping assistant. "
-                    "Map the criterion to SNOMED codes and field mappings."
-                ),
+                "content": system_tpl.render(),
             },
             {
                 "role": "user",
-                "content": (
-                    f"Criterion: {example['criterion_text']}\n"
-                    f"Type: {example['criterion_type']}"
+                "content": user_tpl.render(
+                    criterion_text=example["criterion_text"],
+                    criterion_type=example["criterion_type"],
                 ),
             },
             {
                 "role": "assistant",
-                "content": f"SNOMED codes: {snomed_str}\nField mapping: {mapping_str}",
+                "content": assistant_tpl.render(
+                    snomed_codes=snomed_str, field_mapping=mapping_str
+                ),
             },
         ]
     }

@@ -1,0 +1,9 @@
+Analyze this {{ context }} and identify:
+1. Medical concepts relating to clinical trial inclusion or exclusion criteria that should be grounded to UMLS/SNOMED entities
+2. The relation between the concept and some criterion (e.g. >=, <=, =, within, IS, IS NOT, etc.)
+3. Clinical significance
+
+Text: {{ text }}
+
+Return JSON with: concepts (list of terms to search),
+relations ("=", ">", "<", ">=", "<=", "within", "IS", "IS NOT", "AND", "OR"), interpretation (brief clinical meaning)

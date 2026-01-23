@@ -1,0 +1,6 @@
+Extract structured entity/relation/value triplets from this criterion.
+Return compact JSON with keys: entity, relation, value, unit, modifiers.
+If multiple constraints exist, return JSON with keys: triplets (array), logical_operator (AND/OR).
+Normalize relations to one of: >, <, >=, <=, =, !=, present, absent, between.
+
+Criterion: {{ text }}

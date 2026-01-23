@@ -25,7 +25,9 @@ from fastapi import (
     Depends,
     FastAPI,
     File,
+    Header,
     HTTPException,
+    Request,
     UploadFile,
 )
 from fastapi.middleware.cors import CORSMiddleware
@@ -37,6 +39,18 @@ from api_service.dependencies import get_storage
 from api_service.ingestion import ingest_protocol_document_text
 from api_service.storage import Criterion as StorageCriterion
 from api_service.storage import Storage, init_db, reset_storage
+
+
+def get_session_context(
+    x_session_id: str | None = Header(default=None, alias="X-Session-ID"),
+    x_user_id: str | None = Header(default=None, alias="X-User-ID"),
+) -> dict[str, str | None]:
+    """Extract session and user IDs from request headers.
+
+    Returns:
+        Dictionary with 'session_id' and 'user_id' keys.
+    """
+    return {"session_id": x_session_id, "user_id": x_user_id}
 
 # Load .env from repo root (find_dotenv walks up to find it)
 load_dotenv(find_dotenv())
@@ -69,6 +83,9 @@ logging.getLogger("uvicorn.access").setLevel(log_level)
 logging.getLogger("uvicorn.error").setLevel(log_level)
 
 logger = logging.getLogger(__name__)
+
+# Track background tasks for graceful shutdown
+_background_tasks: set[asyncio.Task[None]] = set()
 
 # Try to import agent (optional dependency)
 try:
@@ -117,6 +134,23 @@ async def lifespan(app_instance: FastAPI) -> AsyncIterator[None]:
     if not api_key:
         raise RuntimeError("UMLS_API_KEY or GROUNDING_SERVICE_UMLS_API_KEY must be set")
     yield
+    # Shutdown: cancel all background tasks
+    logger.info("Shutting down: cancelling %d background tasks", len(_background_tasks))
+    for task in _background_tasks:
+        if not task.done():
+            task.cancel()
+    # Wait for tasks to complete cancellation (with timeout)
+    if _background_tasks:
+        try:
+            await asyncio.wait_for(
+                asyncio.gather(*_background_tasks, return_exceptions=True),
+                timeout=5.0,
+            )
+        except asyncio.TimeoutError:
+            logger.warning("Some background tasks did not complete within timeout")
+        except Exception:
+            pass  # Ignore exceptions during shutdown
+    logger.info("Shutdown complete")
 
 
 def _get_umls_api_key() -> str:
@@ -390,23 +424,27 @@ def create_protocol(
 
 
 async def _run_extraction(
-    protocol_id: str, document_text: str, storage: Storage
+    protocol_id: str,
+    document_text: str,
+    storage: Storage,
+    session_id: str | None = None,
+    user_id: str | None = None,
 ) -> None:
     """Run extraction in background task (streaming)."""
-    storage.update_protocol_status(
-        protocol_id=protocol_id,
-        processing_status="extracting",
-        progress_message="Starting extraction…",
-        processed_count=0,
-    )
-    # Clear existing criteria first to support re-runs.
-    storage.update_protocol_status(
-        protocol_id=protocol_id,
-        progress_message="Clearing previous criteria…",
-    )
-    storage.replace_criteria(protocol_id=protocol_id, extracted=[])
-
     try:
+        storage.update_protocol_status(
+            protocol_id=protocol_id,
+            processing_status="extracting",
+            progress_message="Starting extraction…",
+            processed_count=0,
+        )
+        # Clear existing criteria first to support re-runs.
+        storage.update_protocol_status(
+            protocol_id=protocol_id,
+            progress_message="Clearing previous criteria…",
+        )
+        storage.replace_criteria(protocol_id=protocol_id, extracted=[])
+
         storage.update_protocol_status(
             protocol_id=protocol_id,
             progress_message="Extracting and grounding criteria…",
@@ -416,6 +454,8 @@ async def _run_extraction(
             document_text=document_text,
             storage=storage,
             umls_api_key=_get_umls_api_key(),
+            session_id=session_id,
+            user_id=user_id,
         )
         count = len(criteria)
         storage.update_protocol_status(
@@ -424,6 +464,14 @@ async def _run_extraction(
             processed_count=count,
             progress_message=f"Ingestion completed ({count} criteria).",
         )
+    except asyncio.CancelledError:
+        logger.info("Extraction task cancelled for protocol %s", protocol_id)
+        storage.update_protocol_status(
+            protocol_id=protocol_id,
+            processing_status="failed",
+            progress_message="Extraction cancelled.",
+        )
+        raise
     except Exception:
         logger.exception("Extraction stream failed")
         storage.update_protocol_status(
@@ -434,16 +482,33 @@ async def _run_extraction(
 
 
 def _run_extraction_sync(
-    protocol_id: str, document_text: str, storage: Storage
+    protocol_id: str,
+    document_text: str,
+    storage: Storage,
+    session_id: str | None = None,
+    user_id: str | None = None,
 ) -> None:
     """Run extraction from sync background tasks."""
     try:
         loop = asyncio.get_running_loop()
     except RuntimeError:
-        anyio.run(_run_extraction, protocol_id, document_text, storage)
+        anyio.run(
+            _run_extraction,
+            protocol_id,
+            document_text,
+            storage,
+            session_id,
+            user_id,
+        )
         return
 
-    loop.create_task(_run_extraction(protocol_id, document_text, storage))
+    # Create and track the task
+    task = loop.create_task(
+        _run_extraction(protocol_id, document_text, storage, session_id, user_id)
+    )
+    _background_tasks.add(task)
+    # Remove task from set when it completes
+    task.add_done_callback(_background_tasks.discard)
 
 
 @app.post("/v1/protocols/upload")
@@ -452,6 +517,7 @@ async def upload_protocol(
     auto_extract: bool = True,
     background_tasks: BackgroundTasks = BackgroundTasks(),
     storage: Storage = Depends(get_storage),
+    session_context: dict[str, str | None] = Depends(get_session_context),
 ) -> ProtocolResponse:
     """Upload a PDF protocol file and create a protocol record.
 
@@ -503,7 +569,12 @@ async def upload_protocol(
         )
         # Run extraction in background to avoid blocking the response
         background_tasks.add_task(
-            _run_extraction_sync, protocol.id, protocol.document_text, storage
+            _run_extraction_sync,
+            protocol.id,
+            protocol.document_text,
+            storage,
+            session_context.get("session_id"),
+            session_context.get("user_id"),
         )
 
     return ProtocolResponse(protocol_id=protocol.id, title=protocol.title)
@@ -514,6 +585,7 @@ def extract_criteria(
     protocol_id: str,
     background_tasks: BackgroundTasks = BackgroundTasks(),
     storage: Storage = Depends(get_storage),
+    session_context: dict[str, str | None] = Depends(get_session_context),
 ) -> ExtractionResponse:
     """Trigger extraction of atomic criteria for a protocol.
 
@@ -530,7 +602,12 @@ def extract_criteria(
     )
     # Run extraction in background to avoid blocking the response
     background_tasks.add_task(
-        _run_extraction_sync, protocol_id, protocol.document_text, storage
+        _run_extraction_sync,
+        protocol_id,
+        protocol.document_text,
+        storage,
+        session_context.get("session_id"),
+        session_context.get("user_id"),
     )
 
     return ExtractionResponse(
@@ -724,11 +801,15 @@ async def _try_ai_grounding(
     criterion_type: str,
     criterion_id: str,
     storage: Storage,
+    session_id: str | None = None,
+    user_id: str | None = None,
 ) -> GroundingResponse | None:
     """Try AI grounding and return result if successful, None otherwise."""
     try:
         agent = get_grounding_agent()
-        result = await agent.ground(criterion_text, criterion_type)
+        result = await agent.ground(
+            criterion_text, criterion_type, session_id, user_id
+        )
         if not result.terms:
             raise RuntimeError("AI grounding returned empty result")
 
@@ -826,6 +907,7 @@ def _baseline_grounding(
 async def ground_criterion(
     criterion_id: str,
     storage: Storage = Depends(get_storage),
+    session_context: dict[str, str | None] = Depends(get_session_context),
 ) -> GroundingResponse:
     """Retrieve SNOMED candidates and field mappings for a criterion."""
     criterion = storage.get_criterion(criterion_id)
@@ -837,7 +919,12 @@ async def ground_criterion(
     logger.info(f"Grounding: use_ai={use_ai}, AGENT_AVAILABLE={AGENT_AVAILABLE}")
     if use_ai and AGENT_AVAILABLE:
         result = await _try_ai_grounding(
-            criterion.text, criterion.criterion_type, criterion_id, storage
+            criterion.text,
+            criterion.criterion_type,
+            criterion_id,
+            storage,
+            session_context.get("session_id"),
+            session_context.get("user_id"),
         )
         if result is not None:
             return result

@@ -7,6 +7,9 @@ and can be used by the Gemini orchestrator agent.
 from __future__ import annotations
 
 import logging
+from pathlib import Path
+
+from jinja2 import Environment, FileSystemLoader
 
 try:
     from langchain_core.tools import tool  # type: ignore[import-not-found]
@@ -20,6 +23,10 @@ except ImportError:  # pragma: no cover
     tool = _tool  # type: ignore[assignment]
 
 logger = logging.getLogger(__name__)
+
+# Initialize Jinja2 environment for prompt templates
+_PROMPTS_DIR = Path(__file__).parent / "prompts"
+_JINJA_ENV = Environment(loader=FileSystemLoader(str(_PROMPTS_DIR)))
 
 
 @tool
@@ -39,15 +46,9 @@ def interpret_medical_text(text: str, context: str = "criterion") -> str:
     cfg = AgentConfig.from_env()  # Uses VERTEX_ENDPOINT_ID for MedGemma
     model = create_model_loader(cfg)()
 
-    prompt = f"""Analyze this {context} and identify:
-1. Medical concepts that should be grounded to UMLS/SNOMED
-2. Numeric thresholds (e.g., age >= 18, HbA1c < 7.0)
-3. Clinical significance
-
-Text: {text}
-
-Return JSON with: concepts (list of terms to search),
-thresholds (field/operator/value), interpretation (brief clinical meaning)"""
+    # Load and render prompt template
+    template = _JINJA_ENV.get_template("interpret_medical_text.j2")
+    prompt = template.render(context=context, text=text)
 
     try:
         result = model.invoke([("user", prompt)])

@@ -12,6 +12,7 @@ from typing import AsyncIterator, Iterable, Iterator, Sequence
 import anyio
 from inference.agent_factory import create_react_agent
 from inference.model_factory import create_gemini_model_loader
+from shared.mlflow_utils import set_trace_metadata
 
 from extraction_service.chunking import (
     Page,
@@ -96,16 +97,29 @@ class ExtractionPipeline:
         )
 
     async def extract_criteria_async(
-        self, document_text: str
+        self,
+        document_text: str,
+        session_id: str | None = None,
+        user_id: str | None = None,
     ) -> list[ExtractedCriterion]:
-        """Extract criteria using hierarchical filtering."""
+        """Extract criteria using hierarchical filtering.
+
+        Args:
+            document_text: Document text to extract from.
+            session_id: Optional session ID for trace grouping.
+            user_id: Optional user ID for trace grouping.
+        """
         pages = split_into_pages(document_text, max_chars=self.config.max_page_chars)
         if not pages:
             return []
 
-        relevant_pages = await self._filter_pages(pages)
-        relevant_paragraphs = await self._filter_paragraphs(relevant_pages)
-        criteria = await self._extract_from_paragraphs(relevant_paragraphs)
+        relevant_pages = await self._filter_pages(pages, session_id, user_id)
+        relevant_paragraphs = await self._filter_paragraphs(
+            relevant_pages, session_id, user_id
+        )
+        criteria = await self._extract_from_paragraphs(
+            relevant_paragraphs, session_id, user_id
+        )
         return _deduplicate(criteria)
 
     async def extract_criteria_stream_async(
@@ -128,9 +142,14 @@ class ExtractionPipeline:
                 seen.add(normalized)
                 yield item
 
-    async def _filter_pages(self, pages: Sequence[Page]) -> list[Page]:
+    async def _filter_pages(
+        self, pages: Sequence[Page], session_id: str | None = None, user_id: str | None = None
+    ) -> list[Page]:
         if not pages:
             return []
+
+        # Set trace metadata before agent invocation
+        set_trace_metadata(user_id=user_id, session_id=session_id)
 
         selected_numbers: set[int] = set()
         for batch in _chunked(pages, self.config.max_pages_per_batch):
@@ -139,7 +158,12 @@ class ExtractionPipeline:
 
         return [page for page in pages if page.page_number in selected_numbers]
 
-    async def _filter_paragraphs(self, pages: Sequence[Page]) -> list[Paragraph]:
+    async def _filter_paragraphs(
+        self, pages: Sequence[Page], session_id: str | None = None, user_id: str | None = None
+    ) -> list[Paragraph]:
+        # Set trace metadata before agent invocation
+        set_trace_metadata(user_id=user_id, session_id=session_id)
+
         relevant: list[Paragraph] = []
         for page in pages:
             paragraphs = split_into_paragraphs(page)
@@ -157,16 +181,26 @@ class ExtractionPipeline:
         return relevant
 
     async def _extract_from_paragraphs(
-        self, paragraphs: Sequence[Paragraph]
+        self,
+        paragraphs: Sequence[Paragraph],
+        session_id: str | None = None,
+        user_id: str | None = None,
     ) -> list[ExtractedCriterion]:
         criteria: list[ExtractedCriterion] = []
         for paragraph in paragraphs:
-            criteria.extend(await self._extract_from_paragraph(paragraph))
+            criteria.extend(
+                await self._extract_from_paragraph(paragraph, session_id, user_id)
+            )
         return criteria
 
     async def _extract_from_paragraph(
-        self, paragraph: Paragraph
+        self,
+        paragraph: Paragraph,
+        session_id: str | None = None,
+        user_id: str | None = None,
     ) -> list[ExtractedCriterion]:
+        # Set trace metadata before agent invocation
+        set_trace_metadata(user_id=user_id, session_id=session_id)
         result = await self._extract_agent({"paragraph": paragraph})
         return result.criteria
 
@@ -184,10 +218,20 @@ def extract_criteria_stream(document_text: str) -> Iterator[ExtractedCriterion]:
     yield from items
 
 
-async def extract_criteria_async(document_text: str) -> list[ExtractedCriterion]:
-    """Async wrapper for extracting criteria."""
+async def extract_criteria_async(
+    document_text: str,
+    session_id: str | None = None,
+    user_id: str | None = None,
+) -> list[ExtractedCriterion]:
+    """Async wrapper for extracting criteria.
+
+    Args:
+        document_text: Document text to extract from.
+        session_id: Optional session ID for trace grouping.
+        user_id: Optional user ID for trace grouping.
+    """
     pipeline = _get_pipeline()
-    return await pipeline.extract_criteria_async(document_text)
+    return await pipeline.extract_criteria_async(document_text, session_id, user_id)
 
 
 def iter_normalized_texts(items: Iterable[str]) -> Iterator[str]:

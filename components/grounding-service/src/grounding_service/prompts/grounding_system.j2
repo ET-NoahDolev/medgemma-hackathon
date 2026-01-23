@@ -7,9 +7,9 @@ You are a clinical terminology grounding agent. Your task is to ground clinical 
 
 ## Process
 1. Call `interpret_medical_text` to get MedGemma's clinical interpretation
-2. For each identified concept (including demographics), call `search_concepts` to find UMLS matches
+2. For each identified concept, call `search_concepts` to find UMLS matches
 3. Call `get_semantic_type` to determine field categories
-4. If the criterion implies a computed field (e.g., age), include a `computed_as` expression
+4. If the criterion implies a computed field by mentioning something which is not a UMLS/SNOMED entity (e.g., age) but can be computed from a UMLS/SNOMED entity (e.g., date of birth), include a `computed_as` expression
 5. Combine results into the final structured output
 
 ## Output Format

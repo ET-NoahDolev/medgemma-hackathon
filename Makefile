@@ -4,7 +4,7 @@
 # Ensure bash is used for shell commands (required for read -p)
 SHELL := /bin/bash
 
-.PHONY: help docs-build docs-serve clean create-component docs-openapi
+.PHONY: help docs-build docs-serve clean create-component docs-openapi kill-processes
 
 # Component creation commands
 .PHONY: create-component
@@ -44,6 +44,11 @@ docs-openapi:
 	@echo "Exporting OpenAPI spec..."
 	uv run --project components/api-service python components/api-service/scripts/export_openapi.py
 
+# Kill running processes from previous sessions
+kill-processes:
+	@echo "Killing running processes..."
+	@./scripts/kill_running_processes.py
+
 # Clean build artifacts
 clean:
 	@echo "Cleaning build artifacts..."
@@ -64,3 +69,6 @@ help:
 	@echo "  docs-components-gen   Generate components overview page"
 	@echo "  docs-nav-update       Update root navigation"
 	@echo "  clean                 Clean build artifacts"
+	@echo ""
+	@echo "Utilities:"
+	@echo "  kill-processes        Kill running API/UI/MLflow processes from previous sessions"

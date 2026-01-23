@@ -4,9 +4,11 @@ from __future__ import annotations
 
 import json
 import logging
+from pathlib import Path
 from typing import Any
 
 from inference.tools import _coerce_model_output
+from jinja2 import Environment, FileSystemLoader
 
 try:
     from langchain_core.tools import tool
@@ -20,6 +22,10 @@ except ImportError:  # pragma: no cover
     tool = _tool  # type: ignore[assignment]
 
 logger = logging.getLogger(__name__)
+
+# Initialize Jinja2 environment for prompt templates
+_PROMPTS_DIR = Path(__file__).parent / "prompts"
+_JINJA_ENV = Environment(loader=FileSystemLoader(str(_PROMPTS_DIR)))
 
 
 RELATION_NORMALIZATION = {
@@ -99,15 +105,8 @@ def extract_triplet(text: str) -> str:
     Returns:
         JSON string with entity/relation/value/unit or list of triplets.
     """
-    prompt = (
-        "Extract structured entity/relation/value triplets from this criterion.\n"
-        "Return compact JSON with keys: entity, relation, value, unit, modifiers.\n"
-        "If multiple constraints exist, return JSON with keys: triplets (array), "
-        "logical_operator (AND/OR).\n"
-        "Normalize relations to one of: >, <, >=, <=, =, !=, present, absent, "
-        "between.\n\n"
-        f"Criterion: {text}\n"
-    )
+    template = _JINJA_ENV.get_template("extract_triplet.j2")
+    prompt = template.render(text=text)
     result = _invoke_medgemma(prompt)
     try:
         payload = json.loads(result)
@@ -133,9 +132,6 @@ def clarify_ambiguity(question: str, text: str) -> str:
     Returns:
         Clarification response text.
     """
-    prompt = (
-        "Answer the clarification question about the criterion.\n\n"
-        f"Question: {question}\n"
-        f"Text: {text}\n"
-    )
+    template = _JINJA_ENV.get_template("clarify_ambiguity.j2")
+    prompt = template.render(question=question, text=text)
     return _invoke_medgemma(prompt)

@@ -29,6 +29,7 @@ else:
 from grounding_service.schemas import GroundingResult
 from grounding_service.tools import interpret_medical_text
 from grounding_service.umls_client import UmlsClient
+from shared.mlflow_utils import set_trace_metadata
 
 logger = logging.getLogger(__name__)
 
@@ -146,17 +147,26 @@ class GroundingAgent:
         return self._agent
 
     async def ground(
-        self, criterion_text: str, criterion_type: str
+        self,
+        criterion_text: str,
+        criterion_type: str,
+        session_id: str | None = None,
+        user_id: str | None = None,
     ) -> GroundingResult:
         """Ground a criterion using Gemini orchestrator with structured output.
 
         Args:
             criterion_text: The criterion text to ground.
             criterion_type: Type of criterion ("inclusion" or "exclusion").
+            session_id: Optional session ID for trace grouping.
+            user_id: Optional user ID for trace grouping.
 
         Returns:
             GroundingResult with SNOMED codes and field mappings.
         """
+        # Set trace metadata before agent invocation
+        set_trace_metadata(user_id=user_id, session_id=session_id)
+
         agent = await self._get_agent()
         return await agent(
             {
