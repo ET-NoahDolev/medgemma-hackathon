@@ -262,7 +262,7 @@ def test_ground_criterion_uses_ai_when_enabled(
     """Test that AI grounding is used when USE_AI_GROUNDING=true."""
     from unittest.mock import AsyncMock, MagicMock
 
-    from grounding_service.schemas import FieldMappingResult, GroundingResult
+    from grounding_service.schemas import GroundedTerm, GroundingResult
 
     # Enable AI grounding
     monkeypatch.setenv("USE_AI_GROUNDING", "true")
@@ -271,14 +271,14 @@ def test_ground_criterion_uses_ai_when_enabled(
     # Mock the agent
     mock_agent = MagicMock()
     mock_result = GroundingResult(
-        snomed_codes=["123456789"],
-        field_mappings=[
-            FieldMappingResult(
-                field="demographics.age",
+        terms=[
+            GroundedTerm(
+                snippet="Age >= 18",
+                snomed_code="123456789",
                 relation=">=",
                 value="18",
                 confidence=0.95,
-                umls_cui="C123456",
+                umls_id="C123456",
             )
         ],
         reasoning="AI reasoning test",
