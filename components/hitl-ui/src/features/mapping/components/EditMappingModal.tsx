@@ -16,6 +16,7 @@ import { useState, useEffect } from 'react';
 import { Loader2, X, Search } from 'lucide-react';
 import { useGroundCriterion } from '@/hooks/useGroundCriterion';
 import { useSubmitFeedback } from '@/hooks/useSubmitFeedback';
+import { useEditCriterionMapping } from '@/hooks/useEditCriterionMapping';
 import { toast } from 'sonner';
 
 interface EditMappingModalProps {
@@ -25,6 +26,20 @@ interface EditMappingModalProps {
         id: string;
         text: string;
         snomedCodes?: string[];
+        snomedCode?: string;
+        entity?: string;
+        umlsConcept?: string;
+        umlsId?: string;
+        relation?: string;
+        value?: string;
+        unit?: string;
+        hitlEntity?: string;
+        hitlUmlsConcept?: string;
+        hitlUmlsId?: string;
+        hitlSnomedCode?: string;
+        hitlRelation?: string;
+        hitlValue?: string;
+        hitlUnit?: string;
         fieldMapping?: {
             field: string;
             relation: string;
@@ -43,11 +58,23 @@ export function EditMappingModal({
     // protocolId not available here; invalidate all criteria queries after grounding.
     const groundCriterion = useGroundCriterion(null);
     const submitFeedback = useSubmitFeedback();
+    const editMapping = useEditCriterionMapping();
 
     // Local state for editing
     const [snomedCodes, setSnomedCodes] = useState<string[]>(criterion.snomedCodes || []);
     const [fieldMapping, setFieldMapping] = useState(
         criterion.fieldMapping || { field: '', relation: '', value: '' }
+    );
+    const [entity, setEntity] = useState(criterion.hitlEntity ?? criterion.entity ?? '');
+    const [relation, setRelation] = useState(criterion.hitlRelation ?? criterion.relation ?? '');
+    const [value, setValue] = useState(criterion.hitlValue ?? criterion.value ?? '');
+    const [unit, setUnit] = useState(criterion.hitlUnit ?? criterion.unit ?? '');
+    const [umlsConcept, setUmlsConcept] = useState(
+        criterion.hitlUmlsConcept ?? criterion.umlsConcept ?? ''
+    );
+    const [umlsId, setUmlsId] = useState(criterion.hitlUmlsId ?? criterion.umlsId ?? '');
+    const [snomedCode, setSnomedCode] = useState(
+        criterion.hitlSnomedCode ?? criterion.snomedCode ?? ''
     );
 
     // Candidates from grounding service
@@ -70,6 +97,18 @@ export function EditMappingModal({
                 });
         }
     }, [open, criterion.id, groundCriterion]);
+
+    useEffect(() => {
+        setSnomedCodes(criterion.snomedCodes || []);
+        setFieldMapping(criterion.fieldMapping || { field: '', relation: '', value: '' });
+        setEntity(criterion.hitlEntity ?? criterion.entity ?? '');
+        setRelation(criterion.hitlRelation ?? criterion.relation ?? '');
+        setValue(criterion.hitlValue ?? criterion.value ?? '');
+        setUnit(criterion.hitlUnit ?? criterion.unit ?? '');
+        setUmlsConcept(criterion.hitlUmlsConcept ?? criterion.umlsConcept ?? '');
+        setUmlsId(criterion.hitlUmlsId ?? criterion.umlsId ?? '');
+        setSnomedCode(criterion.hitlSnomedCode ?? criterion.snomedCode ?? '');
+    }, [criterion]);
 
     const handleAddCode = (code: string) => {
         if (!snomedCodes.includes(code)) {
@@ -112,19 +151,23 @@ export function EditMappingModal({
             });
         });
 
+        const mappingForSubmit = {
+            field: fieldMapping.field,
+            relation,
+            value,
+        };
+
         // Field Mapping - we only support one for now, so replacement
         if (
-            fieldMapping.field !== criterion.fieldMapping?.field ||
-            fieldMapping.value !== criterion.fieldMapping?.value
+            mappingForSubmit.field !== criterion.fieldMapping?.field ||
+            mappingForSubmit.value !== criterion.fieldMapping?.value ||
+            mappingForSubmit.relation !== criterion.fieldMapping?.relation
         ) {
             if (criterion.fieldMapping?.field) {
                 submitFeedback.mutate({
                     criterion_id: criterion.id,
                     action: 'remove_mapping',
-                    field_mapping_removed: JSON.stringify(criterion.fieldMapping) // API expects string? or structured? 
-                    // The API `field_mapping_removed` is a string. We probably usually send ID or serialized.
-                    // For the hackathon let's just send 'add_mapping' with the new one which effectively overwrites 
-                    // (if backend logic supports it).
+                    field_mapping_removed: JSON.stringify(criterion.fieldMapping)
                 });
             }
 
@@ -132,10 +175,25 @@ export function EditMappingModal({
             submitFeedback.mutate({
                 criterion_id: criterion.id,
                 action: 'add_mapping',
-                field_mapping_added: JSON.stringify(fieldMapping)
-                // Note: The API treats this as a string record.
+                field_mapping_added: JSON.stringify(mappingForSubmit)
             });
         }
+
+        editMapping.mutate({
+            criterionId: criterion.id,
+            payload: {
+                user: 'reviewer',
+                edits: {
+                    entity,
+                    relation,
+                    value,
+                    unit,
+                    umls_concept: umlsConcept,
+                    umls_id: umlsId,
+                    snomed_code: snomedCode,
+                },
+            },
+        });
 
         toast.success('Mapping updated');
         onOpenChange(false);
@@ -219,6 +277,17 @@ export function EditMappingModal({
                                 <h4 className="text-sm font-semibold">Structured Data Mapping</h4>
                                 <div className="space-y-3">
                                     <div className="space-y-1">
+                                        <Label className="text-xs">Entity</Label>
+                                        <Input
+                                            placeholder="e.g. Age"
+                                            value={entity}
+                                            onChange={e => setEntity(e.target.value)}
+                                        />
+                                        {criterion.entity && criterion.entity !== entity && (
+                                            <div className="text-[11px] text-gray-500">AI: {criterion.entity}</div>
+                                        )}
+                                    </div>
+                                    <div className="space-y-1">
                                         <Label className="text-xs">Field (Variable)</Label>
                                         <div className="relative">
                                             <Search className="absolute left-2 top-2.5 h-4 w-4 text-gray-400" />
@@ -236,18 +305,76 @@ export function EditMappingModal({
                                             <Label className="text-xs">Relation</Label>
                                             <Input
                                                 placeholder="e.g. >=, EQUAL"
-                                                value={fieldMapping.relation}
-                                                onChange={e => setFieldMapping({ ...fieldMapping, relation: e.target.value })}
+                                                value={relation}
+                                                onChange={e => {
+                                                    setRelation(e.target.value);
+                                                    setFieldMapping({ ...fieldMapping, relation: e.target.value });
+                                                }}
                                             />
+                                            {criterion.relation && criterion.relation !== relation && (
+                                                <div className="text-[11px] text-gray-500">AI: {criterion.relation}</div>
+                                            )}
                                         </div>
                                         <div className="space-y-1">
                                             <Label className="text-xs">Value</Label>
                                             <Input
                                                 placeholder="e.g. 18, Yes"
-                                                value={fieldMapping.value}
-                                                onChange={e => setFieldMapping({ ...fieldMapping, value: e.target.value })}
+                                                value={value}
+                                                onChange={e => {
+                                                    setValue(e.target.value);
+                                                    setFieldMapping({ ...fieldMapping, value: e.target.value });
+                                                }}
                                             />
+                                            {criterion.value && criterion.value !== value && (
+                                                <div className="text-[11px] text-gray-500">AI: {criterion.value}</div>
+                                            )}
                                         </div>
+                                    </div>
+                                    <div className="space-y-1">
+                                        <Label className="text-xs">Unit</Label>
+                                        <Input
+                                            placeholder="e.g. years"
+                                            value={unit}
+                                            onChange={e => setUnit(e.target.value)}
+                                        />
+                                        {criterion.unit && criterion.unit !== unit && (
+                                            <div className="text-[11px] text-gray-500">AI: {criterion.unit}</div>
+                                        )}
+                                    </div>
+                                    <div className="grid grid-cols-2 gap-3">
+                                        <div className="space-y-1">
+                                            <Label className="text-xs">UMLS Concept</Label>
+                                            <Input
+                                                placeholder="e.g. Date of birth"
+                                                value={umlsConcept}
+                                                onChange={e => setUmlsConcept(e.target.value)}
+                                            />
+                                            {criterion.umlsConcept && criterion.umlsConcept !== umlsConcept && (
+                                                <div className="text-[11px] text-gray-500">AI: {criterion.umlsConcept}</div>
+                                            )}
+                                        </div>
+                                        <div className="space-y-1">
+                                            <Label className="text-xs">UMLS ID</Label>
+                                            <Input
+                                                placeholder="e.g. C0011002"
+                                                value={umlsId}
+                                                onChange={e => setUmlsId(e.target.value)}
+                                            />
+                                            {criterion.umlsId && criterion.umlsId !== umlsId && (
+                                                <div className="text-[11px] text-gray-500">AI: {criterion.umlsId}</div>
+                                            )}
+                                        </div>
+                                    </div>
+                                    <div className="space-y-1">
+                                        <Label className="text-xs">Primary SNOMED Code</Label>
+                                        <Input
+                                            placeholder="e.g. 371273006"
+                                            value={snomedCode}
+                                            onChange={e => setSnomedCode(e.target.value)}
+                                        />
+                                        {criterion.snomedCode && criterion.snomedCode !== snomedCode && (
+                                            <div className="text-[11px] text-gray-500">AI: {criterion.snomedCode}</div>
+                                        )}
                                     </div>
                                 </div>
                             </div>

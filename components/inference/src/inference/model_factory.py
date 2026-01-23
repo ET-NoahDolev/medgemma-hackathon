@@ -142,6 +142,44 @@ def create_model_loader(config: AgentConfig | None = None) -> Callable[[], Any]:
     return _create_local_model_loader(cfg)
 
 
+def create_gemini_model_loader(
+    model_name: str | None = None,
+    project: str | None = None,
+    region: str | None = None,
+) -> Callable[[], Any]:
+    """Create a lazy Gemini model loader for LangChain agents.
+
+    Args:
+        model_name: Optional Gemini model name override.
+        project: Optional GCP project override.
+        region: Optional GCP region override.
+
+    Returns:
+        Callable that loads and returns a Gemini chat model when invoked.
+    """
+    resolved_model = model_name or os.getenv("GEMINI_MODEL_NAME", "gemini-2.5-pro")
+    resolved_project = project or os.getenv("GCP_PROJECT_ID")
+    resolved_region = region or os.getenv("GCP_REGION", "europe-west4")
+
+    @lazy_singleton
+    def load_model() -> Any:
+        try:
+            from langchain_google_genai import ChatGoogleGenerativeAI
+        except ImportError as exc:  # pragma: no cover
+            raise ImportError(
+                "Gemini requires langchain-google-genai installed."
+            ) from exc
+
+        return ChatGoogleGenerativeAI(
+            model=resolved_model,
+            project=resolved_project,
+            location=resolved_region,
+            vertexai=True,
+        )
+
+    return load_model
+
+
 def _validate_vertex_config(cfg: AgentConfig) -> tuple[str, str, str, str]:
     project_id = (cfg.gcp_project_id or "").strip()
     region = (cfg.gcp_region or "").strip()

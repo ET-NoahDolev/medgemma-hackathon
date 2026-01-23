@@ -205,18 +205,10 @@ async def test_create_react_agent_smoke(
     def dummy_model_loader() -> object:
         return object()
 
-    # Monkeypatch langgraph.prebuilt.create_react_agent to return DummyAgent
-    import sys
-    import types
-
-    def _create_react_agent(**_kw: Any) -> DummyAgent:
+    # Monkeypatch langchain.agents.create_agent to return DummyAgent
+    def _create_agent(**_kw: Any) -> DummyAgent:
         return DummyAgent()
-
-    prebuilt = types.SimpleNamespace(create_react_agent=_create_react_agent)
-    monkeypatch.setitem(
-        sys.modules, "langgraph", types.SimpleNamespace(prebuilt=prebuilt)
-    )
-    monkeypatch.setitem(sys.modules, "langgraph.prebuilt", prebuilt)
+    monkeypatch.setattr("langchain.agents.create_agent", _create_agent)
 
     invoke = create_react_agent(
         model_loader=dummy_model_loader,

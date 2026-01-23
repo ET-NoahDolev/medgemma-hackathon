@@ -6,6 +6,7 @@ from typing import Any, cast
 import pytest
 from fastapi.testclient import TestClient
 
+import api_service.ingestion as ingestion
 import api_service.main as api_main
 from api_service.main import app
 from api_service.storage import reset_storage
@@ -66,6 +67,30 @@ def force_fast_test_settings(monkeypatch: pytest.MonkeyPatch) -> None:
 
     monkeypatch.setenv("USE_MODEL_EXTRACTION", "false")
     monkeypatch.setenv("USE_AI_GROUNDING", "false")
+
+
+@pytest.fixture(autouse=True)
+def stub_model_extraction(
+    monkeypatch: pytest.MonkeyPatch, request: pytest.FixtureRequest
+) -> None:
+    """Stub extraction to keep tests deterministic."""
+    if "fake_services" in request.fixturenames:
+        return
+
+    async def _extract_criteria_async(_text: str) -> list[FakeExtractedCriterion]:
+        return [
+            FakeExtractedCriterion(
+                text=constants.EXTRACTED_TEXT,
+                criterion_type=constants.CRITERION_TYPE,
+                confidence=constants.CRITERION_CONFIDENCE,
+            )
+        ]
+
+    monkeypatch.setattr(
+        api_main_any.extraction_pipeline,
+        "extract_criteria_async",
+        _extract_criteria_async,
+    )
 
 
 @pytest.fixture()
@@ -152,6 +177,11 @@ def fake_services(monkeypatch: pytest.MonkeyPatch) -> FakeServicesState:
     monkeypatch.setattr(api_main_any.umls_client, "UmlsClient", FakeUmlsClient)
     monkeypatch.setattr(
         api_main_any.umls_client, "propose_field_mapping", _propose_field_mapping
+    )
+    monkeypatch.setattr(
+        ingestion,
+        "extract_triplet",
+        lambda _text: '{"entity":"age","relation":">=","value":"18","unit":"years"}',
     )
 
     return state

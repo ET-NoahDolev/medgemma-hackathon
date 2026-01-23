@@ -95,7 +95,7 @@ def test_extract_criteria_populates_list(
     assert criterion["text"] == EXTRACTED_TEXT
     assert criterion["criterion_type"] == CRITERION_TYPE
     assert criterion["confidence"] == CRITERION_CONFIDENCE
-    assert criterion["snomed_codes"] == []
+    assert criterion["snomed_codes"] == [SNOMED_CODE]
 
 
 def test_update_criterion_returns_updated_value(
@@ -264,8 +264,8 @@ def test_ground_criterion_uses_ai_when_enabled(
 
     from grounding_service.schemas import GroundedTerm, GroundingResult
 
-    # Enable AI grounding
-    monkeypatch.setenv("USE_AI_GROUNDING", "true")
+    # Disable AI grounding during extraction to keep it deterministic.
+    monkeypatch.setenv("USE_AI_GROUNDING", "false")
     _ = fake_services  # fixture side-effects (monkeypatching) are required
 
     # Mock the agent
@@ -274,6 +274,8 @@ def test_ground_criterion_uses_ai_when_enabled(
         terms=[
             GroundedTerm(
                 snippet="Age >= 18",
+                    raw_criterion_text="Age >= 18",
+                    criterion_type="inclusion",
                 snomed_code="123456789",
                 relation=">=",
                 value="18",
@@ -298,6 +300,9 @@ def test_ground_criterion_uses_ai_when_enabled(
 
     list_response = client.get(f"/v1/protocols/{protocol_id}/criteria")
     criterion_id = list_response.json()["criteria"][0]["id"]
+
+    # Enable AI grounding only for the grounding endpoint.
+    monkeypatch.setenv("USE_AI_GROUNDING", "true")
 
     response = client.post(f"/v1/criteria/{criterion_id}/ground")
 

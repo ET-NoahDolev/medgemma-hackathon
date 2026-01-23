@@ -1,3 +1,4 @@
+from collections.abc import Callable
 from unittest.mock import MagicMock, patch
 
 import httpx
@@ -26,17 +27,57 @@ def mock_umls_success() -> dict[str, object]:
     }
 
 
+def _create_mock_response_handler(
+    search_response: dict[str, object],
+    atoms_responses: dict[str, dict[str, object]],
+) -> Callable[..., MagicMock]:
+    """Create a mock response handler that returns different responses based on URL."""
+    def _handler(*args: object, **kwargs: object) -> MagicMock:
+        # httpx.Client.get(url, params=...) - url is first positional arg
+        url = str(args[0]) if args else ""
+        if "/search/current" in url:
+            return MagicMock(
+                json=lambda: search_response,
+                status_code=200,
+                raise_for_status=lambda: None,
+            )
+        elif "/atoms" in url:
+            # Extract CUI from URL
+            for cui, atoms_response in atoms_responses.items():
+                if f"/CUI/{cui}/atoms" in url:
+                    return MagicMock(
+                        json=lambda: atoms_response,
+                        status_code=200,
+                        raise_for_status=lambda: None,
+                    )
+            # Default atoms response if CUI not found
+            return MagicMock(
+                json=lambda: {"result": {"results": [{"code": ""}]}},
+                status_code=200,
+                raise_for_status=lambda: None,
+            )
+        # Default response
+        return MagicMock(
+            json=lambda: search_response,
+            status_code=200,
+            raise_for_status=lambda: None,
+        )
+    return _handler
+
+
 class TestUmlsClientSearch:
     def test_search_snomed_returns_candidates(
         self,
         mock_umls_success: dict[str, object],
     ) -> None:
+        atoms_responses = {
+            "372244006": {"result": {"results": [{"code": "372244006"}]}},
+            "363346000": {"result": {"results": [{"code": "363346000"}]}},
+        }
         with patch("httpx.Client") as mock_client_cls:
             mock_client = MagicMock()
-            mock_client.get.return_value = MagicMock(
-                json=lambda: mock_umls_success,
-                status_code=200,
-                raise_for_status=lambda: None,
+            mock_client.get.side_effect = _create_mock_response_handler(
+                mock_umls_success, atoms_responses
             )
             mock_client_cls.return_value = mock_client
             with UmlsClient(api_key="test-key") as client:
@@ -49,12 +90,14 @@ class TestUmlsClientSearch:
         self,
         mock_umls_success: dict[str, object],
     ) -> None:
+        atoms_responses = {
+            "372244006": {"result": {"results": [{"code": "372244006"}]}},
+            "363346000": {"result": {"results": [{"code": "363346000"}]}},
+        }
         with patch("httpx.Client") as mock_client_cls:
             mock_client = MagicMock()
-            mock_client.get.return_value = MagicMock(
-                json=lambda: mock_umls_success,
-                status_code=200,
-                raise_for_status=lambda: None,
+            mock_client.get.side_effect = _create_mock_response_handler(
+                mock_umls_success, atoms_responses
             )
             mock_client_cls.return_value = mock_client
             with UmlsClient(api_key="test-key") as client:
@@ -68,19 +111,24 @@ class TestUmlsClientSearch:
         self,
         mock_umls_success: dict[str, object],
     ) -> None:
+        atoms_responses = {
+            "372244006": {"result": {"results": [{"code": "372244006"}]}},
+            "363346000": {"result": {"results": [{"code": "363346000"}]}},
+        }
         with patch("httpx.Client") as mock_client_cls:
             mock_client = MagicMock()
-            mock_client.get.return_value = MagicMock(
-                json=lambda: mock_umls_success,
-                status_code=200,
-                raise_for_status=lambda: None,
+            mock_client.get.side_effect = _create_mock_response_handler(
+                mock_umls_success, atoms_responses
             )
             mock_client_cls.return_value = mock_client
             with UmlsClient(api_key="test-key") as client:
                 client.search_snomed("melanoma")
                 client.search_snomed("melanoma")
 
-        assert mock_client.get.call_count == 1
+        # First call: 1 search + 2 atoms (one per candidate)
+        # Second call: cached, so 0 calls
+        # Total: 3 calls (1 search + 2 atoms)
+        assert mock_client.get.call_count == 3
 
     def test_search_snomed_empty_query_raises(self) -> None:
         with UmlsClient(api_key="test-key") as client:
@@ -98,12 +146,13 @@ class TestUmlsClientSearch:
         self,
         mock_umls_success: dict[str, object],
     ) -> None:
+        atoms_responses = {
+            "372244006": {"result": {"results": [{"code": "372244006"}]}},
+        }
         with patch("httpx.Client") as mock_client_cls:
             mock_client = MagicMock()
-            mock_client.get.return_value = MagicMock(
-                json=lambda: mock_umls_success,
-                status_code=200,
-                raise_for_status=lambda: None,
+            mock_client.get.side_effect = _create_mock_response_handler(
+                mock_umls_success, atoms_responses
             )
             mock_client_cls.return_value = mock_client
             with UmlsClient(api_key="test-key") as client:

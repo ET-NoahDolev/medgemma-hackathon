@@ -1,143 +1,99 @@
-"""Document chunking utilities for long protocol text."""
+"""Semantic chunking utilities for protocol text."""
 
 from __future__ import annotations
 
 import re
 from dataclasses import dataclass
 
+_PAGE_SEPARATOR = "\f"
+_PARAGRAPH_SPLIT_RE = re.compile(r"\n\s*\n+")
+
 
 @dataclass(frozen=True)
-class DocumentChunk:
-    """A chunk of document text with metadata."""
+class Page:
+    """A page-sized chunk of document text."""
 
     text: str
-    start_char: int
-    end_char: int
-    section_type: str | None
-    page_hint: int | None
+    page_number: int
 
 
-INCLUSION_HEADER = re.compile(
-    r"(?:^|\n)\s*(?:inclusion\s*criteria|eligibility\s*criteria|include)\s*:?\s*(?:\n|$)",
-    re.IGNORECASE | re.MULTILINE,
-)
-EXCLUSION_HEADER = re.compile(
-    r"(?:^|\n)\s*(?:exclusion\s*criteria|ineligibility\s*criteria|exclude)\s*:?\s*(?:\n|$)",
-    re.IGNORECASE | re.MULTILINE,
-)
+@dataclass(frozen=True)
+class Paragraph:
+    """A paragraph within a page."""
+
+    text: str
+    page_number: int
+    paragraph_index: int
 
 
-def _estimate_tokens(text: str) -> int:
-    """Estimate token count using a simple character heuristic."""
-    if not text:
-        return 0
-    return max(1, len(text) // 4)
+def split_into_pages(text: str, max_chars: int = 4000) -> list[Page]:
+    """Split document into page-sized chunks.
 
-
-def detect_section_boundaries(text: str) -> list[tuple[int, str]]:
-    """Find character positions of inclusion/exclusion section headers."""
-    boundaries: list[tuple[int, str]] = []
-    for match in INCLUSION_HEADER.finditer(text):
-        boundaries.append((match.start(), "inclusion"))
-    for match in EXCLUSION_HEADER.finditer(text):
-        boundaries.append((match.start(), "exclusion"))
-    return sorted(boundaries, key=lambda item: item[0])
-
-
-def _split_paragraphs(text: str) -> list[tuple[int, int]]:
-    """Return paragraph spans as (start, end) indices."""
-    spans: list[tuple[int, int]] = []
-    for match in re.finditer(r"(?:[^\n]|\n(?!\n))+", text):
-        if match.group(0).strip():
-            spans.append((match.start(), match.end()))
-    return spans
-
-
-def _overlap_start(text: str, end_char: int, overlap_tokens: int) -> int:
-    """Find start index that yields roughly overlap_tokens from end_char."""
-    if overlap_tokens <= 0:
-        return end_char
-    target_chars = overlap_tokens * 4
-    return max(0, end_char - target_chars)
-
-
-def _section_type_for_chunk(
-    boundaries: list[tuple[int, str]], start_char: int
-) -> str | None:
-    current = None
-    for pos, section in boundaries:
-        if pos <= start_char:
-            current = section
-        else:
-            break
-    return current
-
-
-def _page_hint_for_chunk(text: str, start_char: int) -> int | None:
-    if "\f" not in text:
-        return None
-    return text.count("\f", 0, start_char) + 1
-
-
-def chunk_document(
-    text: str,
-    max_tokens: int = 6000,
-    overlap_tokens: int = 400,
-    respect_sections: bool = True,
-) -> list[DocumentChunk]:
-    """Split document into overlapping chunks respecting section boundaries."""
+    Uses form-feed characters if present; otherwise groups paragraphs into
+    roughly max_chars pages.
+    """
     if not text.strip():
         return []
 
-    boundaries = detect_section_boundaries(text) if respect_sections else []
-    paragraph_spans = _split_paragraphs(text)
+    if _PAGE_SEPARATOR in text:
+        raw_pages = [page for page in text.split(_PAGE_SEPARATOR) if page.strip()]
+        return [
+            Page(text=page.strip(), page_number=index + 1)
+            for index, page in enumerate(raw_pages)
+        ]
 
-    chunks: list[DocumentChunk] = []
-    current_start: int | None = None
-    current_end: int | None = None
+    paragraphs = _split_paragraph_text(text)
+    pages: list[Page] = []
+    current_parts: list[str] = []
+    current_len = 0
+    page_number = 1
 
-    for start, end in paragraph_spans:
-        if current_start is None:
-            current_start = start
-            current_end = end
-            continue
-
-        candidate_text = text[current_start:end]
-        if _estimate_tokens(candidate_text) <= max_tokens:
-            current_end = end
-            continue
-
-        if current_end is None:
-            continue
-        chunk_text = text[current_start:current_end]
-        section_type = _section_type_for_chunk(boundaries, current_start)
-        page_hint = _page_hint_for_chunk(text, current_start)
-        chunks.append(
-            DocumentChunk(
-                text=chunk_text,
-                start_char=current_start,
-                end_char=current_end,
-                section_type=section_type,
-                page_hint=page_hint,
+    for paragraph in paragraphs:
+        paragraph_len = len(paragraph)
+        if current_parts and current_len + paragraph_len + 2 > max_chars:
+            pages.append(
+                Page(text="\n\n".join(current_parts).strip(), page_number=page_number)
             )
+            page_number += 1
+            current_parts = [paragraph]
+            current_len = paragraph_len
+            continue
+
+        if current_parts:
+            current_len += 2  # account for paragraph separator
+        current_parts.append(paragraph)
+        current_len += paragraph_len
+
+    if current_parts:
+        pages.append(
+            Page(text="\n\n".join(current_parts).strip(), page_number=page_number)
         )
 
-        overlap_start = _overlap_start(text, current_end, overlap_tokens)
-        current_start = min(overlap_start, start)
-        current_end = end
+    return pages
 
-    if current_start is not None and current_end is not None:
-        chunk_text = text[current_start:current_end]
-        section_type = _section_type_for_chunk(boundaries, current_start)
-        page_hint = _page_hint_for_chunk(text, current_start)
-        chunks.append(
-            DocumentChunk(
-                text=chunk_text,
-                start_char=current_start,
-                end_char=current_end,
-                section_type=section_type,
-                page_hint=page_hint,
-            )
+
+def split_into_paragraphs(page: Page) -> list[Paragraph]:
+    """Split a page into paragraphs."""
+    paragraphs = _split_paragraph_text(page.text)
+    return [
+        Paragraph(
+            text=paragraph.strip(),
+            page_number=page.page_number,
+            paragraph_index=index,
         )
+        for index, paragraph in enumerate(paragraphs)
+        if paragraph.strip()
+    ]
 
-    return chunks
+
+def _split_paragraph_text(text: str) -> list[str]:
+    paragraphs = [
+        chunk.strip()
+        for chunk in _PARAGRAPH_SPLIT_RE.split(text)
+        if chunk.strip()
+    ]
+    if paragraphs:
+        return paragraphs
+    if text.strip():
+        return [text.strip()]
+    return []

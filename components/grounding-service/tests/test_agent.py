@@ -17,6 +17,8 @@ def mock_invoke():
             terms=[
                 GroundedTerm(
                     snippet="Age >= 18",
+                    raw_criterion_text="Age >= 18",
+                    criterion_type="inclusion",
                     snomed_code="123456789",
                     relation=">=",
                     value="18",
@@ -44,6 +46,8 @@ async def test_ground_returns_structured_result():
             terms=[
                 GroundedTerm(
                     snippet="Age >= 18",
+                    raw_criterion_text="Age >= 18",
+                    criterion_type="inclusion",
                     snomed_code="123456789",
                     relation=">=",
                     value="18",

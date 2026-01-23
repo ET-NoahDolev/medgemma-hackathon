@@ -46,7 +46,7 @@ def test_configure_mlflow_once_sets_tracking(monkeypatch: pytest.MonkeyPatch) ->
     def _set_experiment(name: str) -> None:
         calls["experiment"].append(name)
 
-    def _autolog() -> None:
+    def _autolog(**kwargs: object) -> None:
         calls["autolog"].append("called")
 
     fake_mlflow = SimpleNamespace(

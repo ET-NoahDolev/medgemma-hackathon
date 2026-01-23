@@ -137,6 +137,9 @@ markers = [
     "e2e: end-to-end API workflow tests",
     "integration: marks tests as integration tests",
 ]
+filterwarnings = [
+    "ignore:Inheritance class AiohttpClientSession.*:DeprecationWarning:google\\.genai\\._api_client",
+]
 pythonpath = [
     "components/api-service/src",
     "components/data-pipeline/src",

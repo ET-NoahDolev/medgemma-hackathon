@@ -1,12 +1,13 @@
 # extraction-service
 
-Wireframe extraction pipeline for MedGemma Task A. Produces atomic inclusion/exclusion criteria from protocol text.
+Hierarchical extraction pipeline for MedGemma Task A. Produces atomic
+inclusion/exclusion criteria from clinical trial protocols.
 
 ## Responsibilities
 
-- Segment protocol text into candidate criteria.
-- Classify criteria as inclusion/exclusion.
-- Return evidence snippets and confidence scores.
+- Filter pages for eligibility criteria content (Gemini).
+- Filter paragraphs for criteria statements (Gemini).
+- Extract atomic criteria with confidence scores (Gemini + MedGemma tools).
 
 ## Key Module
 
@@ -22,12 +23,19 @@ for item in criteria:
     print(item.text, item.criterion_type, item.confidence)
 ```
 
+## Configuration
+
+The pipeline reads configuration from environment variables:
+
+- `GEMINI_MODEL_NAME` (default: `gemini-2.5-pro`)
+- `GCP_PROJECT_ID` (required for Vertex Gemini)
+- `GCP_REGION` (default: `europe-west4`)
+- `EXTRACTION_MAX_PAGE_CHARS` (default: `4000`)
+- `EXTRACTION_MAX_PAGES_PER_BATCH` (default: `6`)
+- `EXTRACTION_MAX_PARAGRAPHS_PER_BATCH` (default: `10`)
+
 ## Tests
 
 ```bash
 make check-all
 ```
-
-## Notes
-
-This component is a stub. It documents the intended API for wiring MedGemma LoRA adapters.

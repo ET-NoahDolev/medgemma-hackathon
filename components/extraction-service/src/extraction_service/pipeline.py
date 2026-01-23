@@ -1,732 +1,252 @@
-"""Extraction pipeline for MedGemma Task A.
+"""Hierarchical extraction pipeline for eligibility criteria."""
 
-This module provides:
-- A baseline regex-based extractor (fast, deterministic).
-- An optional MedGemma-based extractor (via the shared `inference` component).
-
-The public API remains:
-- `extract_criteria(document_text)`
-- `extract_criteria_stream(document_text)`
-"""
+from __future__ import annotations
 
 import logging
 import os
 import re
 from dataclasses import dataclass
-from enum import Enum
 from pathlib import Path
-from typing import Any, Dict, Iterator
+from typing import AsyncIterator, Iterable, Iterator, Sequence
 
-from inference import create_react_agent
-from shared.models import Criterion
+import anyio
+from inference.agent_factory import create_react_agent
+from inference.model_factory import create_gemini_model_loader
 
-from extraction_service.react_graph import ChunkAgentResult
+from extraction_service.chunking import (
+    Page,
+    Paragraph,
+    split_into_pages,
+    split_into_paragraphs,
+)
+from extraction_service.schemas import (
+    ExtractedCriterion,
+    ExtractionResult,
+    PageFilterResult,
+    ParagraphFilterResult,
+)
+from extraction_service.tools import clarify_ambiguity, extract_triplet
 
 logger = logging.getLogger(__name__)
 
-
-def _criteria_from_extraction_result(result: Any) -> list[Criterion]:
-    """Convert an ExtractionResult-like object into Criterion list."""
-    extracted: list[Criterion] = []
-    for item in getattr(result, "criteria", []) or []:
-        text = _normalize_candidate(getattr(item, "text", ""))
-        if not is_valid_criterion_candidate(text):
-            continue
-        extracted.append(
-            Criterion(
-                id="",
-                text=text,
-                criterion_type=getattr(item, "criterion_type", "inclusion"),
-                confidence=float(getattr(item, "confidence", 0.75)),
-                snomed_codes=[],
-                evidence_spans=[],
-            )
-        )
-    return extracted
+_PIPELINE: "ExtractionPipeline | None" = None
 
 
 @dataclass(frozen=True)
 class ExtractionConfig:
-    """Configuration for extraction.
+    """Configuration for the extraction pipeline."""
 
-    Attributes:
-        use_model: Whether to attempt MedGemma-based extraction.
-        model_path: HuggingFace model ID or local model path.
-        quantization: Quantization level ("4bit", "8bit", or "none").
-    """
-
-    use_model: bool = True
-    model_path: str = "google/medgemma-4b-it"
-    quantization: str = "4bit"
+    gemini_model_name: str | None = None
+    gcp_project_id: str | None = None
+    gcp_region: str = "europe-west4"
+    max_page_chars: int = 4000
+    max_pages_per_batch: int = 6
+    max_paragraphs_per_batch: int = 10
 
     @classmethod
     def from_env(cls) -> "ExtractionConfig":
         """Create config from environment variables."""
-        use_model = os.getenv("USE_MODEL_EXTRACTION", "true").lower() == "true"
         return cls(
-            use_model=use_model,
-            model_path=os.getenv("MEDGEMMA_MODEL_PATH", cls.model_path),
-            quantization=os.getenv("MEDGEMMA_QUANTIZATION", cls.quantization),
+            gemini_model_name=os.getenv("GEMINI_MODEL_NAME"),
+            gcp_project_id=os.getenv("GCP_PROJECT_ID"),
+            gcp_region=os.getenv("GCP_REGION", "europe-west4"),
+            max_page_chars=_read_int_env("EXTRACTION_MAX_PAGE_CHARS", 4000),
+            max_pages_per_batch=_read_int_env("EXTRACTION_MAX_PAGES_PER_BATCH", 6),
+            max_paragraphs_per_batch=_read_int_env(
+                "EXTRACTION_MAX_PARAGRAPHS_PER_BATCH", 10
+            ),
         )
 
 
 class ExtractionPipeline:
-    """Extraction pipeline with optional MedGemma-based extraction.
+    """Hierarchical extraction pipeline."""
 
-    Supports two extraction modes:
-    - Iterative extraction (default): Uses tools to extract criteria in batches,
-      allowing the agent to iterate and handle large documents without token limits.
-    - Legacy extraction: Single-shot extraction without tools.
-    """
-
-    def __init__(
-        self,
-        config: ExtractionConfig | None = None,
-        use_iterative: bool = True,
-    ) -> None:
-        """Initialize the extraction pipeline.
-
-        Args:
-            config: Extraction configuration. Defaults to from_env().
-            use_iterative: If True, use iterative extraction with tools.
-        """
+    def __init__(self, *, config: ExtractionConfig | None = None) -> None:
+        """Initialize pipeline with Gemini configuration."""
         self.config = config or ExtractionConfig.from_env()
-        self.use_iterative = use_iterative
-        self._model_loader: Any | None = None
-        self._prompts_dir: Path | None = None
-        self._agent_cfg: Any | None = None
-
-    def _get_model_loader(self) -> tuple[Any, Path, Any]:
-        """Lazily create and cache the model loader.
-
-        Returns:
-            Tuple of (model_loader, prompts_dir, agent_cfg).
-        """
-        if self._model_loader is not None:
-            return self._model_loader, self._prompts_dir, self._agent_cfg  # type: ignore[return-value]
-
-        from inference import AgentConfig, create_model_loader
-
-        prompts_dir = Path(__file__).parent / "prompts"
-        base_cfg = AgentConfig.from_env()
-        agent_cfg = AgentConfig(
-            backend=base_cfg.backend,
-            model_path=self.config.model_path or base_cfg.model_path,
-            quantization=self.config.quantization or base_cfg.quantization,
-            max_new_tokens=base_cfg.max_new_tokens,
-            gcp_project_id=base_cfg.gcp_project_id,
-            gcp_region=base_cfg.gcp_region,
-            vertex_endpoint_id=base_cfg.vertex_endpoint_id,
-            vertex_model_name=base_cfg.vertex_model_name,
+        self._model_loader = create_gemini_model_loader(
+            model_name=self.config.gemini_model_name,
+            project=self.config.gcp_project_id,
+            region=self.config.gcp_region,
         )
-        self._model_loader = create_model_loader(agent_cfg)
-        self._prompts_dir = prompts_dir
-        self._agent_cfg = agent_cfg
-        return self._model_loader, prompts_dir, agent_cfg
-
-    class AgentMode(Enum):
-        """Extraction agent mode."""
-
-        ITERATIVE = "iterative"
-        LEGACY = "legacy"
-
-    def _create_agent(
-        self,
-        mode: "ExtractionPipeline.AgentMode" = AgentMode.ITERATIVE,
-    ) -> tuple[Any, Any | None]:
-        """Create an extraction agent in the specified mode.
-
-        Returns:
-            Tuple of (agent_invoke_fn, tool_factory) where tool_factory may be None.
-        """
-        from inference import create_react_agent
-
-        from extraction_service.schemas import ExtractionResult
-        from extraction_service.tools import ExtractionToolFactory
-
-        model_loader, prompts_dir, _ = self._get_model_loader()
-
-        tools: list[Any] = []
-        tool_factory = None
-        system_template = "extraction_system.j2"
-
-        if mode is self.AgentMode.ITERATIVE:
-            tool_factory = ExtractionToolFactory()
-            tools = tool_factory.create_tools()
-            system_template = "extraction_system_iterative.j2"
-
-        agent = create_react_agent(
-            model_loader=model_loader,
-            prompts_dir=prompts_dir,
-            tools=tools,
+        self._prompts_dir = Path(__file__).parent / "prompts"
+        self._page_filter_agent = create_react_agent(
+            model_loader=self._model_loader,
+            prompts_dir=self._prompts_dir,
+            tools=[],
+            response_schema=PageFilterResult,
+            system_template="system.j2",
+            user_template="filter_pages.j2",
+        )
+        self._paragraph_filter_agent = create_react_agent(
+            model_loader=self._model_loader,
+            prompts_dir=self._prompts_dir,
+            tools=[],
+            response_schema=ParagraphFilterResult,
+            system_template="system.j2",
+            user_template="filter_paragraphs.j2",
+        )
+        self._extract_agent = create_react_agent(
+            model_loader=self._model_loader,
+            prompts_dir=self._prompts_dir,
+            tools=[extract_triplet, clarify_ambiguity],
             response_schema=ExtractionResult,
-            system_template=system_template,
-            user_template="extraction_user.j2",
-        )
-        return agent, tool_factory
-
-    def extract_criteria_stream(self, document_text: str) -> Iterator[Criterion]:
-        """Stream atomic inclusion/exclusion criteria from protocol text."""
-        if not document_text.strip():
-            raise ValueError("document_text is required")
-
-        if self.config.use_model:
-            try:
-                # Model extraction returns a list; stream it for API consistency.
-                criteria = self.extract_criteria(document_text)
-                yield from criteria
-                return
-            except Exception as exc:
-                logger.warning(
-                    "Model extraction failed; using baseline: %s", exc, exc_info=True
-                )
-
-        yield from _extract_criteria_baseline_stream(document_text)
-
-    async def extract_criteria_async(self, document_text: str) -> list[Criterion]:
-        """Extract criteria using async model invocation when available.
-
-        This is the preferred entrypoint when already running inside an asyncio loop
-        (e.g., FastAPI background tasks). It avoids calling `anyio.run()`, which
-        raises "Already running asyncio in this thread".
-
-        Uses iterative extraction by default, falling back to legacy mode if the
-        model doesn't support tools or if iterative mode fails.
-        """
-        if not document_text.strip():
-            raise ValueError("document_text is required")
-
-        if not self.config.use_model:
-            return _extract_criteria_baseline(document_text)
-
-        try:
-            # Try Gemini orchestrator first (if GEMINI_MODEL_NAME is set)
-            if os.getenv("GEMINI_MODEL_NAME"):
-                try:
-                    return await self._extract_with_gemini_orchestrator(document_text)
-                except Exception as e:
-                    logger.warning(
-                        "Gemini orchestrator failed, falling back: %s", e, exc_info=True
-                    )
-                    # Fall through to iterative/legacy modes
-
-            if self.use_iterative:
-                # Check if model supports tools before attempting iterative mode
-                _, _, agent_cfg = self._get_model_loader()
-                if not agent_cfg.supports_tools:
-                    logger.info(
-                        "Model doesn't support tools; using legacy extraction mode"
-                    )
-                    return await self._extract_legacy_async(document_text)
-                return await self._extract_iterative_async(document_text)
-            return await self._extract_legacy_async(document_text)
-        except Exception as exc:
-            logger.warning(
-                "Model extraction failed; using baseline: %s", exc, exc_info=True
-            )
-
-        return _extract_criteria_baseline(document_text)
-
-    async def _extract_iterative_async(self, document_text: str) -> list[Criterion]:
-        """Extract criteria using chunked ReAct approach."""
-        if not os.getenv("GEMINI_MODEL_NAME"):
-            logger.warning(
-                "GEMINI_MODEL_NAME not set; falling back to legacy extraction."
-            )
-            return await self._extract_legacy_async(document_text)
-
-        from extraction_service.chunking import chunk_document
-        from extraction_service.react_graph import build_extraction_graph
-        from extraction_service.state import DocumentProcessingState
-        from extraction_service.tools import ExtractionToolFactory
-
-        chunks = chunk_document(
-            document_text,
-            max_tokens=self._get_chunk_tokens(),
-            overlap_tokens=self._get_chunk_overlap(),
-            respect_sections=True,
+            system_template="system.j2",
+            user_template="extract_criteria.j2",
         )
 
-        if not chunks:
+    async def extract_criteria_async(
+        self, document_text: str
+    ) -> list[ExtractedCriterion]:
+        """Extract criteria using hierarchical filtering."""
+        pages = split_into_pages(document_text, max_chars=self.config.max_page_chars)
+        if not pages:
             return []
 
-        tool_factory = ExtractionToolFactory()
-        tools = tool_factory.create_tools()
+        relevant_pages = await self._filter_pages(pages)
+        relevant_paragraphs = await self._filter_paragraphs(relevant_pages)
+        criteria = await self._extract_from_paragraphs(relevant_paragraphs)
+        return _deduplicate(criteria)
 
-        model_loader = self._get_gemini_model_loader()
-        prompts_dir = Path(__file__).parent / "prompts"
-
-        def _agent_loader():
-            return create_react_agent(
-                model_loader=model_loader,
-                prompts_dir=prompts_dir,
-                tools=tools,
-                response_schema=ChunkAgentResult,
-                system_template="extraction_system_react.j2",
-                user_template="extraction_user_chunked.j2",
-            )
-
-        graph = build_extraction_graph(
-            agent_loader=_agent_loader, tool_factory=tool_factory
-        )
-
-        initial_state: DocumentProcessingState = {
-            "messages": [],
-            "chunks": chunks,
-            "chunk_index": 0,
-            "total_chunks": len(chunks),
-            "findings": [],
-            "reasoning_steps": [],
-        }
-
-        final_state = await graph.ainvoke(initial_state)
-        findings = final_state.get("findings", [])
-        deduped = self._deduplicate_findings(findings)
-        return self._findings_to_criteria(deduped)
-
-    def _get_chunk_tokens(self) -> int:
-        value = os.getenv("MAX_CHUNK_TOKENS", "6000")
-        try:
-            return max(1000, int(value))
-        except ValueError:
-            logger.warning("Invalid MAX_CHUNK_TOKENS value: %s", value)
-            return 6000
-
-    def _get_chunk_overlap(self) -> int:
-        value = os.getenv("CHUNK_OVERLAP_TOKENS", "400")
-        try:
-            return max(0, int(value))
-        except ValueError:
-            logger.warning("Invalid CHUNK_OVERLAP_TOKENS value: %s", value)
-            return 400
-
-    def _get_gemini_model_loader(self) -> Any:
-        def gemini_loader():
-            from langchain_google_genai import ChatGoogleGenerativeAI
-
-            return ChatGoogleGenerativeAI(
-                model=os.getenv("GEMINI_MODEL_NAME", "gemini-2.5-pro"),
-                project=os.getenv("GCP_PROJECT_ID"),
-                location=os.getenv("GCP_REGION", "europe-west4"),
-                vertexai=True,
-            )
-
-        return gemini_loader
-
-    def _deduplicate_findings(
-        self, findings: list[dict[str, Any]]
-    ) -> list[dict[str, Any]]:
-        seen: set[tuple[str, str, str, str]] = set()
-        unique: list[dict[str, Any]] = []
-        for item in findings:
-            triplet = item.get("triplet") or {}
-            key = (
-                str(triplet.get("entity", "")).lower(),
-                str(triplet.get("relation", "")).lower(),
-                str(triplet.get("value", "")).lower(),
-                str(item.get("criterion_type", "")).lower(),
-            )
-            if key in seen:
-                continue
-            seen.add(key)
-            unique.append(item)
-        return unique
-
-    def _findings_to_criteria(
-        self, findings: list[dict[str, Any]]
-    ) -> list[Criterion]:
-        extracted: list[Criterion] = []
-        for item in findings:
-            if not item.get("has_criteria"):
-                continue
-            text = _normalize_candidate(str(item.get("text", "")))
-            if not is_valid_criterion_candidate(text):
-                continue
-            extracted.append(
-                Criterion(
-                    id="",
-                    text=text,
-                    criterion_type=item.get("criterion_type", "inclusion"),
-                    confidence=float(item.get("confidence", 0.8)),
-                    snomed_codes=[],
-                    evidence_spans=[],
-                )
-            )
-        if extracted:
-            logger.info("Chunked extraction found %d criteria", len(extracted))
-        return extracted
-
-    async def _extract_with_gemini_orchestrator(
+    async def extract_criteria_stream_async(
         self, document_text: str
-    ) -> list[Criterion]:
-        """Extract criteria using Gemini as orchestrator calling MedGemma tools."""
-        from inference import create_react_agent
-        from inference.tools import classify_criterion, extract_field_mapping
+    ) -> AsyncIterator[ExtractedCriterion]:
+        """Stream criteria extraction results."""
+        pages = split_into_pages(document_text, max_chars=self.config.max_page_chars)
+        if not pages:
+            return
 
-        from extraction_service.schemas import ExtractionResult
+        relevant_pages = await self._filter_pages(pages)
+        relevant_paragraphs = await self._filter_paragraphs(relevant_pages)
+        seen: set[str] = set()
+        for paragraph in relevant_paragraphs:
+            extracted = await self._extract_from_paragraph(paragraph)
+            for item in extracted:
+                normalized = normalize_criterion_text(item.text)
+                if not normalized or normalized in seen:
+                    continue
+                seen.add(normalized)
+                yield item
 
-        # Create Gemini model loader
-        def gemini_loader():
-            from langchain_google_genai import ChatGoogleGenerativeAI
+    async def _filter_pages(self, pages: Sequence[Page]) -> list[Page]:
+        if not pages:
+            return []
 
-            return ChatGoogleGenerativeAI(
-                model=os.getenv("GEMINI_MODEL_NAME", "gemini-2.5-pro"),
-                project=os.getenv("GCP_PROJECT_ID"),
-                location=os.getenv("GCP_REGION", "europe-west4"),
-                vertexai=True,
-            )
+        selected_numbers: set[int] = set()
+        for batch in _chunked(pages, self.config.max_pages_per_batch):
+            result = await self._page_filter_agent({"pages": batch})
+            selected_numbers.update(result.pages)
 
-        tools = [extract_field_mapping, classify_criterion]
-        prompts_dir = Path(__file__).parent / "prompts"
+        return [page for page in pages if page.page_number in selected_numbers]
 
-        # Create agent with structured output enforced
-        agent = create_react_agent(
-            model_loader=gemini_loader,
-            prompts_dir=prompts_dir,
-            tools=tools,
-            response_schema=ExtractionResult,  # Pydantic schema
-            system_template="extraction_system_orchestrator.j2",
-            user_template="extraction_user_orchestrator.j2",
-        )
-
-        # Invoke agent - returns validated ExtractionResult
-        result = await agent({"document_text": document_text})
-
-        # Convert to Criterion list
-        return _criteria_from_extraction_result(result)
-
-    async def _extract_legacy_async(self, document_text: str) -> list[Criterion]:
-        """Extract criteria using legacy single-shot approach."""
-        agent, _ = self._create_agent(mode=self.AgentMode.LEGACY)
-        result = await agent({"document_text": document_text})
-        extracted = _criteria_from_extraction_result(result)
-        if extracted:
-            return extracted
-        return _extract_criteria_baseline(document_text)
-
-    def extract_criteria(self, document_text: str) -> list[Criterion]:
-        """Extract atomic inclusion/exclusion criteria from protocol text.
-
-        Uses iterative extraction by default for better handling of large documents.
-        """
-        if not document_text.strip():
-            raise ValueError("document_text is required")
-
-        if not self.config.use_model:
-            return _extract_criteria_baseline(document_text)
-
-        try:
-            # Run the async extraction via anyio from sync context.
-            from anyio import run  # type: ignore[import-not-found]
-
-            return run(self.extract_criteria_async, document_text)  # type: ignore[no-untyped-call]
-        except Exception as exc:
-            logger.warning(
-                "Model extraction failed; using baseline: %s", exc, exc_info=True
-            )
-
-        return _extract_criteria_baseline(document_text)
-
-
-def _extract_criteria_baseline_stream(document_text: str) -> Iterator[Criterion]:
-    """Baseline extraction implementation using regex (streaming)."""
-    if not document_text.strip():
-        raise ValueError("document_text is required")
-
-    sections = detect_sections(document_text)
-
-    # Track seen text to deduplicate if needed, essentially just yielding
-    for section_type, section_text in sections.items():
-        sentences = split_into_candidate_sentences(section_text)
-        for sentence in sentences:
-            if not is_valid_criterion_candidate(sentence):
+    async def _filter_paragraphs(self, pages: Sequence[Page]) -> list[Paragraph]:
+        relevant: list[Paragraph] = []
+        for page in pages:
+            paragraphs = split_into_paragraphs(page)
+            if not paragraphs:
                 continue
-            criterion_type = classify_criterion_type(sentence, section=section_type)
-            confidence = 0.9 if section_type != "unknown" else 0.7
-            yield Criterion(
-                id="",
-                text=sentence,
-                criterion_type=criterion_type,
-                confidence=confidence,
-                snomed_codes=[],
-                evidence_spans=[],
-            )
+            for batch in _chunked(paragraphs, self.config.max_paragraphs_per_batch):
+                result = await self._paragraph_filter_agent(
+                    {"page_number": page.page_number, "paragraphs": batch}
+                )
+                relevant.extend(
+                    paragraph
+                    for paragraph in batch
+                    if paragraph.paragraph_index in result.paragraph_indices
+                )
+        return relevant
+
+    async def _extract_from_paragraphs(
+        self, paragraphs: Sequence[Paragraph]
+    ) -> list[ExtractedCriterion]:
+        criteria: list[ExtractedCriterion] = []
+        for paragraph in paragraphs:
+            criteria.extend(await self._extract_from_paragraph(paragraph))
+        return criteria
+
+    async def _extract_from_paragraph(
+        self, paragraph: Paragraph
+    ) -> list[ExtractedCriterion]:
+        result = await self._extract_agent({"paragraph": paragraph})
+        return result.criteria
 
 
-def _extract_criteria_baseline(document_text: str) -> list[Criterion]:
-    """Baseline extraction implementation using regex (legacy list return)."""
-    return list(_extract_criteria_baseline_stream(document_text))
+def extract_criteria(document_text: str) -> list[ExtractedCriterion]:
+    """Synchronous wrapper for extracting criteria."""
+    pipeline = _get_pipeline()
+    return anyio.run(pipeline.extract_criteria_async, document_text)
 
 
-def extract_criteria_stream(document_text: str) -> Iterator[Criterion]:
-    """Stream atomic inclusion/exclusion criteria from protocol text.
-
-    Uses MedGemma if enabled, else falls back to baseline.
-
-    Args:
-        document_text: Raw protocol text or extracted PDF text.
-
-    Yields:
-         Extracted criteria with type and confidence scores.
-    """
-    yield from get_extraction_pipeline().extract_criteria_stream(document_text)
+def extract_criteria_stream(document_text: str) -> Iterator[ExtractedCriterion]:
+    """Synchronous streaming wrapper for criteria extraction."""
+    pipeline = _get_pipeline()
+    items = anyio.run(_collect_stream, pipeline, document_text)
+    yield from items
 
 
-def extract_criteria(document_text: str) -> list[Criterion]:
-    r"""Extract atomic inclusion/exclusion criteria from protocol text.
-
-    Uses MedGemma if enabled, else falls back to baseline.
-
-    Args:
-        document_text: Raw protocol text or extracted PDF text.
-
-    Returns:
-        A list of extracted criteria with type and confidence scores.
-
-    Raises:
-        ValueError: If the document text is empty or not parseable.
-
-    Examples:
-        >>> items = extract_criteria("Inclusion Criteria:\\n- Age >= 18 years.")
-        >>> len(items) >= 1
-        True
-
-    Notes:
-        This function uses MedGemma if USE_MODEL_EXTRACTION=true, otherwise it
-        uses the baseline regex extractor.
-    """
-    return get_extraction_pipeline().extract_criteria(document_text)
+async def extract_criteria_async(document_text: str) -> list[ExtractedCriterion]:
+    """Async wrapper for extracting criteria."""
+    pipeline = _get_pipeline()
+    return await pipeline.extract_criteria_async(document_text)
 
 
-async def extract_criteria_async(document_text: str) -> list[Criterion]:
-    """Async variant of `extract_criteria` for callers already in an event loop."""
-    return await get_extraction_pipeline().extract_criteria_async(document_text)
+def iter_normalized_texts(items: Iterable[str]) -> Iterator[str]:
+    """Yield normalized criterion text items."""
+    for item in items:
+        normalized = normalize_criterion_text(item)
+        if normalized:
+            yield normalized
 
 
-_PIPELINE: ExtractionPipeline | None = None
+def normalize_criterion_text(text: str) -> str:
+    """Normalize criterion text for deduplication."""
+    cleaned = " ".join(text.split())
+    cleaned = re.sub(r"\s+([.,;:])", r"\1", cleaned)
+    return cleaned.rstrip(".;:").strip()
 
 
-def get_extraction_pipeline(
-    config: ExtractionConfig | None = None,
-) -> ExtractionPipeline:
-    """Get or create a singleton extraction pipeline.
-
-    Args:
-        config: Optional configuration override. If provided, returns a new instance.
-    """
+def _get_pipeline() -> ExtractionPipeline:
     global _PIPELINE
-    if config is not None:
-        return ExtractionPipeline(config=config)
     if _PIPELINE is None:
         _PIPELINE = ExtractionPipeline()
     return _PIPELINE
 
 
-def split_into_candidate_sentences(text: str) -> list[str]:
-    """Split text into candidate criterion sentences.
+def _chunked(items: Sequence[Page] | Sequence[Paragraph], size: int) -> Iterator[list]:
+    if size <= 0:
+        raise ValueError("Chunk size must be positive.")
+    for idx in range(0, len(items), size):
+        yield list(items[idx : idx + size])
 
-    Args:
-        text: Section text to split.
 
-    Returns:
-        List of candidate sentences.
-    """
-    if not text.strip():
-        return []
-
-    if "\n" not in text and (
-        INLINE_INCLUSION.search(text) or INLINE_EXCLUSION.search(text)
-    ):
-        return _split_inline_criteria(text)
-
-    lines = text.split("\n")
-    candidates: list[str] = []
-    for line in lines:
-        cleaned = _normalize_candidate(BULLET_PATTERN.sub("", line))
-        if not cleaned:
+def _deduplicate(
+    criteria: Sequence[ExtractedCriterion],
+) -> list[ExtractedCriterion]:
+    deduped: list[ExtractedCriterion] = []
+    seen: set[str] = set()
+    for item in criteria:
+        normalized = normalize_criterion_text(item.text)
+        if not normalized or normalized in seen:
             continue
-        if INCLUSION_HEADER.match(cleaned) or EXCLUSION_HEADER.match(cleaned):
-            continue
-        candidates.append(cleaned)
-    return candidates
+        seen.add(normalized)
+        deduped.append(item)
+    return deduped
 
 
-def _split_inline_criteria(text: str) -> list[str]:
-    """Split inline Inclusion/Exclusion sentences into criteria."""
-    normalized = text.replace("\n", " ").strip()
-    raw_sentences = [segment.strip() for segment in normalized.split(".")]
-    candidates: list[str] = []
-    for sentence in raw_sentences:
-        if not sentence:
-            continue
-        lowered = sentence.lower()
-        if lowered.startswith("inclusion:"):
-            sentence = sentence[len("inclusion:") :].strip()
-        elif lowered.startswith("exclusion:"):
-            sentence = sentence[len("exclusion:") :].strip()
-        sentence = _normalize_candidate(sentence)
-        if sentence:
-            candidates.append(sentence)
-    return candidates
+def _read_int_env(name: str, default: int) -> int:
+    raw = os.getenv(name)
+    if raw is None:
+        return default
+    try:
+        return int(raw)
+    except ValueError as exc:
+        raise ValueError(f"Invalid integer for {name}: {raw}") from exc
 
 
-def _normalize_candidate(text: str) -> str:
-    """Normalize candidate criteria text."""
-    return text.strip().rstrip(".")
-
-
-_PAGE_NUMBER_PATTERN = re.compile(r"^\s*\d+\s*$")
-_NUMERIC_RANGE_PATTERN = re.compile(r"^\s*\d+\s*[-–]\s*\d+\s*$")
-_CITATION_YEAR_VOL_PAGES_PATTERN = re.compile(
-    r"\b(19|20)\d{2}\s*;\s*\d+\s*:\s*\d+(?:\s*[-–]\s*\d+)?\b", re.IGNORECASE
-)
-_CITATION_MARKERS_PATTERN = re.compile(
-    r"\b(?:et\s+al\.?|doi:|pmid:|issn:|vol\.|no\.|pp\.|pages?)\b", re.IGNORECASE
-)
-
-
-def is_valid_criterion_candidate(text: str) -> bool:
-    """Heuristically filter out noise that is not a criterion.
-
-    Args:
-        text: Candidate text.
-
-    Returns:
-        True if the text looks like an inclusion/exclusion criterion.
-    """
-    cleaned = text.strip()
-    if not cleaned:
-        return False
-    if _PAGE_NUMBER_PATTERN.match(cleaned):
-        return False
-    if _NUMERIC_RANGE_PATTERN.match(cleaned):
-        return False
-    if not re.search(r"[A-Za-z]", cleaned):
-        return False
-    if _CITATION_YEAR_VOL_PAGES_PATTERN.search(cleaned):
-        return False
-    if _CITATION_MARKERS_PATTERN.search(cleaned):
-        return False
-    return True
-
-
-def classify_criterion_type(candidate_text: str, section: str = "unknown") -> str:
-    """Classify criterion as inclusion or exclusion.
-
-    Args:
-        candidate_text: Criterion text.
-        section: Section context ("inclusion", "exclusion", or "unknown").
-
-    Returns:
-        Either "inclusion" or "exclusion".
-    """
-    if not candidate_text.strip():
-        raise ValueError("candidate_text is required")
-
-    lowered = candidate_text.lower()
-    for keyword in EXCLUSION_KEYWORDS:
-        if keyword in lowered:
-            return "exclusion"
-
-    if section == "exclusion":
-        return "exclusion"
-
-    return "inclusion"
-
-
-INCLUSION_HEADER = re.compile(
-    r"(?:^|\n)\s*(?:inclusion\s*criteria|eligibility\s*criteria|include)\s*:?\s*(?:\n|$)",
-    re.IGNORECASE | re.MULTILINE,
-)
-EXCLUSION_HEADER = re.compile(
-    r"(?:^|\n)\s*(?:exclusion\s*criteria|ineligibility\s*criteria|exclude)\s*:?\s*(?:\n|$)",
-    re.IGNORECASE | re.MULTILINE,
-)
-BULLET_PATTERN = re.compile(r"^\s*(?:[-•*]|\d+[.)\]]|\([a-z]\))\s*", re.MULTILINE)
-INLINE_INCLUSION = re.compile(r"\binclusion\b\s*:", re.IGNORECASE)
-INLINE_EXCLUSION = re.compile(r"\bexclusion\b\s*:", re.IGNORECASE)
-
-EXCLUSION_KEYWORDS = [
-    "pregnant",
-    "pregnancy",
-    "breastfeeding",
-    "lactating",
-    "exclude",
-    "excluded",
-    "not eligible",
-    "ineligible",
-    "contraindicated",
-    "cannot",
-    "no prior",
-    "none of",
-    "history of",
-    "active disease",
-    "known allergy",
-]
-
-
-def detect_sections(document_text: str) -> Dict[str, str]:
-    """Detect inclusion/exclusion sections in protocol text.
-
-    Args:
-        document_text: Raw protocol text.
-
-    Returns:
-        Dict mapping section type to section content.
-    """
-    sections: Dict[str, str] = {}
-
-    inc_match = INCLUSION_HEADER.search(document_text)
-    exc_match = EXCLUSION_HEADER.search(document_text)
-
-    if not inc_match and not exc_match:
-        inc_match = INLINE_INCLUSION.search(document_text)
-        exc_match = INLINE_EXCLUSION.search(document_text)
-
-    if not inc_match and not exc_match:
-        return sections
-
-    def _truncate_at_boundary(text: str) -> str:
-        boundary = SECTION_END_PATTERNS.search(text)
-        return text[: boundary.start()] if boundary else text
-
-    if inc_match and exc_match:
-        if inc_match.start() < exc_match.start():
-            sections["inclusion"] = _truncate_at_boundary(
-                document_text[inc_match.end() : exc_match.start()]
-            )
-            sections["exclusion"] = _truncate_at_boundary(
-                document_text[exc_match.end() :]
-            )
-        else:
-            sections["exclusion"] = _truncate_at_boundary(
-                document_text[exc_match.end() : inc_match.start()]
-            )
-            sections["inclusion"] = _truncate_at_boundary(
-                document_text[inc_match.end() :]
-            )
-    elif inc_match:
-        sections["inclusion"] = _truncate_at_boundary(document_text[inc_match.end() :])
-    elif exc_match:
-        sections["exclusion"] = _truncate_at_boundary(document_text[exc_match.end() :])
-
-    return sections
-
-
-SECTION_END_PATTERNS = re.compile(
-    r"(?:^|\n)\s*(?:"
-    r"study\s*design|"
-    r"methods?|"
-    r"statistical\s*analysis|"
-    r"references?|"
-    r"procedures?|"
-    r"interventions?|"
-    r"endpoints?|"
-    r"outcome\s*measures?|"
-    r"assessments?|"
-    r"safety|"
-    r"adverse\s*events?|"
-    r"bibliography"
-    r")\s*:?\s*(?:\n|$)",
-    re.IGNORECASE | re.MULTILINE,
-)
+async def _collect_stream(
+    pipeline: ExtractionPipeline, document_text: str
+) -> list[ExtractedCriterion]:
+    items: list[ExtractedCriterion] = []
+    async for item in pipeline.extract_criteria_stream_async(document_text):
+        items.append(item)
+    return items

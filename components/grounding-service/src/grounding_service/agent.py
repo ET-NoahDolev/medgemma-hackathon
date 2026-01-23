@@ -3,13 +3,10 @@
 import logging
 import os
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 try:
     from langchain_core.tools import tool  # type: ignore[import-not-found]
-    from langchain_google_genai import (
-        ChatGoogleGenerativeAI,  # type: ignore[import-not-found]
-    )
 except ImportError:  # pragma: no cover
     # Minimal fallback so this module can be imported without LangChain installed.
     def _tool(func=None, **_kwargs):  # type: ignore[no-redef]
@@ -18,7 +15,16 @@ except ImportError:  # pragma: no cover
         return func
 
     tool = _tool  # type: ignore[assignment]
-    ChatGoogleGenerativeAI = None  # type: ignore[assignment,misc]
+
+if TYPE_CHECKING:
+    from langchain_google_genai import ChatGoogleGenerativeAI as ChatGoogleGenerativeAI
+else:
+    try:
+        from langchain_google_genai import (
+            ChatGoogleGenerativeAI as ChatGoogleGenerativeAI,
+        )
+    except ImportError:  # pragma: no cover
+        ChatGoogleGenerativeAI = object  # type: ignore[assignment]
 
 from grounding_service.schemas import GroundingResult
 from grounding_service.tools import interpret_medical_text
@@ -118,28 +124,13 @@ class GroundingAgent:
             return self._agent
 
         from inference import create_react_agent
+        from inference.model_factory import create_gemini_model_loader
 
         from grounding_service.schemas import GroundingResult
 
         tools = [interpret_medical_text, search_concepts_tool, get_semantic_type_tool]
 
-        # Create Gemini model loader
-        def gemini_loader():
-            from langchain_google_genai import ChatGoogleGenerativeAI
-
-            gemini_model_name = os.getenv("GEMINI_MODEL_NAME", "gemini-2.5-pro")
-            project_id = os.getenv("GCP_PROJECT_ID")
-            region = os.getenv("GCP_REGION", "europe-west4")
-
-            if ChatGoogleGenerativeAI is None:
-                raise ImportError("langchain-google-genai is required")
-
-            return ChatGoogleGenerativeAI(
-                model=gemini_model_name,
-                project=project_id,
-                location=region,
-                vertexai=True,
-            )
+        gemini_loader = create_gemini_model_loader()
 
         prompts_dir = Path(__file__).parent / "prompts"
 

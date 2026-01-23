@@ -33,12 +33,28 @@ def render_prompts(
 def _load_langgraph_create_react_agent() -> Any:
     """Load LangGraph's prebuilt create_react_agent lazily."""
     try:
-        from langgraph.prebuilt import create_react_agent as lg_create_react_agent
-    except ImportError as exc:  # pragma: no cover
-        raise ImportError(
-            "langgraph is required to create ReAct agents. "
-            "Install inference ML dependencies."
-        ) from exc
+        from langchain.agents import create_agent as lc_create_agent
+
+        def lg_create_react_agent(
+            *,
+            model: Any,
+            tools: list[Any],
+            response_format: Any,
+        ) -> Any:
+            return lc_create_agent(
+                model=model,
+                tools=tools,
+                response_format=response_format,
+            )
+
+    except ImportError:  # pragma: no cover
+        try:
+            from langgraph.prebuilt import create_react_agent as lg_create_react_agent
+        except ImportError as fallback_exc:  # pragma: no cover
+            raise ImportError(
+                "langgraph or langchain agents are required to create ReAct agents. "
+                "Install inference ML dependencies."
+            ) from fallback_exc
     return lg_create_react_agent
 
 

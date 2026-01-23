@@ -1,70 +1,24 @@
-from __future__ import annotations
-
-import pytest
-
-from extraction_service.chunking import chunk_document
-from extraction_service.react_graph import build_extraction_graph
-from extraction_service.tools import ExtractionToolFactory
+from extraction_service.chunking import Page, split_into_pages, split_into_paragraphs
 
 
-def test_chunk_document_detects_sections() -> None:
-    text = (
-        "Inclusion Criteria:\n"
-        "Age >= 18 years.\n\n"
-        "Additional inclusion details.\n\n"
-        "Exclusion Criteria:\n"
-        "Pregnant or breastfeeding.\n"
-    )
-    chunks = chunk_document(text, max_tokens=5, overlap_tokens=2)
-    assert chunks, "Expected at least one chunk"
-    assert chunks[0].section_type == "inclusion"
+def test_split_into_pages_uses_form_feed() -> None:
+    text = "Page one content.\fPage two content."
+    pages = split_into_pages(text, max_chars=10)
+    assert len(pages) == 2
+    assert pages[0].page_number == 1
+    assert pages[1].page_number == 2
+    assert "Page one" in pages[0].text
 
 
-def test_tool_factory_records_finding() -> None:
-    factory = ExtractionToolFactory()
-    factory.set_current_chunk(chunk_index=0, chunk_text="Age >= 18 years.")
-    tools = factory.create_tools()
-    submit_finding = next(
-        t for t in tools if getattr(t, "name", t.__name__) == "submit_finding"
-    )
-    submit_finding(
-        {
-            "text": "Age >= 18 years",
-            "criterion_type": "inclusion",
-            "snippet": "Age >= 18",
-            "triplet": {
-                "entity": "age",
-                "relation": "greater_than_or_equal",
-                "value": "18",
-            },
-            "confidence": 0.9,
-        }
-    )
-    results = factory.get_chunk_findings(0)
-    assert len(results) == 1
-    assert results[0]["has_criteria"] is True
+def test_split_into_pages_groups_paragraphs() -> None:
+    text = "Paragraph one.\n\nParagraph two.\n\nParagraph three."
+    pages = split_into_pages(text, max_chars=20)
+    assert len(pages) >= 2
+    assert all(page.text for page in pages)
 
 
-@pytest.mark.anyio
-async def test_react_graph_records_no_criteria() -> None:
-    async def dummy_agent(_prompt_vars: dict) -> None:
-        return None
-
-    factory = ExtractionToolFactory()
-    graph = build_extraction_graph(
-        agent_loader=lambda: dummy_agent, tool_factory=factory
-    )
-    chunks = chunk_document(
-        "No eligibility info here.", max_tokens=50, overlap_tokens=0
-    )
-    state = {
-        "messages": [],
-        "chunks": chunks,
-        "chunk_index": 0,
-        "total_chunks": len(chunks),
-        "findings": [],
-        "reasoning_steps": [],
-    }
-    final_state = await graph.ainvoke(state)
-    assert final_state["findings"], "Expected a no-criteria finding to be recorded"
-    assert final_state["findings"][0]["has_criteria"] is False
+def test_split_into_paragraphs_preserves_indices() -> None:
+    page = Page(text="A\n\nB\n\nC", page_number=3)
+    paragraphs = split_into_paragraphs(page)
+    assert [p.paragraph_index for p in paragraphs] == [0, 1, 2]
+    assert all(p.page_number == 3 for p in paragraphs)

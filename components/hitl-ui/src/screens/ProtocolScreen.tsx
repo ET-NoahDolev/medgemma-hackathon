@@ -11,6 +11,7 @@ import { SourceMaterialsPanel } from '@/features/protocols/components/SourceMate
 import { useCriteria } from '@/hooks/useCriteria';
 import { useExtractCriteria } from '@/hooks/useExtractCriteria';
 import { useSubmitFeedback } from '@/hooks/useSubmitFeedback';
+import { useApproveCriterion } from '@/hooks/useApproveCriterion';
 import { useUpdateCriterion } from '@/hooks/useUpdateCriterion';
 import { useProtocol } from '@/hooks/useProtocol';
 import { MappingDisplay } from '@/features/mapping/components/MappingDisplay';
@@ -35,9 +36,24 @@ interface Criterion {
   type: 'inclusion' | 'exclusion';
   text: string;
   confidence: number;
-  status: 'ai-suggested' | 'approved' | 'edited';
+  status: 'ai-suggested' | 'approved' | 'edited' | 'rejected';
   evidenceSnippet?: string;
   snomedCodes?: string[];
+  snomedCode?: string | null;
+  entity?: string | null;
+  umlsConcept?: string | null;
+  umlsId?: string | null;
+  calculatedBy?: string | null;
+  relation?: string | null;
+  value?: string | null;
+  unit?: string | null;
+  hitlEntity?: string | null;
+  hitlUmlsConcept?: string | null;
+  hitlUmlsId?: string | null;
+  hitlSnomedCode?: string | null;
+  hitlRelation?: string | null;
+  hitlValue?: string | null;
+  hitlUnit?: string | null;
   fieldMapping?: {
     field: string;
     relation: string;
@@ -73,6 +89,7 @@ export function ProtocolScreen() {
   });
   const extractCriteria = useExtractCriteria();
   const submitFeedback = useSubmitFeedback();
+  const approveCriterion = useApproveCriterion();
   const updateCriterion = useUpdateCriterion();
 
   const sourceDocuments = useMemo(() => {
@@ -91,13 +108,41 @@ export function ProtocolScreen() {
     const apiCriteria = criteriaData?.criteria ?? [];
     return apiCriteria.map(c => ({
       id: c.id,
-      type: (c.criterion_type as 'inclusion' | 'exclusion') ?? 'inclusion',
-      text: c.text,
+      type: (c.criteria_type as 'inclusion' | 'exclusion') ?? 'inclusion',
+      text: c.text_snippet,
       confidence: c.confidence,
-      status: 'ai-suggested' as const,
+      status:
+        c.hitl_status === 'approved'
+          ? 'approved'
+          : c.hitl_status === 'edited'
+            ? 'edited'
+            : c.hitl_status === 'rejected'
+              ? 'rejected'
+              : 'ai-suggested',
       evidenceSnippet: undefined,
       snomedCodes: c.snomed_codes ?? [],
-      fieldMapping: null,
+      snomedCode: c.snomed_code ?? null,
+      entity: c.entity ?? null,
+      umlsConcept: c.umls_concept ?? null,
+      umlsId: c.umls_id ?? null,
+      calculatedBy: c.calculated_by ?? null,
+      relation: c.relation ?? null,
+      value: c.value ?? null,
+      unit: c.unit ?? null,
+      hitlEntity: c.hitl_entity ?? null,
+      hitlUmlsConcept: c.hitl_umls_concept ?? null,
+      hitlUmlsId: c.hitl_umls_id ?? null,
+      hitlSnomedCode: c.hitl_snomed_code ?? null,
+      hitlRelation: c.hitl_relation ?? null,
+      hitlValue: c.hitl_value ?? null,
+      hitlUnit: c.hitl_unit ?? null,
+      fieldMapping: c.entity
+        ? {
+            field: c.entity,
+            relation: c.relation ?? '',
+            value: c.value ?? '',
+          }
+        : null,
     }));
   }, [criteriaData]);
 
@@ -138,7 +183,7 @@ export function ProtocolScreen() {
   // Criteria polling is handled by React Query via useCriteria(refetchInterval).
 
   const handleApprove = (id: string) => {
-    submitFeedback.mutate({ criterion_id: id, action: 'accept' });
+    approveCriterion.mutate({ criterionId: id, payload: { user: 'reviewer' } });
     setCriteria(prev => prev.map(c => (c.id === id ? { ...c, status: 'approved' as const } : c)));
   };
 
@@ -423,6 +468,32 @@ export function ProtocolScreen() {
                             <>
                               <p className="text-sm text-gray-900 leading-relaxed">{criterion.text}</p>
 
+                              {(criterion.entity || criterion.relation || criterion.value || criterion.unit) && (
+                                <div className="mt-2 text-xs text-gray-600">
+                                  <span className="font-medium text-gray-700">Mapping:</span>{' '}
+                                  {criterion.entity && <span>{criterion.entity}</span>}
+                                  {criterion.relation && <span> {criterion.relation}</span>}
+                                  {criterion.value && <span> {criterion.value}</span>}
+                                  {criterion.unit && <span> {criterion.unit}</span>}
+                                </div>
+                              )}
+
+                              {(criterion.umlsConcept || criterion.umlsId || criterion.snomedCode) && (
+                                <div className="mt-1 text-xs text-gray-600">
+                                  <span className="font-medium text-gray-700">Grounding:</span>{' '}
+                                  {criterion.umlsConcept && <span>{criterion.umlsConcept}</span>}
+                                  {criterion.umlsId && <span> ({criterion.umlsId})</span>}
+                                  {criterion.snomedCode && <span> SNOMED {criterion.snomedCode}</span>}
+                                </div>
+                              )}
+
+                              {criterion.calculatedBy && (
+                                <div className="mt-1 text-xs text-gray-600">
+                                  <span className="font-medium text-gray-700">Calculated by:</span>{' '}
+                                  {criterion.calculatedBy}
+                                </div>
+                              )}
+
                               <MappingDisplay
                                 snomedCodes={criterion.snomedCodes}
                                 fieldMapping={criterion.fieldMapping}
@@ -488,6 +559,13 @@ export function ProtocolScreen() {
                               </Badge>
                             )}
 
+                            {criterion.status === 'rejected' && (
+                              <Badge className="bg-red-100 text-red-700 border-red-300">
+                                <Edit2 className="w-3 h-3 mr-1" />
+                                Rejected
+                              </Badge>
+                            )}
+
                             <Button
                               size="sm"
                               variant="outline"
@@ -533,6 +611,20 @@ export function ProtocolScreen() {
             id: selectedCriterion.id,
             text: selectedCriterion.text,
             snomedCodes: selectedCriterion.snomedCodes,
+            snomedCode: selectedCriterion.snomedCode ?? undefined,
+            entity: selectedCriterion.entity ?? undefined,
+            umlsConcept: selectedCriterion.umlsConcept ?? undefined,
+            umlsId: selectedCriterion.umlsId ?? undefined,
+            relation: selectedCriterion.relation ?? undefined,
+            value: selectedCriterion.value ?? undefined,
+            unit: selectedCriterion.unit ?? undefined,
+            hitlEntity: selectedCriterion.hitlEntity ?? undefined,
+            hitlUmlsConcept: selectedCriterion.hitlUmlsConcept ?? undefined,
+            hitlUmlsId: selectedCriterion.hitlUmlsId ?? undefined,
+            hitlSnomedCode: selectedCriterion.hitlSnomedCode ?? undefined,
+            hitlRelation: selectedCriterion.hitlRelation ?? undefined,
+            hitlValue: selectedCriterion.hitlValue ?? undefined,
+            hitlUnit: selectedCriterion.hitlUnit ?? undefined,
             fieldMapping: selectedCriterion.fieldMapping,
           }}
           onSave={handleSaveMapping}

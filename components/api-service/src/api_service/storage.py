@@ -12,7 +12,7 @@ from typing import Protocol as TypingProtocol
 
 from shared.models import Protocol as SharedProtocol
 from sqlalchemy import JSON, Column, delete, func, text
-from sqlalchemy.engine import Engine
+from sqlalchemy.engine import Connection, Engine
 from sqlalchemy.exc import OperationalError
 from sqlmodel import Field, Session, SQLModel, col, create_engine, select
 
@@ -52,6 +52,25 @@ class Criterion(SQLModel, table=True):
     text: str
     criterion_type: str
     confidence: float
+    entity: str | None = None
+    relation: str | None = None
+    value: str | None = None
+    unit: str | None = None
+    umls_concept: str | None = None
+    umls_id: str | None = None
+    computed_as: str | None = None
+    triplet_confidence: float | None = None
+    grounding_confidence: float | None = None
+    hitl_status: str = Field(default="pending")
+    hitl_entity: str | None = None
+    hitl_relation: str | None = None
+    hitl_value: str | None = None
+    hitl_unit: str | None = None
+    hitl_umls_concept: str | None = None
+    hitl_umls_id: str | None = None
+    hitl_snomed_code: str | None = None
+    hitl_approved_at: datetime | None = None
+    hitl_approved_by: str | None = None
     snomed_codes: list[str] = Field(
         default_factory=list, sa_column=Column(JSON, nullable=False)
     )
@@ -157,6 +176,71 @@ def _ensure_sqlite_protocol_progress_columns(engine: Engine) -> None:
                 # If a concurrent process added the column first, ignore.
                 continue
         conn.commit()
+
+        _ensure_sqlite_criterion_columns(conn)
+
+
+def _ensure_sqlite_criterion_columns(conn: Connection) -> None:
+    try:
+        rows = conn.execute(text("PRAGMA table_info(criterion)")).fetchall()
+    except OperationalError:
+        return
+
+    existing = {row[1] for row in rows}
+    column_statements = [
+        ("entity", "ALTER TABLE criterion ADD COLUMN entity TEXT NULL"),
+        ("relation", "ALTER TABLE criterion ADD COLUMN relation TEXT NULL"),
+        ("value", "ALTER TABLE criterion ADD COLUMN value TEXT NULL"),
+        ("unit", "ALTER TABLE criterion ADD COLUMN unit TEXT NULL"),
+        ("umls_concept", "ALTER TABLE criterion ADD COLUMN umls_concept TEXT NULL"),
+        ("umls_id", "ALTER TABLE criterion ADD COLUMN umls_id TEXT NULL"),
+        ("computed_as", "ALTER TABLE criterion ADD COLUMN computed_as TEXT NULL"),
+        (
+            "triplet_confidence",
+            "ALTER TABLE criterion ADD COLUMN triplet_confidence REAL NULL",
+        ),
+        (
+            "grounding_confidence",
+            "ALTER TABLE criterion ADD COLUMN grounding_confidence REAL NULL",
+        ),
+        (
+            "hitl_status",
+            "ALTER TABLE criterion ADD COLUMN hitl_status "
+            "TEXT NOT NULL DEFAULT 'pending'",
+        ),
+        ("hitl_entity", "ALTER TABLE criterion ADD COLUMN hitl_entity TEXT NULL"),
+        ("hitl_relation", "ALTER TABLE criterion ADD COLUMN hitl_relation TEXT NULL"),
+        ("hitl_value", "ALTER TABLE criterion ADD COLUMN hitl_value TEXT NULL"),
+        ("hitl_unit", "ALTER TABLE criterion ADD COLUMN hitl_unit TEXT NULL"),
+        (
+            "hitl_umls_concept",
+            "ALTER TABLE criterion ADD COLUMN hitl_umls_concept TEXT NULL",
+        ),
+        ("hitl_umls_id", "ALTER TABLE criterion ADD COLUMN hitl_umls_id TEXT NULL"),
+        (
+            "hitl_snomed_code",
+            "ALTER TABLE criterion ADD COLUMN hitl_snomed_code TEXT NULL",
+        ),
+        (
+            "hitl_approved_at",
+            "ALTER TABLE criterion ADD COLUMN hitl_approved_at TEXT NULL",
+        ),
+        (
+            "hitl_approved_by",
+            "ALTER TABLE criterion ADD COLUMN hitl_approved_by TEXT NULL",
+        ),
+    ]
+
+    migrations = [
+        statement for column, statement in column_statements if column not in existing
+    ]
+
+    for statement in migrations:
+        try:
+            conn.execute(text(statement))
+        except OperationalError:
+            continue
+    conn.commit()
 
 
 def reset_storage() -> None:
@@ -330,6 +414,22 @@ class Storage:
             session.refresh(criterion)
             return criterion
 
+    def update_criterion_hitl(
+        self, *, criterion_id: str, updates: dict[str, object]
+    ) -> Criterion | None:
+        """Update HITL-related fields on a criterion."""
+        with Session(self._engine) as session:
+            criterion = session.get(Criterion, criterion_id)
+            if criterion is None:
+                return None
+            for key, value in updates.items():
+                if hasattr(criterion, key):
+                    setattr(criterion, key, value)
+            session.add(criterion)
+            session.commit()
+            session.refresh(criterion)
+            return criterion
+
     def get_criterion(self, criterion_id: str) -> Criterion | None:
         """Fetch a criterion by ID."""
         with Session(self._engine) as session:
@@ -471,6 +571,51 @@ class Storage:
                 criterion_type=criterion_type,
                 confidence=confidence,
                 snomed_codes=[],
+            )
+            session.add(criterion)
+            session.commit()
+            session.refresh(criterion)
+            return criterion
+
+    def create_criterion_detail(
+        self,
+        *,
+        protocol_id: str,
+        text: str,
+        criterion_type: str,
+        confidence: float,
+        entity: str | None = None,
+        relation: str | None = None,
+        value: str | None = None,
+        unit: str | None = None,
+        umls_concept: str | None = None,
+        umls_id: str | None = None,
+        computed_as: str | None = None,
+        triplet_confidence: float | None = None,
+        grounding_confidence: float | None = None,
+        snomed_codes: list[str] | None = None,
+        evidence_spans: list[dict[str, object]] | None = None,
+    ) -> Criterion:
+        """Create a criterion record with detailed extraction fields."""
+        with Session(self._engine) as session:
+            criterion_id = _generate_id("crit")
+            criterion = Criterion(
+                id=criterion_id,
+                protocol_id=protocol_id,
+                text=text,
+                criterion_type=criterion_type,
+                confidence=confidence,
+                entity=entity,
+                relation=relation,
+                value=value,
+                unit=unit,
+                umls_concept=umls_concept,
+                umls_id=umls_id,
+                computed_as=computed_as,
+                triplet_confidence=triplet_confidence,
+                grounding_confidence=grounding_confidence,
+                snomed_codes=snomed_codes or [],
+                evidence_spans=evidence_spans or [],
             )
             session.add(criterion)
             session.commit()

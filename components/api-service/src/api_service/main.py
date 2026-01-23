@@ -8,7 +8,7 @@ import tempfile
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 from pathlib import Path
 from typing import List
@@ -16,7 +16,7 @@ from typing import List
 from anyio import to_thread
 from data_pipeline.download_protocols import extract_text_from_pdf
 from dotenv import find_dotenv, load_dotenv
-from extraction_service import pipeline as extraction_pipeline
+from extraction_service import pipeline as extraction_pipeline  # noqa: F401
 from fastapi import (
     BackgroundTasks,
     Body,
@@ -32,6 +32,7 @@ from pydantic import BaseModel
 from shared.mlflow_utils import configure_mlflow_once
 
 from api_service.dependencies import get_storage
+from api_service.ingestion import ingest_protocol_document_text
 from api_service.storage import Criterion as StorageCriterion
 from api_service.storage import Storage, init_db, reset_storage
 
@@ -160,21 +161,43 @@ class ProtocolResponse(BaseModel):
     title: str
 
 
-class CriterionResponse(BaseModel):
-    """Response payload for an extracted criterion."""
+class CriterionDetailResponse(BaseModel):
+    """Response payload for a detailed criterion."""
 
     id: str
     text: str
+    text_snippet: str
     criterion_type: str
-    confidence: float
+    criteria_type: str
+    entity: str | None
+    umls_concept: str | None
+    umls_id: str | None
+    snomed_code: str | None
     snomed_codes: List[str]
+    calculated_by: str | None
+    relation: str | None
+    value: str | None
+    unit: str | None
+    confidence: float
+    triplet_confidence: float | None
+    grounding_confidence: float | None
+    hitl_status: str
+    hitl_entity: str | None
+    hitl_umls_concept: str | None
+    hitl_umls_id: str | None
+    hitl_snomed_code: str | None
+    hitl_relation: str | None
+    hitl_value: str | None
+    hitl_unit: str | None
+    hitl_approved_at: datetime | None
+    hitl_approved_by: str | None
 
 
 class CriteriaListResponse(BaseModel):
     """Response payload for listing criteria."""
 
     protocol_id: str
-    criteria: List[CriterionResponse]
+    criteria: List[CriterionDetailResponse]
 
 
 class ExtractionResponse(BaseModel):
@@ -197,7 +220,7 @@ class CriterionUpdateResponse(BaseModel):
 
     criterion_id: str
     status: str
-    criterion: CriterionResponse
+    criterion: CriterionDetailResponse
 
 
 class GroundingCandidateResponse(BaseModel):
@@ -259,6 +282,28 @@ class HitlFeedbackRequest(BaseModel):
     snomed_code_removed: str | None = None
     field_mapping_added: str | None = None
     field_mapping_removed: str | None = None
+    note: str | None = None
+
+
+class HitlApproveRequest(BaseModel):
+    """Payload for HITL approval."""
+
+    user: str
+    note: str | None = None
+
+
+class HitlRejectRequest(BaseModel):
+    """Payload for HITL rejection."""
+
+    user: str
+    reason: str
+
+
+class HitlEditMappingRequest(BaseModel):
+    """Payload for HITL edits to extracted mappings."""
+
+    user: str
+    edits: dict[str, object]
     note: str | None = None
 
 
@@ -359,43 +404,23 @@ async def _run_extraction(
     )
     storage.replace_criteria(protocol_id=protocol_id, extracted=[])
 
-    count = 0
     try:
-        # Prefer async extraction when model extraction is enabled to avoid
-        # calling anyio.run() inside the running event loop thread.
-        use_model = os.getenv("USE_MODEL_EXTRACTION", "true").lower() == "true"
-        logger.info("Extraction: use_model=%s", use_model)
-        if use_model and hasattr(extraction_pipeline, "extract_criteria_async"):
-            logger.info("Extraction: Using async model extraction")
-            items = await extraction_pipeline.extract_criteria_async(document_text)
-            iterator = iter(items)
-        else:
-            iterator = extraction_pipeline.extract_criteria_stream(document_text)
-
         storage.update_protocol_status(
             protocol_id=protocol_id,
-            progress_message="Extracting criteria…",
+            progress_message="Extracting and grounding criteria…",
         )
-
-        for item in iterator:
-            storage.add_criterion_streaming(
-                protocol_id=protocol_id,
-                text=item.text,
-                criterion_type=item.criterion_type,
-                confidence=item.confidence,
-            )
-            count += 1
-            if count == 1 or count % 5 == 0:
-                storage.update_protocol_status(
-                    protocol_id=protocol_id,
-                    processed_count=count,
-                    progress_message=f"Extracting criteria… ({count} found)",
-                )
-
+        criteria = await ingest_protocol_document_text(
+            protocol_id=protocol_id,
+            document_text=document_text,
+            storage=storage,
+            umls_api_key=_get_umls_api_key(),
+        )
+        count = len(criteria)
         storage.update_protocol_status(
             protocol_id=protocol_id,
             processing_status="completed",
-            progress_message=f"Extraction completed ({count} criteria).",
+            processed_count=count,
+            progress_message=f"Ingestion completed ({count} criteria).",
         )
     except Exception:
         logger.exception("Extraction stream failed")
@@ -806,13 +831,36 @@ async def ground_criterion(
     return _baseline_grounding(criterion.text, criterion_id, storage)
 
 
-def _criterion_to_response(criterion: StorageCriterion) -> CriterionResponse:
-    return CriterionResponse(
+def _criterion_to_response(criterion: StorageCriterion) -> CriterionDetailResponse:
+    snomed_code = criterion.snomed_codes[0] if criterion.snomed_codes else None
+    return CriterionDetailResponse(
         id=criterion.id,
         text=criterion.text,
+        text_snippet=criterion.text,
         criterion_type=criterion.criterion_type,
-        confidence=criterion.confidence,
+        criteria_type=criterion.criterion_type,
+        entity=criterion.entity,
+        umls_concept=criterion.umls_concept,
+        umls_id=criterion.umls_id,
+        snomed_code=snomed_code,
         snomed_codes=criterion.snomed_codes,
+        calculated_by=criterion.computed_as,
+        relation=criterion.relation,
+        value=criterion.value,
+        unit=criterion.unit,
+        confidence=criterion.confidence,
+        triplet_confidence=criterion.triplet_confidence,
+        grounding_confidence=criterion.grounding_confidence,
+        hitl_status=criterion.hitl_status,
+        hitl_entity=criterion.hitl_entity,
+        hitl_umls_concept=criterion.hitl_umls_concept,
+        hitl_umls_id=criterion.hitl_umls_id,
+        hitl_snomed_code=criterion.hitl_snomed_code,
+        hitl_relation=criterion.hitl_relation,
+        hitl_value=criterion.hitl_value,
+        hitl_unit=criterion.hitl_unit,
+        hitl_approved_at=criterion.hitl_approved_at,
+        hitl_approved_by=criterion.hitl_approved_by,
     )
 
 
@@ -864,6 +912,108 @@ def hitl_feedback(
     if payload.snomed_code_removed:
         storage.remove_snomed_code(payload.criterion_id, payload.snomed_code_removed)
     return {"status": "recorded"}
+
+
+@app.post("/v1/criteria/{criterion_id}/approve")
+def approve_criterion(
+    criterion_id: str,
+    payload: HitlApproveRequest,
+    storage: Storage = Depends(get_storage),
+) -> CriterionDetailResponse:
+    """Approve a criterion and copy AI values into HITL fields."""
+    criterion = storage.get_criterion(criterion_id)
+    if criterion is None:
+        raise HTTPException(status_code=404, detail="Criterion not found")
+
+    snomed_code = criterion.snomed_codes[0] if criterion.snomed_codes else None
+    updated = storage.update_criterion_hitl(
+        criterion_id=criterion_id,
+        updates={
+            "hitl_status": "approved",
+            "hitl_entity": criterion.entity,
+            "hitl_relation": criterion.relation,
+            "hitl_value": criterion.value,
+            "hitl_unit": criterion.unit,
+            "hitl_umls_concept": criterion.umls_concept,
+            "hitl_umls_id": criterion.umls_id,
+            "hitl_snomed_code": snomed_code,
+            "hitl_approved_at": datetime.now(timezone.utc),
+            "hitl_approved_by": payload.user,
+        },
+    )
+    storage.create_hitl_edit(
+        criterion_id=criterion_id,
+        action=HitlAction.accept.value,
+        note=payload.note,
+    )
+
+    if updated is None:
+        raise HTTPException(status_code=500, detail="Failed to update criterion")
+    return _criterion_to_response(updated)
+
+
+@app.post("/v1/criteria/{criterion_id}/reject")
+def reject_criterion(
+    criterion_id: str,
+    payload: HitlRejectRequest,
+    storage: Storage = Depends(get_storage),
+) -> CriterionDetailResponse:
+    """Reject a criterion and mark HITL status."""
+    criterion = storage.get_criterion(criterion_id)
+    if criterion is None:
+        raise HTTPException(status_code=404, detail="Criterion not found")
+
+    updated = storage.update_criterion_hitl(
+        criterion_id=criterion_id,
+        updates={
+            "hitl_status": "rejected",
+            "hitl_approved_at": datetime.now(timezone.utc),
+            "hitl_approved_by": payload.user,
+        },
+    )
+    storage.create_hitl_edit(
+        criterion_id=criterion_id,
+        action=HitlAction.reject.value,
+        note=payload.reason,
+    )
+
+    if updated is None:
+        raise HTTPException(status_code=500, detail="Failed to update criterion")
+    return _criterion_to_response(updated)
+
+
+@app.patch("/v1/criteria/{criterion_id}/edit-mapping")
+def edit_criterion_mapping(
+    criterion_id: str,
+    payload: HitlEditMappingRequest,
+    storage: Storage = Depends(get_storage),
+) -> CriterionDetailResponse:
+    """Apply HITL edits to mapping fields."""
+    criterion = storage.get_criterion(criterion_id)
+    if criterion is None:
+        raise HTTPException(status_code=404, detail="Criterion not found")
+
+    updates = {
+        "hitl_status": "edited",
+        "hitl_approved_at": datetime.now(timezone.utc),
+        "hitl_approved_by": payload.user,
+    }
+    for key, value in payload.edits.items():
+        updates[f"hitl_{key}"] = value
+
+    updated = storage.update_criterion_hitl(
+        criterion_id=criterion_id,
+        updates=updates,
+    )
+    storage.create_hitl_edit(
+        criterion_id=criterion_id,
+        action=HitlAction.edit.value,
+        note=payload.note,
+    )
+
+    if updated is None:
+        raise HTTPException(status_code=500, detail="Failed to update criterion")
+    return _criterion_to_response(updated)
 
 
 @app.get("/v1/criteria/{criterion_id}/edits")

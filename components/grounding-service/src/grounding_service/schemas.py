@@ -1,5 +1,7 @@
 """Pydantic schemas for structured agent output."""
 
+from typing import Literal
+
 from pydantic import BaseModel, Field
 
 
@@ -7,6 +9,10 @@ class GroundedTerm(BaseModel):
     """Single grounded term from a criterion."""
 
     snippet: str = Field(description="Text span being grounded")
+    raw_criterion_text: str = Field(description="Full criterion sentence")
+    criterion_type: Literal["inclusion", "exclusion"] = Field(
+        description="Criterion type label"
+    )
     umls_concept: str | None = Field(
         default=None, description="UMLS concept preferred name"
     )
@@ -21,6 +27,15 @@ class GroundedTerm(BaseModel):
     unit: str | None = Field(default=None, description="Unit of measurement")
     computed_as: str | None = Field(
         default=None, description="Expression if computed, e.g. 'today() - birthDate'"
+    )
+    relation_confidence: float = Field(
+        0.0, ge=0, le=1, description="Relation extraction confidence"
+    )
+    value_confidence: float = Field(
+        0.0, ge=0, le=1, description="Value extraction confidence"
+    )
+    umls_confidence: float = Field(
+        0.0, ge=0, le=1, description="UMLS match confidence"
     )
     confidence: float = Field(ge=0, le=1, description="Confidence score")
 
