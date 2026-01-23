@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import os
 import tempfile
@@ -13,6 +14,7 @@ from enum import Enum
 from pathlib import Path
 from typing import List
 
+import anyio
 from anyio import to_thread
 from data_pipeline.download_protocols import extract_text_from_pdf
 from dotenv import find_dotenv, load_dotenv
@@ -431,6 +433,19 @@ async def _run_extraction(
         )
 
 
+def _run_extraction_sync(
+    protocol_id: str, document_text: str, storage: Storage
+) -> None:
+    """Run extraction from sync background tasks."""
+    try:
+        loop = asyncio.get_running_loop()
+    except RuntimeError:
+        anyio.run(_run_extraction, protocol_id, document_text, storage)
+        return
+
+    loop.create_task(_run_extraction(protocol_id, document_text, storage))
+
+
 @app.post("/v1/protocols/upload")
 async def upload_protocol(
     file: UploadFile = File(...),
@@ -488,7 +503,7 @@ async def upload_protocol(
         )
         # Run extraction in background to avoid blocking the response
         background_tasks.add_task(
-            _run_extraction, protocol.id, protocol.document_text, storage
+            _run_extraction_sync, protocol.id, protocol.document_text, storage
         )
 
     return ProtocolResponse(protocol_id=protocol.id, title=protocol.title)
@@ -515,7 +530,7 @@ def extract_criteria(
     )
     # Run extraction in background to avoid blocking the response
     background_tasks.add_task(
-        _run_extraction, protocol_id, protocol.document_text, storage
+        _run_extraction_sync, protocol_id, protocol.document_text, storage
     )
 
     return ExtractionResponse(
