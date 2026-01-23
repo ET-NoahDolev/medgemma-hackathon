@@ -40,7 +40,7 @@ def search_concepts_tool(term: str, limit: int = 5) -> str:
         limit: Maximum number of results to return (default: 5).
 
     Returns:
-        JSON string with list of concepts containing code, display, and cui.
+        JSON string with list of concepts containing UMLS CUI and SNOMED code.
     """
     import json
 
@@ -53,9 +53,9 @@ def search_concepts_tool(term: str, limit: int = 5) -> str:
             candidates = client.search_snomed(term, limit)
             results = [
                 {
-                    "code": c.code,
+                    "snomed_code": c.code,
                     "display": c.display,
-                    "cui": c.code,
+                    "cui": c.cui,
                     "ontology": c.ontology,
                 }
                 for c in candidates

@@ -48,12 +48,14 @@ class SnomedCandidate:
     """SNOMED candidate returned from UMLS.
 
     Args:
+        cui: UMLS Concept Unique Identifier.
         code: SNOMED concept code.
         display: Human-readable concept name.
         ontology: Ontology label (e.g., SNOMEDCT_US).
         confidence: Confidence or relevance score.
     """
 
+    cui: str
     code: str
     display: str
     ontology: str
@@ -142,17 +144,19 @@ class UmlsClient:
     def _fetch_from_api(self, query: str, limit: int) -> list[SnomedCandidate]:
         """Execute HTTP request to UMLS API with retry on transient errors."""
         url = f"{self.base_url.rstrip('/')}/search/current"
+        is_code_query = bool(re.fullmatch(r"\d+", query.strip()))
         params: dict[str, str | int] = {
             "string": query,
             "sabs": "SNOMEDCT_US",
-            "returnIdType": "code",
+            "searchType": "exact" if is_code_query else "words",
+            "inputType": "sourceUi" if is_code_query else "atom",
             "pageSize": limit,
             "apiKey": self.api_key or "",
         }
 
         try:
             data = self._request_with_retry(url, params)
-            return self._parse_response(data, limit)
+            return self._parse_response(data, limit, fallback_code=query if is_code_query else "")
         except httpx.HTTPStatusError as exc:
             logger.warning("UMLS API HTTP error: %s", exc)
             return []
@@ -185,6 +189,7 @@ class UmlsClient:
         self,
         data: dict[str, object],
         limit: int,
+        fallback_code: str = "",
     ) -> list[SnomedCandidate]:
         """Parse UMLS API response into candidates."""
         result = data.get("result", {})
@@ -201,15 +206,63 @@ class UmlsClient:
             ui = item.get("ui")
             name = item.get("name")
             root = item.get("rootSource")
+            cui = str(ui) if isinstance(ui, str) else ""
+            snomed_code = fallback_code
+            if cui and not snomed_code:
+                snomed_code = self._get_snomed_code_for_cui(cui)
             candidates.append(
                 SnomedCandidate(
-                    code=str(ui) if isinstance(ui, (str, int)) else "",
+                    cui=cui,
+                    code=snomed_code,
                     display=str(name) if isinstance(name, str) else "",
                     ontology=str(root) if isinstance(root, str) else "SNOMEDCT_US",
                     confidence=0.9,
                 )
             )
         return candidates
+
+    def _get_snomed_code_for_cui(self, cui: str) -> str:
+        """Fetch the SNOMED code associated with a UMLS CUI."""
+        cache_key = f"snomed_code:{cui}"
+        cached = cast(str | None, self._cache.get(cache_key))
+        if cached is not None:
+            return cached
+
+        url = f"{self.base_url.rstrip('/')}/content/current/CUI/{cui}/atoms"
+        params: dict[str, str | int] = {
+            "sabs": "SNOMEDCT_US",
+            "pageSize": 1,
+            "apiKey": self.api_key or "",
+        }
+        try:
+            data = self._request_with_retry(url, params)
+            snomed_code = self._extract_snomed_code_from_atoms(data)
+            if self._cache_ttl:
+                self._cache.set(cache_key, snomed_code, expire=self._cache_ttl)
+            return snomed_code
+        except httpx.HTTPStatusError as exc:
+            logger.warning("UMLS API HTTP error for CUI atoms %s: %s", cui, exc)
+            return ""
+        except httpx.RequestError as exc:
+            logger.warning("UMLS API request error for CUI atoms %s: %s", cui, exc)
+            return ""
+
+    @staticmethod
+    def _extract_snomed_code_from_atoms(data: dict[str, object]) -> str:
+        result = data.get("result", {})
+        if not isinstance(result, dict):
+            return ""
+        results = result.get("results", [])
+        if not isinstance(results, Sequence) or not results:
+            return ""
+        first = results[0]
+        if not isinstance(first, dict):
+            return ""
+        for key in ("code", "sourceConcept", "sourceConceptId", "sourceUi"):
+            value = first.get(key)
+            if isinstance(value, str) and value:
+                return value
+        return ""
 
     def close(self) -> None:
         """Close the HTTP client and release resources."""
@@ -261,6 +314,49 @@ class UmlsClient:
             return {}
         except httpx.RequestError as exc:
             logger.warning("UMLS API request error for CUI %s: %s", cui, exc)
+            return {}
+
+    def get_snomed_details(self, snomed_code: str) -> dict[str, object]:
+        """Get UMLS details for a SNOMED CT source-asserted identifier.
+
+        Args:
+            snomed_code: SNOMED CT code (source identifier).
+
+        Returns:
+            Dictionary with source-asserted details from UMLS.
+
+        Raises:
+            ValueError: If SNOMED code is empty.
+        """
+        if not snomed_code.strip():
+            raise ValueError("snomed_code is required")
+
+        cache_key = f"snomed_details:{snomed_code}"
+        cached = cast(dict[str, object] | None, self._cache.get(cache_key))
+        if cached is not None:
+            return cached
+
+        url = (
+            f"{self.base_url.rstrip('/')}/content/current/source/SNOMEDCT_US/"
+            f"{snomed_code}"
+        )
+        params: dict[str, str | int] = {
+            "apiKey": self.api_key or "",
+        }
+        try:
+            data = self._request_with_retry(url, params)
+            if self._cache_ttl:
+                self._cache.set(cache_key, data, expire=self._cache_ttl)
+            return data
+        except httpx.HTTPStatusError as exc:
+            logger.warning(
+                "UMLS API HTTP error for SNOMED code %s: %s", snomed_code, exc
+            )
+            return {}
+        except httpx.RequestError as exc:
+            logger.warning(
+                "UMLS API request error for SNOMED code %s: %s", snomed_code, exc
+            )
             return {}
 
     def get_semantic_types(self, cui: str) -> list[str]:

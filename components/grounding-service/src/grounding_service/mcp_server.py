@@ -27,7 +27,7 @@ def search_concepts(term: str, limit: int = 5) -> list[dict[str, Any]]:
         limit: Maximum number of results to return (default: 5).
 
     Returns:
-        List of concept dictionaries with code, display, and cui fields.
+        List of concept dictionaries with SNOMED code and CUI fields.
     """
     api_key = os.getenv("UMLS_API_KEY")
     if not api_key:
@@ -39,9 +39,9 @@ def search_concepts(term: str, limit: int = 5) -> list[dict[str, Any]]:
             candidates = client.search_snomed(term, limit)
             return [
                 {
-                    "code": c.code,
+                    "snomed_code": c.code,
                     "display": c.display,
-                    "cui": c.code,  # For SNOMED, code is the CUI
+                    "cui": c.cui,
                     "ontology": c.ontology,
                     "confidence": c.confidence,
                 }

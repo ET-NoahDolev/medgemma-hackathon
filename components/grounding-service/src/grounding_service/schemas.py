@@ -3,31 +3,33 @@
 from pydantic import BaseModel, Field
 
 
-class UMLSConcept(BaseModel):
-    """UMLS concept representation."""
+class GroundedTerm(BaseModel):
+    """Single grounded term from a criterion."""
 
-    cui: str = Field(description="UMLS Concept Unique Identifier")
-    name: str = Field(description="Preferred concept name")
-    semantic_type: str = Field(description="UMLS semantic type (TUI)")
-
-
-class FieldMappingResult(BaseModel):
-    """Field mapping result with UMLS provenance."""
-
-    field: str = Field(description="Target field path, e.g. demographics.age")
-    relation: str = Field(description="Comparison operator: >, >=, <, <=, =")
-    value: str = Field(description="Extracted value")
-    confidence: float = Field(ge=0, le=1, description="Confidence score")
-    umls_cui: str | None = Field(
-        default=None, description="UMLS CUI provenance for this mapping"
+    snippet: str = Field(description="Text span being grounded")
+    umls_concept: str | None = Field(
+        default=None, description="UMLS concept preferred name"
     )
+    umls_id: str | None = Field(
+        default=None, description="UMLS CUI (e.g., C0011860)"
+    )
+    snomed_code: str | None = Field(default=None, description="SNOMED CT code")
+    relation: str | None = Field(
+        default=None, description="Comparison: =, >, >=, <, <=, within"
+    )
+    value: str | None = Field(default=None, description="Extracted value")
+    unit: str | None = Field(default=None, description="Unit of measurement")
+    computed_as: str | None = Field(
+        default=None, description="Expression if computed, e.g. 'today() - birthDate'"
+    )
+    confidence: float = Field(ge=0, le=1, description="Confidence score")
 
 
 class GroundingResult(BaseModel):
     """Complete grounding result from agent."""
 
-    snomed_codes: list[str] = Field(description="List of SNOMED CT codes")
-    field_mappings: list[FieldMappingResult] = Field(
-        description="List of field mapping suggestions"
+    terms: list[GroundedTerm] = Field(description="List of grounded terms")
+    logical_operator: str | None = Field(
+        default=None, description="AND/OR between terms"
     )
     reasoning: str = Field(description="Agent reasoning trace")

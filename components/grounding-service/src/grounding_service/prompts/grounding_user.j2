@@ -9,8 +9,11 @@ Follow this workflow:
 3. Call get_semantic_type to determine field categories
 4. Map semantic types to field categories
 5. Extract relations (>, >=, <, <=, =) and values from the criterion text
+6. If the criterion implies a computed field (e.g., age), include a computed_as expression:
+   - Example: "Age >= 18 years" -> concept "Date of birth", computed_as "today() - birthDate"
+7. Always attempt to ground demographic or lab terms to a SNOMED concept via UMLS
 
 Return a structured GroundingResult with:
-- snomed_codes: List of SNOMED CT codes found
-- field_mappings: List of field mappings (field, relation, value, confidence, umls_cui)
+- terms: List of grounded terms (snippet, umls_concept, umls_id, snomed_code, relation, value, unit, computed_as, confidence)
+- logical_operator: AND/OR between terms when multiple conditions exist
 - reasoning: Brief explanation of your analysis and tool usage
