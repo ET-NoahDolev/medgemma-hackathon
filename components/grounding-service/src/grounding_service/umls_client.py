@@ -156,7 +156,8 @@ class UmlsClient:
 
         try:
             data = self._request_with_retry(url, params)
-            return self._parse_response(data, limit, fallback_code=query if is_code_query else "")
+            fallback = query if is_code_query else ""
+            return self._parse_response(data, limit, fallback_code=fallback)
         except httpx.HTTPStatusError as exc:
             logger.warning("UMLS API HTTP error: %s", exc)
             return []

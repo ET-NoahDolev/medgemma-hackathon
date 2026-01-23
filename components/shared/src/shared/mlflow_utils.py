@@ -53,7 +53,8 @@ def configure_mlflow_once(experiment_name: str) -> None:
         # proper context propagation. This makes the tracer run in the main
         # async task rather than a thread pool, which can improve trace
         # visibility for long-running async operations.
-        run_tracer_inline = os.getenv("MLFLOW_RUN_TRACER_INLINE", "true").lower() == "true"
+        run_tracer_inline_env = os.getenv("MLFLOW_RUN_TRACER_INLINE", "true")
+        run_tracer_inline = run_tracer_inline_env.lower() == "true"
 
         mlflow.langchain.autolog(run_tracer_inline=run_tracer_inline)
         if hasattr(mlflow, "langgraph"):

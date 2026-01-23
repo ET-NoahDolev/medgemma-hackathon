@@ -626,6 +626,59 @@ def suggest_field_mapping(
     return FieldMappingSuggestionResponse(suggestions=suggestions)
 
 
+def _infer_field_from_snippet(snippet: str) -> str:
+    """Infer field name from snippet content."""
+    snippet_lower = snippet.lower()
+    if "age" in snippet_lower:
+        return "demographics.age"
+    if "hba1c" in snippet_lower or "a1c" in snippet_lower:
+        return "labs.hba1c"
+    if "bmi" in snippet_lower or "body mass index" in snippet_lower:
+        return "demographics.bmi"
+    if "weight" in snippet_lower:
+        return "demographics.weight"
+    if "height" in snippet_lower:
+        return "demographics.height"
+    return "unknown"
+
+
+def _extract_field_mapping_from_terms(terms: list) -> FieldMappingResponse | None:
+    """Extract field mapping from first term with relation and value."""
+    for term in terms:
+        if term.relation and term.value:
+            field = _infer_field_from_snippet(term.snippet)
+            return FieldMappingResponse(
+                field=field,
+                relation=term.relation,
+                value=term.value,
+                confidence=term.confidence,
+            )
+    return None
+
+
+def _validate_snomed_codes(
+    snomed_codes: list[str], client: umls_client.UmlsClient
+) -> list[GroundingCandidateResponse]:
+    """Validate SNOMED codes against UMLS and return candidates."""
+    response_candidates = []
+    for code in snomed_codes:
+        candidates = client.search_snomed(code, limit=1)
+        if candidates and candidates[0].code == code:
+            response_candidates.append(
+                GroundingCandidateResponse(
+                    code=candidates[0].code,
+                    display=candidates[0].display,
+                    ontology=candidates[0].ontology,
+                    confidence=candidates[0].confidence,
+                )
+            )
+        else:
+            logger.warning(
+                "AI-provided SNOMED code %s not found in UMLS, skipping", code
+            )
+    return response_candidates
+
+
 async def _try_ai_grounding(
     criterion_text: str,
     criterion_type: str,
@@ -636,53 +689,32 @@ async def _try_ai_grounding(
     try:
         agent = get_grounding_agent()
         result = await agent.ground(criterion_text, criterion_type)
-        if not result.snomed_codes and not result.field_mappings:
+        if not result.terms:
             raise RuntimeError("AI grounding returned empty result")
 
-        # Convert agent result to API response format
-        response_candidates = []
+        # Extract SNOMED codes from terms
+        snomed_codes = [
+            term.snomed_code for term in result.terms if term.snomed_code
+        ]
+
+        # Validate codes and convert to response format
         with umls_client.UmlsClient(api_key=_get_umls_api_key()) as client:
-            for code in result.snomed_codes:
-                # Try to get display name from UMLS by searching for the code
-                candidates = client.search_snomed(code, limit=1)
-                if candidates and candidates[0].code == code:
-                    # Found exact match for the AI-provided code
-                    response_candidates.append(
-                        GroundingCandidateResponse(
-                            code=candidates[0].code,
-                            display=candidates[0].display,
-                            ontology=candidates[0].ontology,
-                            confidence=candidates[0].confidence,
-                        )
-                    )
-                else:
-                    # Code not found in UMLS - log warning and skip
-                    logger.warning(
-                        "AI-provided SNOMED code %s not found in UMLS, skipping",
-                        code,
-                    )
+            response_candidates = _validate_snomed_codes(snomed_codes, client)
 
-        field_mapping = None
-        if result.field_mappings:
-            mapping = result.field_mappings[0]
-            field_mapping = FieldMappingResponse(
-                field=mapping.field,
-                relation=mapping.relation,
-                value=mapping.value,
-                confidence=mapping.confidence,
-            )
+        # Extract field mapping
+        field_mapping = _extract_field_mapping_from_terms(result.terms)
 
-        # Store SNOMED codes (only validated ones that made it into response)
+        # Store SNOMED codes (only validated ones)
         validated_codes = [c.code for c in response_candidates]
         storage.set_snomed_codes(
             criterion_id=criterion_id, snomed_codes=validated_codes
         )
 
-        # If no candidates were found/validated, make it clear
+        # Warn if no candidates validated
         if not response_candidates:
             logger.warning(
                 "AI grounding returned %d codes but none were validated in UMLS",
-                len(result.snomed_codes),
+                len(snomed_codes),
             )
 
         return GroundingResponse(

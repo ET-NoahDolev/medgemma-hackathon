@@ -16,6 +16,20 @@ logger = logging.getLogger(__name__)
 TModel = TypeVar("TModel", bound=BaseModel)
 
 
+def render_prompts(
+    *,
+    prompts_dir: Path,
+    system_template: str,
+    user_template: str,
+    prompt_vars: Mapping[str, Any],
+) -> tuple[str, str]:
+    """Render system and user prompts from Jinja templates."""
+    jinja_env = Environment(loader=FileSystemLoader(str(prompts_dir)))
+    system_tpl = jinja_env.get_template(system_template)
+    user_tpl = jinja_env.get_template(user_template)
+    return system_tpl.render(**prompt_vars), user_tpl.render(**prompt_vars)
+
+
 def _load_langgraph_create_react_agent() -> Any:
     """Load LangGraph's prebuilt create_react_agent lazily."""
     try:
@@ -55,8 +69,6 @@ def create_react_agent(
     Returns:
         Async function that takes prompt variables and returns a structured response.
     """
-    jinja_env = Environment(loader=FileSystemLoader(str(prompts_dir)))
-
     @lazy_singleton
     def _get_agent() -> Any:
         lg_create = _load_langgraph_create_react_agent()
@@ -68,11 +80,12 @@ def create_react_agent(
         )
 
     async def invoke(prompt_vars: Mapping[str, Any]) -> TModel:
-        system_tpl = jinja_env.get_template(system_template)
-        user_tpl = jinja_env.get_template(user_template)
-
-        system_prompt = system_tpl.render(**prompt_vars)
-        user_prompt = user_tpl.render(**prompt_vars)
+        system_prompt, user_prompt = render_prompts(
+            prompts_dir=prompts_dir,
+            system_template=system_template,
+            user_template=user_template,
+            prompt_vars=prompt_vars,
+        )
 
         agent = _get_agent()
 

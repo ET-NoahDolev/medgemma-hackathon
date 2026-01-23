@@ -17,7 +17,10 @@ from enum import Enum
 from pathlib import Path
 from typing import Any, Dict, Iterator
 
+from inference import create_react_agent
 from shared.models import Criterion
+
+from extraction_service.react_graph import ChunkAgentResult
 
 logger = logging.getLogger(__name__)
 
@@ -225,51 +228,133 @@ class ExtractionPipeline:
         return _extract_criteria_baseline(document_text)
 
     async def _extract_iterative_async(self, document_text: str) -> list[Criterion]:
-        """Extract criteria using iterative tool-based approach."""
-        try:
-            agent, tool_factory = self._create_agent(mode=self.AgentMode.ITERATIVE)
-        except Exception as e:
-            logger.error(
-                "Failed to create iterative agent: %s", e, exc_info=True
+        """Extract criteria using chunked ReAct approach."""
+        if not os.getenv("GEMINI_MODEL_NAME"):
+            logger.warning(
+                "GEMINI_MODEL_NAME not set; falling back to legacy extraction."
             )
-            raise
+            return await self._extract_legacy_async(document_text)
 
-        # Run the agent - it will call tools to submit criteria
-        try:
-            await agent({"document_text": document_text})
-        except Exception as e:
-            logger.error(
-                "Agent invocation failed: %s", e, exc_info=True
-            )
-            raise
+        from extraction_service.chunking import chunk_document
+        from extraction_service.react_graph import build_extraction_graph
+        from extraction_service.state import DocumentProcessingState
+        from extraction_service.tools import ExtractionToolFactory
 
-        # Collect results from the tool factory
-        if tool_factory is not None and tool_factory.has_results:
-            extracted = []
-            for item in tool_factory.get_results():
-                text = _normalize_candidate(item.get("text", ""))
-                if not is_valid_criterion_candidate(text):
-                    continue
-                extracted.append(
-                    Criterion(
-                        id="",
-                        text=text,
-                        criterion_type=item.get("criterion_type", "inclusion"),
-                        confidence=float(item.get("confidence", 0.8)),
-                        snomed_codes=[],
-                        evidence_spans=[],
-                    )
-                )
-            if extracted:
-                logger.info(
-                    "Iterative extraction found %d criteria via tools", len(extracted)
-                )
-                return extracted
-
-        raise RuntimeError(
-            "Iterative extraction completed but agent produced no tool results. "
-            "This indicates a prompt/tool integration issue."
+        chunks = chunk_document(
+            document_text,
+            max_tokens=self._get_chunk_tokens(),
+            overlap_tokens=self._get_chunk_overlap(),
+            respect_sections=True,
         )
+
+        if not chunks:
+            return []
+
+        tool_factory = ExtractionToolFactory()
+        tools = tool_factory.create_tools()
+
+        model_loader = self._get_gemini_model_loader()
+        prompts_dir = Path(__file__).parent / "prompts"
+
+        def _agent_loader():
+            return create_react_agent(
+                model_loader=model_loader,
+                prompts_dir=prompts_dir,
+                tools=tools,
+                response_schema=ChunkAgentResult,
+                system_template="extraction_system_react.j2",
+                user_template="extraction_user_chunked.j2",
+            )
+
+        graph = build_extraction_graph(
+            agent_loader=_agent_loader, tool_factory=tool_factory
+        )
+
+        initial_state: DocumentProcessingState = {
+            "messages": [],
+            "chunks": chunks,
+            "chunk_index": 0,
+            "total_chunks": len(chunks),
+            "findings": [],
+            "reasoning_steps": [],
+        }
+
+        final_state = await graph.ainvoke(initial_state)
+        findings = final_state.get("findings", [])
+        deduped = self._deduplicate_findings(findings)
+        return self._findings_to_criteria(deduped)
+
+    def _get_chunk_tokens(self) -> int:
+        value = os.getenv("MAX_CHUNK_TOKENS", "6000")
+        try:
+            return max(1000, int(value))
+        except ValueError:
+            logger.warning("Invalid MAX_CHUNK_TOKENS value: %s", value)
+            return 6000
+
+    def _get_chunk_overlap(self) -> int:
+        value = os.getenv("CHUNK_OVERLAP_TOKENS", "400")
+        try:
+            return max(0, int(value))
+        except ValueError:
+            logger.warning("Invalid CHUNK_OVERLAP_TOKENS value: %s", value)
+            return 400
+
+    def _get_gemini_model_loader(self) -> Any:
+        def gemini_loader():
+            from langchain_google_genai import ChatGoogleGenerativeAI
+
+            return ChatGoogleGenerativeAI(
+                model=os.getenv("GEMINI_MODEL_NAME", "gemini-2.5-pro"),
+                project=os.getenv("GCP_PROJECT_ID"),
+                location=os.getenv("GCP_REGION", "europe-west4"),
+                vertexai=True,
+            )
+
+        return gemini_loader
+
+    def _deduplicate_findings(
+        self, findings: list[dict[str, Any]]
+    ) -> list[dict[str, Any]]:
+        seen: set[tuple[str, str, str, str]] = set()
+        unique: list[dict[str, Any]] = []
+        for item in findings:
+            triplet = item.get("triplet") or {}
+            key = (
+                str(triplet.get("entity", "")).lower(),
+                str(triplet.get("relation", "")).lower(),
+                str(triplet.get("value", "")).lower(),
+                str(item.get("criterion_type", "")).lower(),
+            )
+            if key in seen:
+                continue
+            seen.add(key)
+            unique.append(item)
+        return unique
+
+    def _findings_to_criteria(
+        self, findings: list[dict[str, Any]]
+    ) -> list[Criterion]:
+        extracted: list[Criterion] = []
+        for item in findings:
+            if not item.get("has_criteria"):
+                continue
+            text = _normalize_candidate(str(item.get("text", "")))
+            if not is_valid_criterion_candidate(text):
+                continue
+            extracted.append(
+                Criterion(
+                    id="",
+                    text=text,
+                    criterion_type=item.get("criterion_type", "inclusion"),
+                    confidence=float(item.get("confidence", 0.8)),
+                    snomed_codes=[],
+                    evidence_spans=[],
+                )
+            )
+        if extracted:
+            logger.info("Chunked extraction found %d criteria", len(extracted))
+        return extracted
 
     async def _extract_with_gemini_orchestrator(
         self, document_text: str
