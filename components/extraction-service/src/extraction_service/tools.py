@@ -121,6 +121,16 @@ def extract_triplet(text: str) -> str:
     return json.dumps(normalized, separators=(",", ":"))
 
 
+def _clarify_ambiguity_impl(question: str, text: str) -> str:
+    """Invoke MedGemma to clarify an ambiguous criterion.
+
+    Used by clarify_ambiguity and by ClarifyAmbiguityCache.
+    """
+    template = _JINJA_ENV.get_template("clarify_ambiguity.j2")
+    prompt = template.render(question=question, text=text)
+    return _invoke_medgemma(prompt)
+
+
 @tool
 def clarify_ambiguity(question: str, text: str) -> str:
     """Clarify an ambiguous criterion with a targeted question.
@@ -132,6 +142,37 @@ def clarify_ambiguity(question: str, text: str) -> str:
     Returns:
         Clarification response text.
     """
-    template = _JINJA_ENV.get_template("clarify_ambiguity.j2")
-    prompt = template.render(question=question, text=text)
-    return _invoke_medgemma(prompt)
+    return _clarify_ambiguity_impl(question, text)
+
+
+class ClarifyAmbiguityCache:
+    """Cache clarify_ambiguity by (question, text) to avoid repeated calls."""
+
+    def __init__(self) -> None:
+        """Initialize an empty cache."""
+        self._cache: dict[tuple[str, str], str] = {}
+
+    def clarify(self, question: str, text: str) -> str:
+        """Return clarification for (question, text), using cache on repeated calls."""
+        key = (question.strip().lower(), text.strip().lower())
+        if key in self._cache:
+            logger.debug("Returning cached clarification for: %s", question[:50])
+            return f"[Already answered] {self._cache[key]}"
+        result = _clarify_ambiguity_impl(question, text)
+        self._cache[key] = result
+        return result
+
+    def reset(self) -> None:
+        """Clear the cache (e.g. between paragraphs)."""
+        self._cache.clear()
+
+
+def make_clarify_ambiguity_tool(cache: ClarifyAmbiguityCache) -> Any:
+    """Return a LangChain tool that delegates to the given cache (per-paragraph use)."""
+
+    @tool
+    def clarify_ambiguity_cached(question: str, text: str) -> str:
+        """Clarify an ambiguous criterion (cached per paragraph)."""
+        return cache.clarify(question, text)
+
+    return clarify_ambiguity_cached

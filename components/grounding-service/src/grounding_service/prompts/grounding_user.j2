@@ -3,6 +3,12 @@ Ground this clinical trial criterion:
 Criterion: {{ criterion_text }}
 Type: {{ criterion_type }}
 
+**IMPORTANT: Only ground clinically relevant terms for patient matching:**
+- Medical diagnoses, lab values, medications, procedures, demographics
+- Skip administrative terms (consent, guardian, criterion, protocol)
+
+For age criteria, map to "Date of birth" with computed_as: "floor((today - birthDate) / 365.25)"
+
 Follow this workflow:
 1. Call interpret_medical_text ONCE to get MedGemma's clinical interpretation
 2. For each of the top 3 identified concepts, call search_concepts (limit=3) to find UMLS matches and pick the best result
@@ -10,8 +16,8 @@ Follow this workflow:
 4. Map semantic types to field categories
 5. Extract relations (>, >=, <, <=, =, within, IS, IS NOT, AND, OR) and values from the criterion text
 6. If the criterion implies a computed field (e.g., age), include a computed_as expression:
-   - Example: "Age >= 18 years" -> concept "Date of birth", computed_as "today() - birthDate"
-7. Always attempt to ground demographic or lab terms to a SNOMED concept via UMLS
+   - Example: "Age >= 18 years" -> concept "Date of birth", computed_as "floor((today - birthDate) / 365.25)"
+7. Always attempt to ground demographic or lab terms to a SNOMED concept via UMLS (only clinically relevant terms)
 
 Return a structured GroundingResult with:
 - terms: List of grounded terms (snippet, umls_concept, umls_id, snomed_code, relation, value, unit, computed_as, confidence)

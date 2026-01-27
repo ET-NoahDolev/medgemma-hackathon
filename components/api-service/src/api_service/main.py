@@ -476,10 +476,16 @@ async def _run_extraction(
         raise
     except Exception:
         logger.exception("Extraction stream failed")
+        partial_count = storage.count_criteria(protocol_id)
         storage.update_protocol_status(
             protocol_id=protocol_id,
             processing_status="failed",
-            progress_message="Extraction failed.",
+            processed_count=partial_count,
+            progress_message=(
+                f"Extraction failed ({partial_count} criteria saved)."
+                if partial_count
+                else "Extraction failed."
+            ),
         )
 
 

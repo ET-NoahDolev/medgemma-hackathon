@@ -26,7 +26,11 @@ from extraction_service.schemas import (
     PageFilterResult,
     ParagraphFilterResult,
 )
-from extraction_service.tools import clarify_ambiguity, extract_triplet
+from extraction_service.tools import (
+    ClarifyAmbiguityCache,
+    extract_triplet,
+    make_clarify_ambiguity_tool,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -89,10 +93,11 @@ class ExtractionPipeline:
             user_template="filter_paragraphs.j2",
             recursion_limit=3,  # No tools, should be 1-shot
         )
+        self._clarify_cache = ClarifyAmbiguityCache()
         self._extract_agent = create_react_agent(
             model_loader=self._model_loader,
             prompts_dir=self._prompts_dir,
-            tools=[extract_triplet, clarify_ambiguity],
+            tools=[extract_triplet, make_clarify_ambiguity_tool(self._clarify_cache)],
             response_schema=ExtractionResult,
             system_template="system.j2",
             user_template="extract_criteria.j2",
@@ -196,9 +201,20 @@ class ExtractionPipeline:
         user_id: str | None = None,
     ) -> list[ExtractedCriterion]:
         criteria: list[ExtractedCriterion] = []
+        failed = 0
         for paragraph in paragraphs:
-            criteria.extend(
-                await self._extract_from_paragraph(paragraph, session_id, user_id)
+            extracted = await self._extract_from_paragraph(
+                paragraph, session_id, user_id
+            )
+            if not extracted:
+                # Empty can mean recursion limit or genuinely no criteria
+                failed += 1
+            criteria.extend(extracted)
+        if failed and paragraphs:
+            logger.info(
+                "Extraction: %d/%d paragraphs yielded no criteria",
+                failed,
+                len(paragraphs),
             )
         return criteria
 
@@ -208,10 +224,21 @@ class ExtractionPipeline:
         session_id: str | None = None,
         user_id: str | None = None,
     ) -> list[ExtractedCriterion]:
+        # Reset per-paragraph cache so we do not reuse clarifications across snippets
+        self._clarify_cache.reset()
         # Set trace metadata before agent invocation
         set_trace_metadata(user_id=user_id, session_id=session_id)
-        result = await self._extract_agent({"paragraph": paragraph})
-        return result.criteria
+        try:
+            result = await self._extract_agent({"paragraph": paragraph})
+            return result.criteria
+        except RecursionError as e:
+            logger.warning(
+                "Extraction hit recursion limit for paragraph page=%s index=%s: %s",
+                paragraph.page_number,
+                paragraph.paragraph_index,
+                e,
+            )
+            return []
 
 
 def extract_criteria(document_text: str) -> list[ExtractedCriterion]:
