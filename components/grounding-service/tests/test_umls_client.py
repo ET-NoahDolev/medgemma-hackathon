@@ -4,7 +4,16 @@ from unittest.mock import MagicMock, patch
 import httpx
 import pytest
 
-from grounding_service.umls_client import SnomedCandidate, UmlsClient
+from grounding_service.umls_client import (
+    SnomedCandidate,
+    UmlsApiAuthenticationError,
+    UmlsApiClientError,
+    UmlsApiError,
+    UmlsApiRateLimitError,
+    UmlsApiServerError,
+    UmlsClient,
+    _ServerError,
+)
 
 
 @pytest.fixture
@@ -182,3 +191,141 @@ class TestUmlsClientConfig:
     def test_custom_base_url(self) -> None:
         with UmlsClient(base_url="http://localhost:8080", api_key="test-key") as client:
             assert client.base_url == "http://localhost:8080"
+
+
+class TestUmlsClientExceptionHierarchy:
+    """Test UMLS client exception hierarchy and error handling."""
+
+    def test_authentication_error_401(self) -> None:
+        """Test that 401 status code raises UmlsApiAuthenticationError."""
+        with patch("httpx.Client") as mock_client_cls:
+            mock_client = MagicMock()
+            mock_response = MagicMock()
+            mock_response.status_code = 401
+            mock_response.text = "Unauthorized"
+            mock_response.is_success = False
+            mock_response.raise_for_status = MagicMock(
+                side_effect=httpx.HTTPStatusError(
+                    "401 Unauthorized", request=MagicMock(), response=mock_response
+                )
+            )
+            mock_client.get.return_value = mock_response
+            mock_client_cls.return_value = mock_client
+
+            with UmlsClient(api_key="test-key") as client:
+                with pytest.raises(UmlsApiAuthenticationError) as exc_info:
+                    client.search_snomed("test")
+
+        assert exc_info.value.status_code == 401
+        assert "Authentication failed" in exc_info.value.message
+        assert exc_info.value.response_body == "Unauthorized"
+
+    def test_authentication_error_403(self) -> None:
+        """Test that 403 status code raises UmlsApiAuthenticationError."""
+        with patch("httpx.Client") as mock_client_cls:
+            mock_client = MagicMock()
+            mock_response = MagicMock()
+            mock_response.status_code = 403
+            mock_response.text = "Forbidden"
+            mock_response.is_success = False
+            mock_response.raise_for_status = MagicMock(
+                side_effect=httpx.HTTPStatusError(
+                    "403 Forbidden", request=MagicMock(), response=mock_response
+                )
+            )
+            mock_client.get.return_value = mock_response
+            mock_client_cls.return_value = mock_client
+
+            with UmlsClient(api_key="test-key") as client:
+                with pytest.raises(UmlsApiAuthenticationError) as exc_info:
+                    client.search_snomed("test")
+
+        assert exc_info.value.status_code == 403
+        assert "Authentication failed" in exc_info.value.message
+
+    def test_rate_limit_error_429(self) -> None:
+        """Test that 429 status code raises UmlsApiRateLimitError."""
+        with patch("httpx.Client") as mock_client_cls:
+            mock_client = MagicMock()
+            mock_response = MagicMock()
+            mock_response.status_code = 429
+            mock_response.text = "Too Many Requests"
+            mock_response.is_success = False
+            mock_response.raise_for_status = MagicMock(
+                side_effect=httpx.HTTPStatusError(
+                    "429 Too Many Requests", request=MagicMock(), response=mock_response
+                )
+            )
+            mock_client.get.return_value = mock_response
+            mock_client_cls.return_value = mock_client
+
+            with UmlsClient(api_key="test-key") as client:
+                with pytest.raises(UmlsApiRateLimitError) as exc_info:
+                    client.search_snomed("test")
+
+        assert exc_info.value.status_code == 429
+        assert "Rate limit exceeded" in exc_info.value.message
+        assert exc_info.value.response_body == "Too Many Requests"
+
+    def test_server_error_500(self) -> None:
+        """Test that 500 status code raises _ServerError after retries."""
+        with patch("httpx.Client") as mock_client_cls:
+            mock_client = MagicMock()
+            mock_response = MagicMock()
+            mock_response.status_code = 500
+            mock_response.text = "Internal Server Error"
+            mock_response.is_success = False
+            mock_response.raise_for_status = MagicMock(
+                side_effect=httpx.HTTPStatusError(
+                    "500 Internal Server Error",
+                    request=MagicMock(),
+                    response=mock_response,
+                )
+            )
+            mock_client.get.return_value = mock_response
+            mock_client_cls.return_value = mock_client
+
+            with UmlsClient(api_key="test-key") as client:
+                # After retries are exhausted, _ServerError is raised
+                with pytest.raises(_ServerError) as exc_info:
+                    client.search_snomed("test")
+
+        assert exc_info.value.status_code == 500
+        assert "Internal Server Error" in exc_info.value.body
+
+    def test_server_error_503(self) -> None:
+        """Test that 503 status code raises _ServerError after retries."""
+        with patch("httpx.Client") as mock_client_cls:
+            mock_client = MagicMock()
+            mock_response = MagicMock()
+            mock_response.status_code = 503
+            mock_response.text = "Service Unavailable"
+            mock_response.is_success = False
+            mock_response.raise_for_status = MagicMock(
+                side_effect=httpx.HTTPStatusError(
+                    "503 Service Unavailable",
+                    request=MagicMock(),
+                    response=mock_response,
+                )
+            )
+            mock_client.get.return_value = mock_response
+            mock_client_cls.return_value = mock_client
+
+            with UmlsClient(api_key="test-key") as client:
+                # After retries are exhausted, _ServerError is raised
+                with pytest.raises(_ServerError) as exc_info:
+                    client.search_snomed("test")
+
+        assert exc_info.value.status_code == 503
+        assert "Service Unavailable" in exc_info.value.body
+
+    def test_exception_hierarchy_inheritance(self) -> None:
+        """Test that exception hierarchy is correct."""
+        # AuthenticationError should inherit from ClientError
+        assert issubclass(UmlsApiAuthenticationError, UmlsApiClientError)
+        # RateLimitError should inherit from ClientError
+        assert issubclass(UmlsApiRateLimitError, UmlsApiClientError)
+        # All should inherit from base UmlsApiError
+        assert issubclass(UmlsApiAuthenticationError, UmlsApiClientError)
+        assert issubclass(UmlsApiRateLimitError, UmlsApiClientError)
+        assert issubclass(UmlsApiServerError, UmlsApiError)

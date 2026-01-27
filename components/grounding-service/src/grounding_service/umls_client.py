@@ -441,7 +441,8 @@ class UmlsClient:
         self._http.close()
         try:
             self._cache.close()
-        except Exception:
+        except (OSError, AttributeError):
+            # Expected cleanup errors: cache may already be closed or file system errors
             pass
 
     def __del__(self) -> None:  # pragma: no cover
@@ -449,6 +450,8 @@ class UmlsClient:
         try:
             self._http.close()
         except Exception:
+            # Destructors should be defensive and catch all exceptions
+            # to prevent errors during garbage collection
             pass
 
     def get_concept_details(self, cui: str) -> dict[str, object]:

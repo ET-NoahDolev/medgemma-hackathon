@@ -143,7 +143,10 @@ class ExtractionPipeline:
                 yield item
 
     async def _filter_pages(
-        self, pages: Sequence[Page], session_id: str | None = None, user_id: str | None = None
+        self,
+        pages: Sequence[Page],
+        session_id: str | None = None,
+        user_id: str | None = None,
     ) -> list[Page]:
         if not pages:
             return []
@@ -159,7 +162,10 @@ class ExtractionPipeline:
         return [page for page in pages if page.page_number in selected_numbers]
 
     async def _filter_paragraphs(
-        self, pages: Sequence[Page], session_id: str | None = None, user_id: str | None = None
+        self,
+        pages: Sequence[Page],
+        session_id: str | None = None,
+        user_id: str | None = None,
     ) -> list[Paragraph]:
         # Set trace metadata before agent invocation
         set_trace_metadata(user_id=user_id, session_id=session_id)

@@ -4,7 +4,7 @@ import contextvars
 import logging
 import os
 from pathlib import Path
-from typing import Any, Awaitable, Callable, TypeVar
+from typing import TypeVar
 
 from dotenv import find_dotenv
 
@@ -79,7 +79,9 @@ def configure_mlflow_once(experiment_name: str) -> None:
         logger.warning("MLflow configuration failed: %s", exc)
 
 
-def set_trace_metadata(user_id: str | None = None, session_id: str | None = None) -> None:
+def set_trace_metadata(
+    user_id: str | None = None, session_id: str | None = None
+) -> None:
     """Set metadata on the current MLflow trace to group traces by user and session.
 
     This function should be called within the context where traces are being created

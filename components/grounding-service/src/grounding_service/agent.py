@@ -26,10 +26,11 @@ else:
     except ImportError:  # pragma: no cover
         ChatGoogleGenerativeAI = object  # type: ignore[assignment]
 
+from shared.mlflow_utils import set_trace_metadata
+
 from grounding_service.schemas import GroundingResult
 from grounding_service.tools import interpret_medical_text
 from grounding_service.umls_client import UmlsClient
-from shared.mlflow_utils import set_trace_metadata
 
 logger = logging.getLogger(__name__)
 

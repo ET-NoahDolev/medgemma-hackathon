@@ -77,7 +77,13 @@ def stub_model_extraction(
     if "fake_services" in request.fixturenames:
         return
 
-    async def _extract_criteria_async(_text: str) -> list[FakeExtractedCriterion]:
+    async def _extract_criteria_async(
+        _text: str,
+        session_id: str | None = None,
+        user_id: str | None = None,
+    ) -> list[FakeExtractedCriterion]:
+        _ = session_id  # Unused but required for signature compatibility
+        _ = user_id  # Unused but required for signature compatibility
         return [
             FakeExtractedCriterion(
                 text=constants.EXTRACTED_TEXT,
@@ -127,7 +133,13 @@ def fake_services(monkeypatch: pytest.MonkeyPatch) -> FakeServicesState:
     def _extract_criteria_stream(_text: str):
         yield from state.extracted
 
-    async def _extract_criteria_async(_text: str):
+    async def _extract_criteria_async(
+        _text: str,
+        session_id: str | None = None,
+        user_id: str | None = None,
+    ):
+        _ = session_id  # Unused but required for signature compatibility
+        _ = user_id  # Unused but required for signature compatibility
         return state.extracted
 
     class FakeUmlsClient:

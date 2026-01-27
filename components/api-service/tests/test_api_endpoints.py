@@ -356,6 +356,100 @@ def test_ground_criterion_falls_back_when_ai_fails(
     )
 
 
+def test_criterion_response_includes_umls_mappings_and_logical_operator(
+    client: TestClient,
+    fake_services: FakeServicesState,
+) -> None:
+    """Test that CriterionDetailResponse includes umls_mappings and logical_operator."""
+    from api_service.storage import Storage, get_engine
+
+    storage = Storage(get_engine())
+
+    # Create a protocol
+    create_response = client.post(
+        "/v1/protocols",
+        json={"title": PROTOCOL_TITLE, "document_text": DOCUMENT_TEXT},
+    )
+    protocol_id = create_response.json()["protocol_id"]
+
+    # Create a criterion with grounding_terms and logical_operator
+    grounding_terms = [
+        {
+            "umls_concept": "Age",
+            "umls_id": "C0001779",
+            "snomed_code": "371273006",
+            "relation": ">=",
+            "value": "18",
+            "unit": "years",
+            "umls_confidence": 0.95,
+            "grounding_confidence": 0.92,
+        },
+        {
+            "umls_concept": "Body weight",
+            "umls_id": "C0005910",
+            "snomed_code": "27113001",
+            "relation": ">=",
+            "value": "50",
+            "unit": "kg",
+            "umls_confidence": 0.88,
+            "grounding_confidence": 0.85,
+        },
+    ]
+
+    storage.create_criterion_detail(
+        protocol_id=protocol_id,
+        text="Age >= 18 years AND weight >= 50 kg",
+        criterion_type="inclusion",
+        confidence=0.9,
+        entity="age",
+        relation=">=",
+        value="18",
+        unit="years",
+        umls_concept="Age",
+        umls_id="C0001779",
+        snomed_codes=["371273006", "27113001"],
+        logical_operator="AND",
+        grounding_terms=grounding_terms,
+    )
+
+    # Get criteria list and verify response includes new fields
+    list_response = client.get(f"/v1/protocols/{protocol_id}/criteria")
+    assert list_response.status_code == 200
+
+    criteria = list_response.json()["criteria"]
+    assert len(criteria) == 1
+
+    criterion_response = criteria[0]
+
+    # Verify logical_operator is included
+    assert "logical_operator" in criterion_response
+    assert criterion_response["logical_operator"] == "AND"
+
+    # Verify grounding_terms is included
+    assert "grounding_terms" in criterion_response
+    assert len(criterion_response["grounding_terms"]) == 2
+    assert criterion_response["grounding_terms"][0]["umls_concept"] == "Age"
+    assert criterion_response["grounding_terms"][1]["umls_concept"] == "Body weight"
+
+    # Verify umls_mappings is included and derived from grounding_terms
+    assert "umls_mappings" in criterion_response
+    assert len(criterion_response["umls_mappings"]) == 2
+
+    # Verify first mapping
+    mapping1 = criterion_response["umls_mappings"][0]
+    assert mapping1["umls_concept"] == "Age"
+    assert mapping1["umls_id"] == "C0001779"
+    assert mapping1["snomed_code"] == "371273006"
+    assert "confidence" in mapping1
+
+    # Verify second mapping
+    mapping2 = criterion_response["umls_mappings"][1]
+    assert mapping2["umls_concept"] == "Body weight"
+    assert mapping2["umls_id"] == "C0005910"
+    assert mapping2["snomed_code"] == "27113001"
+    assert "confidence" in mapping2
+
+
 def test_lifespan_requires_api_key(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv("UMLS_API_KEY", raising=False)
     monkeypatch.delenv("GROUNDING_SERVICE_UMLS_API_KEY", raising=False)
