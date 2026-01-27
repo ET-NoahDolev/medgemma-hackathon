@@ -50,6 +50,7 @@ dev = [
     "aioresponses>=0.7.8",
     "gsutil>=5.35",
     "mlflow>=3.8.1",
+    "pytest-xdist>=3.8.0",
 ]
 
 [tool.uv.workspace]
@@ -151,7 +152,7 @@ pythonpath = [
     "components/shared/src",
 ]
 asyncio_mode = "auto"
-addopts = "--cov=api_service --cov=data_pipeline --cov=evaluation --cov=extraction_service --cov=grounding_service --cov=inference --cov=shared --cov-branch --cov-report=term-missing"
+addopts = "-n auto --cov=api_service --cov=data_pipeline --cov=evaluation --cov=extraction_service --cov=grounding_service --cov=inference --cov=shared --cov-branch --cov-report=term-missing"
 
 [tool.coverage.run]
 source = [
