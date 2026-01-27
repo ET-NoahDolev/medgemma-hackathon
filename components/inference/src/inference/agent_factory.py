@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import importlib.metadata
 import json
 import logging
 import time
@@ -68,6 +69,7 @@ def create_react_agent(
     response_schema: type[TModel],
     system_template: str,
     user_template: str,
+    recursion_limit: int = 10,
 ) -> Callable[[Mapping[str, Any]], Awaitable[TModel]]:
     """Create a reusable ReAct agent invocation function.
 
@@ -83,6 +85,7 @@ def create_react_agent(
         response_schema: Pydantic model for structured output.
         system_template: Filename of the system prompt template.
         user_template: Filename of the user prompt template.
+        recursion_limit: Maximum number of agentic steps before stopping (default: 10).
 
     Returns:
         Async function that takes prompt variables and returns a structured response.
@@ -109,6 +112,24 @@ def create_react_agent(
 
         # region agent log
         try:
+            try:
+                mlflow_version = importlib.metadata.version("mlflow")
+            except importlib.metadata.PackageNotFoundError:
+                mlflow_version = "unknown"
+            try:
+                langgraph_version = importlib.metadata.version("langgraph")
+            except importlib.metadata.PackageNotFoundError:
+                langgraph_version = "unknown"
+            active_trace = None
+            try:
+                import mlflow  # type: ignore
+
+                if hasattr(mlflow, "tracing") and hasattr(
+                    mlflow.tracing, "get_active_trace"
+                ):
+                    active_trace = mlflow.tracing.get_active_trace()
+            except Exception:
+                active_trace = None
             with open(
                 "/Users/noahdolevelixir/Code/gemma-hackathon/.cursor/debug.log",
                 "a",
@@ -119,12 +140,18 @@ def create_react_agent(
                         {
                             "sessionId": "debug-session",
                             "runId": "trace-debug",
-                            "hypothesisId": "H4",
+                            "hypothesisId": "H3",
                             "location": "agent_factory.py:120",
                             "message": "about to invoke agent",
                             "data": {
                                 "agent_type": type(agent).__name__,
                                 "has_ainvoke": hasattr(agent, "ainvoke"),
+                                "mlflow_version": mlflow_version,
+                                "langgraph_version": langgraph_version,
+                                "active_trace_is_none": active_trace is None,
+                                "active_trace_type": None
+                                if active_trace is None
+                                else type(active_trace).__name__,
                             },
                             "timestamp": int(time.time() * 1000),
                         }
@@ -141,7 +168,8 @@ def create_react_agent(
                     ("system", system_prompt),
                     ("user", user_prompt),
                 ]
-            }
+            },
+            config={"recursion_limit": recursion_limit},
         )
         # region agent log
         try:

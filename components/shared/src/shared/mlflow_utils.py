@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import contextvars
 import json
+import importlib.metadata
 import logging
 import os
 import time
@@ -69,6 +70,10 @@ def configure_mlflow_once(experiment_name: str) -> None:
 
         # region agent log
         try:
+            try:
+                mlflow_version = importlib.metadata.version("mlflow")
+            except importlib.metadata.PackageNotFoundError:
+                mlflow_version = "unknown"
             with open(
                 "/Users/noahdolevelixir/Code/gemma-hackathon/.cursor/debug.log",
                 "a",
@@ -87,6 +92,7 @@ def configure_mlflow_once(experiment_name: str) -> None:
                                 "tracking_uri": uri,
                                 "run_tracer_inline": run_tracer_inline,
                                 "has_langgraph": hasattr(mlflow, "langgraph"),
+                                "mlflow_version": mlflow_version,
                             },
                             "timestamp": int(time.time() * 1000),
                         }

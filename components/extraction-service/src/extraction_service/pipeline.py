@@ -78,6 +78,7 @@ class ExtractionPipeline:
             response_schema=PageFilterResult,
             system_template="system.j2",
             user_template="filter_pages.j2",
+            recursion_limit=3,  # No tools, should be 1-shot
         )
         self._paragraph_filter_agent = create_react_agent(
             model_loader=self._model_loader,
@@ -86,6 +87,7 @@ class ExtractionPipeline:
             response_schema=ParagraphFilterResult,
             system_template="system.j2",
             user_template="filter_paragraphs.j2",
+            recursion_limit=3,  # No tools, should be 1-shot
         )
         self._extract_agent = create_react_agent(
             model_loader=self._model_loader,
@@ -94,6 +96,7 @@ class ExtractionPipeline:
             response_schema=ExtractionResult,
             system_template="system.j2",
             user_template="extract_criteria.j2",
+            recursion_limit=8,  # 2 tools, simpler task
         )
 
     async def extract_criteria_async(

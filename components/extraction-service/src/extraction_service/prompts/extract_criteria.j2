@@ -12,3 +12,10 @@ Return ONLY a JSON object matching this shape:
 
 Paragraph:
 {{ paragraph.text }}
+
+---
+
+## Minimize tool use
+- Call extract_triplet once to get the initial triplets
+- Call clarify_ambiguity only if a field is genuinely ambiguous AND necessary
+- Return the JSON immediately after extraction

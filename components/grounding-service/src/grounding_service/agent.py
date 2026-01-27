@@ -144,6 +144,7 @@ class GroundingAgent:
             response_schema=GroundingResult,  # Pydantic schema
             system_template="grounding_system.j2",
             user_template="grounding_user.j2",
+            recursion_limit=10,  # Max 10 steps for grounding (3 tools)
         )
         return self._agent
 
