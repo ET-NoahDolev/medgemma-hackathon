@@ -1,7 +1,6 @@
 """LangGraph ReAct agent for grounding clinical trial criteria."""
 
 import logging
-import os
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -30,7 +29,7 @@ from shared.mlflow_utils import set_trace_metadata
 
 from grounding_service.schemas import GroundingResult
 from grounding_service.tools import interpret_medical_text
-from grounding_service.umls_client import UmlsClient
+from grounding_service.umls_client import UmlsClient, get_umls_api_key
 
 logger = logging.getLogger(__name__)
 
@@ -52,7 +51,7 @@ def search_concepts_tool(term: str, limit: int = 5) -> str:
     """
     import json
 
-    api_key = os.getenv("UMLS_API_KEY")
+    api_key = get_umls_api_key()
     if not api_key:
         return json.dumps([])
 
@@ -86,7 +85,7 @@ def get_semantic_type_tool(cui: str) -> str:
     """
     import json
 
-    api_key = os.getenv("UMLS_API_KEY")
+    api_key = get_umls_api_key()
     if not api_key:
         return json.dumps({"cui": cui, "semantic_types": []})
 
@@ -154,6 +153,7 @@ class GroundingAgent:
         criterion_type: str,
         session_id: str | None = None,
         user_id: str | None = None,
+        run_id: str | None = None,
     ) -> GroundingResult:
         """Ground a criterion using Gemini orchestrator with structured output.
 
@@ -162,12 +162,13 @@ class GroundingAgent:
             criterion_type: Type of criterion ("inclusion" or "exclusion").
             session_id: Optional session ID for trace grouping.
             user_id: Optional user ID for trace grouping.
+            run_id: Optional run ID to group all traces from a single extraction run.
 
         Returns:
             GroundingResult with SNOMED codes and field mappings.
         """
         # Set trace metadata before agent invocation
-        set_trace_metadata(user_id=user_id, session_id=session_id)
+        set_trace_metadata(user_id=user_id, session_id=session_id, run_id=run_id)
 
         agent = await self._get_agent()
         return await agent(

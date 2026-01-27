@@ -6,6 +6,7 @@ import asyncio
 import logging
 import os
 import tempfile
+import uuid
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
@@ -433,6 +434,9 @@ async def _run_extraction(
     user_id: str | None = None,
 ) -> None:
     """Run extraction in background task (streaming)."""
+    # Generate a unique run ID for this extraction to group all traces
+    run_id = str(uuid.uuid4())
+    logger.info("Starting extraction run_id=%s protocol_id=%s", run_id, protocol_id)
     try:
         storage.update_protocol_status(
             protocol_id=protocol_id,
@@ -458,6 +462,7 @@ async def _run_extraction(
             umls_api_key=_get_umls_api_key(),
             session_id=session_id,
             user_id=user_id,
+            run_id=run_id,
         )
         count = len(criteria)
         storage.update_protocol_status(

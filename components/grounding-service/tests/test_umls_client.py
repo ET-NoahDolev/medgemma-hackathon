@@ -148,7 +148,8 @@ class TestUmlsClientSearch:
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         monkeypatch.delenv("UMLS_API_KEY", raising=False)
-        with pytest.raises(ValueError, match="UMLS_API_KEY is required"):
+        monkeypatch.delenv("GROUNDING_SERVICE_UMLS_API_KEY", raising=False)
+        with pytest.raises(ValueError, match="UMLS API key is required"):
             UmlsClient(api_key=None)
 
     def test_search_snomed_respects_limit(

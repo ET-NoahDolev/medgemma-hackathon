@@ -81,9 +81,11 @@ def stub_model_extraction(
         _text: str,
         session_id: str | None = None,
         user_id: str | None = None,
+        run_id: str | None = None,
     ) -> list[FakeExtractedCriterion]:
         _ = session_id  # Unused but required for signature compatibility
         _ = user_id  # Unused but required for signature compatibility
+        _ = run_id  # Unused but required for signature compatibility
         return [
             FakeExtractedCriterion(
                 text=constants.EXTRACTED_TEXT,
@@ -137,9 +139,11 @@ def fake_services(monkeypatch: pytest.MonkeyPatch) -> FakeServicesState:
         _text: str,
         session_id: str | None = None,
         user_id: str | None = None,
+        run_id: str | None = None,
     ):
         _ = session_id  # Unused but required for signature compatibility
         _ = user_id  # Unused but required for signature compatibility
+        _ = run_id  # Unused but required for signature compatibility
         return state.extracted
 
     class FakeUmlsClient:

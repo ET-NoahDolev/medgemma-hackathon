@@ -128,6 +128,10 @@ def get_engine() -> Engine:
 
 def init_db() -> None:
     """Initialize the database tables."""
+    # Ensure all models are registered in metadata
+    # Reference models to trigger registration
+    _ = Protocol, Criterion, HitlEdit
+
     engine = get_engine()
     SQLModel.metadata.create_all(engine)
     _ensure_sqlite_protocol_progress_columns(engine)
@@ -269,8 +273,17 @@ def reset_storage() -> None:
             "reset_storage() requires ALLOW_STORAGE_RESET=1 environment variable. "
             "This function destroys all data and should only be used in tests."
         )
+    # Ensure all models are registered in metadata before dropping
+    _ = Protocol, Criterion, HitlEdit
+    # Clear engine cache to ensure fresh engine for tests
+    get_engine.cache_clear()
     engine = get_engine()
-    SQLModel.metadata.drop_all(engine)
+    # Drop all tables, ignoring errors if tables don't exist
+    try:
+        SQLModel.metadata.drop_all(engine)
+    except OperationalError:
+        # Tables might not exist yet, which is fine
+        pass
     SQLModel.metadata.create_all(engine)
     init_db()
 

@@ -1,7 +1,8 @@
 """UMLS SNOMED client with disk cache and retry.
 
 Environment variables:
-- UMLS_API_KEY: API key for UMLS (required).
+- GROUNDING_SERVICE_UMLS_API_KEY or UMLS_API_KEY: API key for UMLS (required).
+  Checked in that order to match API service configuration.
 - UMLS_CACHE_DIR: Directory for disk cache (optional; defaults to
   .cache/umls next to module).
 - UMLS_CACHE_TTL_SECONDS: TTL in seconds for cache entries (optional;
@@ -32,6 +33,11 @@ from tenacity import (
 logger = logging.getLogger(__name__)
 
 UMLS_DEFAULT_URL = "https://uts-ws.nlm.nih.gov/rest"
+
+
+def get_umls_api_key() -> str | None:
+    """Return UMLS API key. Precedence: GROUNDING_SERVICE_UMLS_API_KEY, then UMLS_API_KEY."""
+    return os.getenv("GROUNDING_SERVICE_UMLS_API_KEY") or os.getenv("UMLS_API_KEY")
 
 
 class UmlsApiError(Exception):
@@ -188,7 +194,7 @@ class UmlsClient:
     ) -> None:
         """Initialize the UMLS client configuration."""
         self.base_url: str = base_url or os.getenv("UMLS_BASE_URL") or UMLS_DEFAULT_URL
-        self.api_key = api_key or os.getenv("UMLS_API_KEY")
+        self.api_key = api_key or get_umls_api_key()
         env_timeout = os.getenv("UMLS_TIMEOUT_SECONDS")
         self.timeout = (
             float(env_timeout)
@@ -196,7 +202,9 @@ class UmlsClient:
             else (timeout if timeout is not None else 10.0)
         )
         if not self.api_key:
-            raise ValueError("UMLS_API_KEY is required")
+            raise ValueError(
+                "UMLS API key is required. Set GROUNDING_SERVICE_UMLS_API_KEY or UMLS_API_KEY."
+            )
         self._http = httpx.Client(timeout=self.timeout)
         cache_dir = os.getenv("UMLS_CACHE_DIR")
         default_cache = Path(user_cache_dir("grounding-service", "gemma")) / "umls"

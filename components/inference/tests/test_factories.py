@@ -3,7 +3,12 @@ from typing import Any
 
 import pytest
 
-from inference import AgentConfig, create_model_loader, create_react_agent
+from inference import (
+    AgentConfig,
+    create_model_loader,
+    create_react_agent,
+    create_structured_extractor,
+)
 
 
 def test_agent_config_from_env_defaults(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -193,6 +198,7 @@ async def test_create_react_agent_smoke(
     (tmp_path / "sys.j2").write_text("system {{ x }}")
     (tmp_path / "user.j2").write_text("user {{ y }}")
 
+    from langchain_core.messages import AIMessage
     from pydantic import BaseModel
 
     class DummySchema(BaseModel):
@@ -202,10 +208,19 @@ async def test_create_react_agent_smoke(
         async def ainvoke(
             self, _payload: object, *, config: object | None = None
         ) -> dict[str, object]:
-            return {"structured_response": {"ok": True}}
+            # Return messages with a final AI message
+            return {"messages": [AIMessage(content="Final response")]}
 
-    def dummy_model_loader() -> object:
-        return object()
+    class DummyStructuredModel:
+        async def ainvoke(self, messages: list[Any]) -> DummySchema:
+            return DummySchema(ok=True)
+
+    class DummyModel:
+        def with_structured_output(self, schema: type[Any]) -> DummyStructuredModel:
+            return DummyStructuredModel()
+
+    def dummy_model_loader() -> DummyModel:
+        return DummyModel()
 
     # Monkeypatch langchain.agents.create_agent to return DummyAgent
     def _create_agent(**_kw: Any) -> DummyAgent:
@@ -216,6 +231,42 @@ async def test_create_react_agent_smoke(
         model_loader=dummy_model_loader,
         prompts_dir=tmp_path,
         tools=[],
+        response_schema=DummySchema,
+        system_template="sys.j2",
+        user_template="user.j2",
+    )
+    result = await invoke({"x": "a", "y": "b"})
+    assert isinstance(result, DummySchema)
+    assert result.ok is True
+
+
+@pytest.mark.asyncio
+async def test_create_structured_extractor_smoke(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Test create_structured_extractor with mocked model."""
+    (tmp_path / "sys.j2").write_text("system {{ x }}")
+    (tmp_path / "user.j2").write_text("user {{ y }}")
+
+    from pydantic import BaseModel
+
+    class DummySchema(BaseModel):
+        ok: bool = False
+
+    class DummyStructuredModel:
+        async def ainvoke(self, messages: list[Any]) -> DummySchema:
+            return DummySchema(ok=True)
+
+    class DummyModel:
+        def with_structured_output(self, schema: type[Any]) -> DummyStructuredModel:
+            return DummyStructuredModel()
+
+    def dummy_model_loader() -> DummyModel:
+        return DummyModel()
+
+    invoke = create_structured_extractor(
+        model_loader=dummy_model_loader,
+        prompts_dir=tmp_path,
         response_schema=DummySchema,
         system_template="sys.j2",
         user_template="user.j2",

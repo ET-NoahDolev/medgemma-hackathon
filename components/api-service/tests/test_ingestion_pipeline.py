@@ -39,9 +39,11 @@ async def test_ingestion_pipeline_stores_triplet_and_grounding(
         _text: str,
         session_id: str | None = None,
         user_id: str | None = None,
+        run_id: str | None = None,
     ):
         _ = session_id  # Unused but required for signature compatibility
         _ = user_id  # Unused but required for signature compatibility
+        _ = run_id  # Unused but required for signature compatibility
         return fake_services.extracted
 
     class FakeUmlsClient:

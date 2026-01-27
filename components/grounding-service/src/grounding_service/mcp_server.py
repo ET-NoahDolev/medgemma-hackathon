@@ -6,12 +6,11 @@ use the same underlying UmlsClient for consistency.
 """
 
 import logging
-import os
 from typing import Any
 
 from fastmcp import FastMCP  # type: ignore[import-not-found]
 
-from grounding_service.umls_client import UmlsClient
+from grounding_service.umls_client import UmlsClient, get_umls_api_key
 
 logger = logging.getLogger(__name__)
 
@@ -29,9 +28,12 @@ def search_concepts(term: str, limit: int = 5) -> list[dict[str, Any]]:
     Returns:
         List of concept dictionaries with SNOMED code and CUI fields.
     """
-    api_key = os.getenv("UMLS_API_KEY")
+    api_key = get_umls_api_key()
     if not api_key:
-        logger.warning("UMLS_API_KEY not set, returning empty results")
+        logger.warning(
+            "UMLS API key not set (GROUNDING_SERVICE_UMLS_API_KEY or UMLS_API_KEY), "
+            "returning empty results"
+        )
         return []
 
     try:
@@ -62,9 +64,12 @@ def get_semantic_type(cui: str) -> dict[str, Any]:
     Returns:
         Dictionary with semantic type information including TUI and name.
     """
-    api_key = os.getenv("UMLS_API_KEY")
+    api_key = get_umls_api_key()
     if not api_key:
-        logger.warning("UMLS_API_KEY not set, returning empty result")
+        logger.warning(
+            "UMLS API key not set (GROUNDING_SERVICE_UMLS_API_KEY or UMLS_API_KEY), "
+            "returning empty result"
+        )
         return {"cui": cui, "semantic_types": []}
 
     try:
@@ -89,9 +94,12 @@ def get_concept_details(cui: str) -> dict[str, Any]:
     Returns:
         Dictionary with concept details from UMLS API.
     """
-    api_key = os.getenv("UMLS_API_KEY")
+    api_key = get_umls_api_key()
     if not api_key:
-        logger.warning("UMLS_API_KEY not set, returning empty result")
+        logger.warning(
+            "UMLS API key not set (GROUNDING_SERVICE_UMLS_API_KEY or UMLS_API_KEY), "
+            "returning empty result"
+        )
         return {"cui": cui, "details": {}}
 
     try:

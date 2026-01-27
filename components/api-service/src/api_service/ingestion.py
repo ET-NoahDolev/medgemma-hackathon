@@ -40,10 +40,13 @@ def _select_primary_triplet(payload: dict[str, Any]) -> dict[str, Any]:
 
 
 async def _extract_triplet(
-    text: str, session_id: str | None = None, user_id: str | None = None
+    text: str,
+    session_id: str | None = None,
+    user_id: str | None = None,
+    run_id: str | None = None,
 ) -> dict[str, Any]:
     # Set trace metadata before tool invocation
-    set_trace_metadata(user_id=user_id, session_id=session_id)
+    set_trace_metadata(user_id=user_id, session_id=session_id, run_id=run_id)
     raw: str = await to_thread.run_sync(_run_extract_triplet, text)
     payload = _parse_triplet_payload(raw)
     return _select_primary_triplet(payload)
@@ -51,10 +54,11 @@ async def _extract_triplet(
 
 def _run_extract_triplet(text: str) -> str:
     tool = extract_triplet
+    # LangChain @tool expects .invoke(input: dict) mapping param names to values
     if hasattr(tool, "invoke"):
-        return cast(Any, tool).invoke(text)
+        return cast(Any, tool).invoke({"text": text})
     if hasattr(tool, "run"):
-        return cast(Any, tool).run(text)
+        return cast(Any, tool).run({"text": text})
     extractor = cast(Callable[[str], str], tool)
     return extractor(text)
 
@@ -64,6 +68,7 @@ async def _ground_with_ai(
     criterion_type: str,
     session_id: str | None = None,
     user_id: str | None = None,
+    run_id: str | None = None,
 ) -> tuple[dict[str, Any], list[str], list[dict[str, Any]], str | None]:
     """Ground criterion with AI and return all terms.
 
@@ -76,8 +81,8 @@ async def _ground_with_ai(
         return {}, [], [], None
 
     agent = get_grounding_agent()
-    # Pass session/user IDs to grounding agent which will set trace metadata
-    result = await agent.ground(text, criterion_type, session_id, user_id)
+    # Pass session/user/run IDs to grounding agent which will set trace metadata
+    result = await agent.ground(text, criterion_type, session_id, user_id, run_id)
     if not result.terms:
         return {}, [], [], None
 
@@ -171,8 +176,11 @@ async def _build_criterion_payload(
     umls_api_key: str,
     session_id: str | None = None,
     user_id: str | None = None,
+    run_id: str | None = None,
 ) -> tuple[dict[str, Any], list[str], list[dict[str, Any]], str | None]:
-    triplet = await _extract_triplet(text, session_id=session_id, user_id=user_id)
+    triplet = await _extract_triplet(
+        text, session_id=session_id, user_id=user_id, run_id=run_id
+    )
 
     computed_as = None
     entity = triplet.get("entity")
@@ -191,7 +199,11 @@ async def _build_criterion_payload(
     if use_ai_grounding:
         grounding_payload, snomed_codes, grounding_terms, logical_operator = (
             await _ground_with_ai(
-                text, criterion_type, session_id=session_id, user_id=user_id
+                text,
+                criterion_type,
+                session_id=session_id,
+                user_id=user_id,
+                run_id=run_id,
             )
         )
     if not grounding_payload:
@@ -216,6 +228,7 @@ async def ingest_protocol_document_text(
     umls_api_key: str,
     session_id: str | None = None,
     user_id: str | None = None,
+    run_id: str | None = None,
 ) -> list[StorageCriterion]:
     """Extract criteria, ground them, and store results in the database.
 
@@ -226,6 +239,7 @@ async def ingest_protocol_document_text(
         umls_api_key: UMLS API key for grounding.
         session_id: Optional session ID for trace grouping.
         user_id: Optional user ID for trace grouping.
+        run_id: Optional run ID to group all traces from a single extraction run.
     """
     use_ai_grounding = os.getenv("USE_AI_GROUNDING", "false").lower() == "true"
     logger.info("Ingestion: use_ai_grounding=%s", use_ai_grounding)
@@ -234,7 +248,7 @@ async def ingest_protocol_document_text(
         raise RuntimeError("Extraction pipeline does not support async extraction.")
 
     items = await extraction_pipeline.extract_criteria_async(
-        document_text, session_id=session_id, user_id=user_id
+        document_text, session_id=session_id, user_id=user_id, run_id=run_id
     )
     iterator = iter(items)
 
@@ -248,6 +262,7 @@ async def ingest_protocol_document_text(
                 umls_api_key=umls_api_key,
                 session_id=session_id,
                 user_id=user_id,
+                run_id=run_id,
             )
         )
         entity = payload.get("entity")

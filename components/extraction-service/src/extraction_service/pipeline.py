@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import AsyncIterator, Iterable, Iterator, Sequence
 
 import anyio
-from inference.agent_factory import create_react_agent
+from inference.agent_factory import create_react_agent, create_structured_extractor
 from inference.model_factory import create_gemini_model_loader
 from shared.mlflow_utils import set_trace_metadata
 
@@ -75,23 +75,19 @@ class ExtractionPipeline:
             region=self.config.gcp_region,
         )
         self._prompts_dir = Path(__file__).parent / "prompts"
-        self._page_filter_agent = create_react_agent(
+        self._page_filter_agent = create_structured_extractor(
             model_loader=self._model_loader,
             prompts_dir=self._prompts_dir,
-            tools=[],
             response_schema=PageFilterResult,
             system_template="system.j2",
             user_template="filter_pages.j2",
-            recursion_limit=3,  # No tools, should be 1-shot
         )
-        self._paragraph_filter_agent = create_react_agent(
+        self._paragraph_filter_agent = create_structured_extractor(
             model_loader=self._model_loader,
             prompts_dir=self._prompts_dir,
-            tools=[],
             response_schema=ParagraphFilterResult,
             system_template="system.j2",
             user_template="filter_paragraphs.j2",
-            recursion_limit=3,  # No tools, should be 1-shot
         )
         self._clarify_cache = ClarifyAmbiguityCache()
         self._extract_agent = create_react_agent(
@@ -109,6 +105,7 @@ class ExtractionPipeline:
         document_text: str,
         session_id: str | None = None,
         user_id: str | None = None,
+        run_id: str | None = None,
     ) -> list[ExtractedCriterion]:
         """Extract criteria using hierarchical filtering.
 
@@ -116,17 +113,18 @@ class ExtractionPipeline:
             document_text: Document text to extract from.
             session_id: Optional session ID for trace grouping.
             user_id: Optional user ID for trace grouping.
+            run_id: Optional run ID to group all traces from a single extraction run.
         """
         pages = split_into_pages(document_text, max_chars=self.config.max_page_chars)
         if not pages:
             return []
 
-        relevant_pages = await self._filter_pages(pages, session_id, user_id)
+        relevant_pages = await self._filter_pages(pages, session_id, user_id, run_id)
         relevant_paragraphs = await self._filter_paragraphs(
-            relevant_pages, session_id, user_id
+            relevant_pages, session_id, user_id, run_id
         )
         criteria = await self._extract_from_paragraphs(
-            relevant_paragraphs, session_id, user_id
+            relevant_paragraphs, session_id, user_id, run_id
         )
         return _deduplicate(criteria)
 
@@ -155,12 +153,13 @@ class ExtractionPipeline:
         pages: Sequence[Page],
         session_id: str | None = None,
         user_id: str | None = None,
+        run_id: str | None = None,
     ) -> list[Page]:
         if not pages:
             return []
 
         # Set trace metadata before agent invocation
-        set_trace_metadata(user_id=user_id, session_id=session_id)
+        set_trace_metadata(user_id=user_id, session_id=session_id, run_id=run_id)
 
         selected_numbers: set[int] = set()
         for batch in _chunked(pages, self.config.max_pages_per_batch):
@@ -174,9 +173,10 @@ class ExtractionPipeline:
         pages: Sequence[Page],
         session_id: str | None = None,
         user_id: str | None = None,
+        run_id: str | None = None,
     ) -> list[Paragraph]:
         # Set trace metadata before agent invocation
-        set_trace_metadata(user_id=user_id, session_id=session_id)
+        set_trace_metadata(user_id=user_id, session_id=session_id, run_id=run_id)
 
         relevant: list[Paragraph] = []
         for page in pages:
@@ -199,12 +199,13 @@ class ExtractionPipeline:
         paragraphs: Sequence[Paragraph],
         session_id: str | None = None,
         user_id: str | None = None,
+        run_id: str | None = None,
     ) -> list[ExtractedCriterion]:
         criteria: list[ExtractedCriterion] = []
         failed = 0
         for paragraph in paragraphs:
             extracted = await self._extract_from_paragraph(
-                paragraph, session_id, user_id
+                paragraph, session_id, user_id, run_id
             )
             if not extracted:
                 # Empty can mean recursion limit or genuinely no criteria
@@ -223,11 +224,12 @@ class ExtractionPipeline:
         paragraph: Paragraph,
         session_id: str | None = None,
         user_id: str | None = None,
+        run_id: str | None = None,
     ) -> list[ExtractedCriterion]:
         # Reset per-paragraph cache so we do not reuse clarifications across snippets
         self._clarify_cache.reset()
         # Set trace metadata before agent invocation
-        set_trace_metadata(user_id=user_id, session_id=session_id)
+        set_trace_metadata(user_id=user_id, session_id=session_id, run_id=run_id)
         try:
             result = await self._extract_agent({"paragraph": paragraph})
             return result.criteria
@@ -258,6 +260,7 @@ async def extract_criteria_async(
     document_text: str,
     session_id: str | None = None,
     user_id: str | None = None,
+    run_id: str | None = None,
 ) -> list[ExtractedCriterion]:
     """Async wrapper for extracting criteria.
 
@@ -265,9 +268,12 @@ async def extract_criteria_async(
         document_text: Document text to extract from.
         session_id: Optional session ID for trace grouping.
         user_id: Optional user ID for trace grouping.
+        run_id: Optional run ID to group all traces from a single extraction run.
     """
     pipeline = _get_pipeline()
-    return await pipeline.extract_criteria_async(document_text, session_id, user_id)
+    return await pipeline.extract_criteria_async(
+        document_text, session_id, user_id, run_id
+    )
 
 
 def iter_normalized_texts(items: Iterable[str]) -> Iterator[str]:

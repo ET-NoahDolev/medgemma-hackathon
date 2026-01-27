@@ -30,6 +30,65 @@ def render_prompts(
     return system_tpl.render(**prompt_vars), user_tpl.render(**prompt_vars)
 
 
+def create_structured_extractor(
+    *,
+    model_loader: Callable[[], Any],
+    prompts_dir: Path,
+    response_schema: type[TModel],
+    system_template: str,
+    user_template: str,
+) -> Callable[[Mapping[str, Any]], Awaitable[TModel]]:
+    """Create a structured extraction function using model.with_structured_output().
+
+    This function uses the model's native structured output support (e.g., Gemini's
+    JSON schema mode) to return validated Pydantic instances directly. This is more
+    reliable than relying on agent frameworks' structured output handling.
+
+    Args:
+        model_loader: Callable returning a LangChain-compatible chat model that
+            supports with_structured_output().
+        prompts_dir: Directory containing Jinja2 templates.
+        response_schema: Pydantic model for structured output.
+        system_template: Filename of the system prompt template.
+        user_template: Filename of the user prompt template.
+
+    Returns:
+        Async function that takes prompt variables and returns a validated
+        Pydantic instance.
+    """
+    @lazy_singleton
+    def _get_structured_model() -> Any:
+        model = model_loader()
+        return model.with_structured_output(response_schema)
+
+    async def invoke(prompt_vars: Mapping[str, Any]) -> TModel:
+        system_prompt, user_prompt = render_prompts(
+            prompts_dir=prompts_dir,
+            system_template=system_template,
+            user_template=user_template,
+            prompt_vars=prompt_vars,
+        )
+
+        structured_model = _get_structured_model()
+        result = await structured_model.ainvoke([
+            ("system", system_prompt),
+            ("user", user_prompt),
+        ])
+
+        # with_structured_output returns the Pydantic instance directly
+        if isinstance(result, response_schema):
+            return result
+        if isinstance(result, dict):
+            return response_schema(**result)
+
+        raise ValueError(
+            f"Model did not return structured output of type "
+            f"{response_schema.__name__}. Got: {type(result)}"
+        )
+
+    return invoke
+
+
 def _load_langgraph_create_react_agent() -> Any:
     """Load LangGraph's prebuilt create_react_agent lazily."""
     try:
@@ -68,12 +127,16 @@ def create_react_agent(
     user_template: str,
     recursion_limit: int = 10,
 ) -> Callable[[Mapping[str, Any]], Awaitable[TModel]]:
-    """Create a reusable ReAct agent invocation function.
+    """Create a reusable ReAct agent invocation function with structured output.
 
     This function composes:
     - lazy model loading (shared across services)
     - Jinja2 prompt rendering (service-specific templates)
-    - LangGraph ReAct agent execution with structured output
+    - LangGraph ReAct agent execution for tool calling
+    - Structured output extraction using model.with_structured_output()
+
+    When tools are present, the agent executes tool calls, then uses
+    with_structured_output() on the final message to extract structured results.
 
     Args:
         model_loader: Callable returning a LangChain-compatible chat model.
@@ -91,11 +154,17 @@ def create_react_agent(
     def _get_agent() -> Any:
         lg_create = _load_langgraph_create_react_agent()
         model = model_loader()
+        # Don't use response_format - we'll handle structured output separately
         return lg_create(
             model=model,
             tools=tools,
-            response_format=response_schema,
+            response_format=None,
         )
+
+    @lazy_singleton
+    def _get_structured_model() -> Any:
+        model = model_loader()
+        return model.with_structured_output(response_schema)
 
     async def invoke(prompt_vars: Mapping[str, Any]) -> TModel:
         system_prompt, user_prompt = render_prompts(
@@ -107,6 +176,7 @@ def create_react_agent(
 
         agent = _get_agent()
 
+        # Run the agent to execute tool calls
         result = await agent.ainvoke(
             {
                 "messages": [
@@ -116,18 +186,35 @@ def create_react_agent(
             },
             config={"recursion_limit": recursion_limit},
         )
-        structured = None
-        if isinstance(result, dict):
-            structured = result.get("structured_response")
 
-        if isinstance(structured, response_schema):
-            return structured
-        if isinstance(structured, dict):
-            return response_schema(**structured)
+        # Extract messages from agent result
+        messages = result.get("messages", []) if isinstance(result, dict) else []
+        if not messages:
+            raise ValueError("Agent returned no messages")
+
+        # Convert agent messages to format expected by structured model
+        # Include full conversation history (system, user, tool calls, tool responses)
+        from langchain_core.messages import SystemMessage
+
+        structured_messages = []
+        if system_prompt:
+            structured_messages.append(SystemMessage(content=system_prompt))
+
+        # Add all messages from the agent (includes tool calls and responses)
+        structured_messages.extend(messages)
+
+        # Use with_structured_output to extract structured result from full conversation
+        structured_model = _get_structured_model()
+        structured_result = await structured_model.ainvoke(structured_messages)
+
+        if isinstance(structured_result, response_schema):
+            return structured_result
+        if isinstance(structured_result, dict):
+            return response_schema(**structured_result)
 
         raise ValueError(
-            "Model did not return structured output. Ensure the model supports "
-            "response_format (Gemini, GPT-4o, etc.) and prompts are compatible."
+            f"Model did not return structured output of type "
+            f"{response_schema.__name__}. Got: {type(structured_result)}"
         )
 
     return invoke

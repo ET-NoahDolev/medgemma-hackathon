@@ -81,13 +81,16 @@ def configure_mlflow_once(experiment_name: str) -> None:
 
 
 def set_trace_metadata(
-    user_id: str | None = None, session_id: str | None = None
+    user_id: str | None = None,
+    session_id: str | None = None,
+    run_id: str | None = None,
 ) -> None:
-    """Set metadata on the current MLflow trace to group traces by user and session.
+    """Set metadata on the current MLflow trace.
 
-    This function should be called within the context where traces are being created
-    (e.g., before agent invocations). The metadata keys `mlflow.trace.user` and
-    `mlflow.trace.session` are used by MLflow to group traces.
+    Groups traces by user, session, and run. Should be called within the context
+    where traces are being created (e.g., before agent invocations). The metadata
+    keys `mlflow.trace.user`, `mlflow.trace.session`, and `run_id` are used by
+    MLflow to group traces.
 
     With autologging, traces are created automatically when agents are invoked.
     This function:
@@ -97,15 +100,22 @@ def set_trace_metadata(
 
     Args:
         user_id: Optional user identifier to associate with the trace.
-        session_id: Optional session identifier to group traces from the same session.
+        session_id: Optional session identifier to group traces from the same
+            session.
+        run_id: Optional run identifier to group all traces from a single
+            extraction run.
 
     Example:
         ```python
-        set_trace_metadata(user_id="user-123", session_id="session-456")
+        set_trace_metadata(
+            user_id="user-123", session_id="session-456", run_id="run-789"
+        )
         # Agent invocations after this will have trace metadata set
         result = await agent.invoke(...)
         # After invocation, try to update trace metadata again
-        set_trace_metadata(user_id="user-123", session_id="session-456")
+        set_trace_metadata(
+            user_id="user-123", session_id="session-456", run_id="run-789"
+        )
         ```
     """
     try:
@@ -120,6 +130,8 @@ def set_trace_metadata(
             metadata["mlflow.trace.user"] = user_id
         if session_id:
             metadata["mlflow.trace.session"] = session_id
+        if run_id:
+            metadata["run_id"] = run_id
 
         if not metadata:
             return
@@ -133,18 +145,21 @@ def set_trace_metadata(
         try:
             mlflow.update_current_trace(metadata=metadata)
             logger.debug(
-                "Updated trace metadata: user_id=%s session_id=%s",
+                "Updated trace metadata: user_id=%s session_id=%s run_id=%s",
                 user_id,
                 session_id,
+                run_id,
             )
         except Exception:  # noqa: BLE001
             # No active trace yet - this is expected with autologging
             # The trace will be created when the agent is invoked
             # Metadata is stored in context and will be applied later
             logger.debug(
-                "Trace not yet active (stored in context): user_id=%s session_id=%s",
+                "Trace not yet active (stored in context): "
+                "user_id=%s session_id=%s run_id=%s",
                 user_id,
                 session_id,
+                run_id,
             )
     except Exception as exc:  # noqa: BLE001 - surface issues without crashing
         logger.debug("Failed to set trace metadata: %s", exc)
