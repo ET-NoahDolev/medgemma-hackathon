@@ -47,7 +47,7 @@ docs-openapi:
 # Kill running processes from previous sessions
 kill-processes:
 	@echo "Killing running processes..."
-	@./scripts/kill_running_processes.py
+	@./scripts/kill-running-processes.sh
 
 # Clean build artifacts
 clean:
