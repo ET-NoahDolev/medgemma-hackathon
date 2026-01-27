@@ -199,7 +199,9 @@ async def test_create_react_agent_smoke(
         ok: bool = False
 
     class DummyAgent:
-        async def ainvoke(self, _payload: object) -> dict[str, object]:
+        async def ainvoke(
+            self, _payload: object, *, config: object | None = None
+        ) -> dict[str, object]:
             return {"structured_response": {"ok": True}}
 
     def dummy_model_loader() -> object:

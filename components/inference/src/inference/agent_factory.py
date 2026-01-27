@@ -2,10 +2,7 @@
 
 from __future__ import annotations
 
-import importlib.metadata
-import json
 import logging
-import time
 from pathlib import Path
 from typing import Any, Awaitable, Callable, Mapping, TypeVar
 
@@ -110,58 +107,6 @@ def create_react_agent(
 
         agent = _get_agent()
 
-        # region agent log
-        try:
-            try:
-                mlflow_version = importlib.metadata.version("mlflow")
-            except importlib.metadata.PackageNotFoundError:
-                mlflow_version = "unknown"
-            try:
-                langgraph_version = importlib.metadata.version("langgraph")
-            except importlib.metadata.PackageNotFoundError:
-                langgraph_version = "unknown"
-            active_trace = None
-            try:
-                import mlflow  # type: ignore
-
-                if hasattr(mlflow, "tracing") and hasattr(
-                    mlflow.tracing, "get_active_trace"
-                ):
-                    active_trace = mlflow.tracing.get_active_trace()
-            except Exception:
-                active_trace = None
-            with open(
-                "/Users/noahdolevelixir/Code/gemma-hackathon/.cursor/debug.log",
-                "a",
-                encoding="utf-8",
-            ) as log_file:
-                log_file.write(
-                    json.dumps(
-                        {
-                            "sessionId": "debug-session",
-                            "runId": "trace-debug",
-                            "hypothesisId": "H3",
-                            "location": "agent_factory.py:120",
-                            "message": "about to invoke agent",
-                            "data": {
-                                "agent_type": type(agent).__name__,
-                                "has_ainvoke": hasattr(agent, "ainvoke"),
-                                "mlflow_version": mlflow_version,
-                                "langgraph_version": langgraph_version,
-                                "active_trace_is_none": active_trace is None,
-                                "active_trace_type": None
-                                if active_trace is None
-                                else type(active_trace).__name__,
-                            },
-                            "timestamp": int(time.time() * 1000),
-                        }
-                    )
-                    + "\n"
-                )
-        except Exception:
-            pass
-        # endregion
-
         result = await agent.ainvoke(
             {
                 "messages": [
@@ -171,30 +116,6 @@ def create_react_agent(
             },
             config={"recursion_limit": recursion_limit},
         )
-        # region agent log
-        try:
-            with open(
-                "/Users/noahdolevelixir/Code/gemma-hackathon/.cursor/debug.log",
-                "a",
-                encoding="utf-8",
-            ) as log_file:
-                log_file.write(
-                    json.dumps(
-                        {
-                            "sessionId": "debug-session",
-                            "runId": "trace-debug",
-                            "hypothesisId": "H4",
-                            "location": "agent_factory.py:144",
-                            "message": "agent invoke completed",
-                            "data": {"result_type": type(result).__name__},
-                            "timestamp": int(time.time() * 1000),
-                        }
-                    )
-                    + "\n"
-                )
-        except Exception:
-            pass
-        # endregion
         structured = None
         if isinstance(result, dict):
             structured = result.get("structured_response")
