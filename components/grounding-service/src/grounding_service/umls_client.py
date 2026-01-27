@@ -36,7 +36,7 @@ UMLS_DEFAULT_URL = "https://uts-ws.nlm.nih.gov/rest"
 
 
 def get_umls_api_key() -> str | None:
-    """Return UMLS API key. Precedence: GROUNDING_SERVICE_UMLS_API_KEY, then UMLS_API_KEY."""
+    """Return UMLS API key. Checks GROUNDING_SERVICE_UMLS_API_KEY then UMLS_API_KEY."""
     return os.getenv("GROUNDING_SERVICE_UMLS_API_KEY") or os.getenv("UMLS_API_KEY")
 
 
@@ -203,7 +203,8 @@ class UmlsClient:
         )
         if not self.api_key:
             raise ValueError(
-                "UMLS API key is required. Set GROUNDING_SERVICE_UMLS_API_KEY or UMLS_API_KEY."
+                "UMLS API key is required. Set GROUNDING_SERVICE_UMLS_API_KEY "
+                "or UMLS_API_KEY."
             )
         self._http = httpx.Client(timeout=self.timeout)
         cache_dir = os.getenv("UMLS_CACHE_DIR")

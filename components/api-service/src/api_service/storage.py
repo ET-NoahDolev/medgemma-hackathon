@@ -133,7 +133,11 @@ def init_db() -> None:
     _ = Protocol, Criterion, HitlEdit
 
     engine = get_engine()
-    SQLModel.metadata.create_all(engine)
+    try:
+        SQLModel.metadata.create_all(engine)
+    except OperationalError:
+        # Tables may already exist (e.g. after reset_storage or parallel tests)
+        pass
     _ensure_sqlite_protocol_progress_columns(engine)
 
 
@@ -284,7 +288,6 @@ def reset_storage() -> None:
     except OperationalError:
         # Tables might not exist yet, which is fine
         pass
-    SQLModel.metadata.create_all(engine)
     init_db()
 
 
