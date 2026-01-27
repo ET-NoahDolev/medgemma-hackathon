@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import json
 import logging
+import time
 from pathlib import Path
 from typing import Any, Awaitable, Callable, Mapping, TypeVar
 
@@ -105,6 +107,34 @@ def create_react_agent(
 
         agent = _get_agent()
 
+        # region agent log
+        try:
+            with open(
+                "/Users/noahdolevelixir/Code/gemma-hackathon/.cursor/debug.log",
+                "a",
+                encoding="utf-8",
+            ) as log_file:
+                log_file.write(
+                    json.dumps(
+                        {
+                            "sessionId": "debug-session",
+                            "runId": "trace-debug",
+                            "hypothesisId": "H4",
+                            "location": "agent_factory.py:120",
+                            "message": "about to invoke agent",
+                            "data": {
+                                "agent_type": type(agent).__name__,
+                                "has_ainvoke": hasattr(agent, "ainvoke"),
+                            },
+                            "timestamp": int(time.time() * 1000),
+                        }
+                    )
+                    + "\n"
+                )
+        except Exception:
+            pass
+        # endregion
+
         result = await agent.ainvoke(
             {
                 "messages": [
@@ -113,6 +143,30 @@ def create_react_agent(
                 ]
             }
         )
+        # region agent log
+        try:
+            with open(
+                "/Users/noahdolevelixir/Code/gemma-hackathon/.cursor/debug.log",
+                "a",
+                encoding="utf-8",
+            ) as log_file:
+                log_file.write(
+                    json.dumps(
+                        {
+                            "sessionId": "debug-session",
+                            "runId": "trace-debug",
+                            "hypothesisId": "H4",
+                            "location": "agent_factory.py:144",
+                            "message": "agent invoke completed",
+                            "data": {"result_type": type(result).__name__},
+                            "timestamp": int(time.time() * 1000),
+                        }
+                    )
+                    + "\n"
+                )
+        except Exception:
+            pass
+        # endregion
         structured = None
         if isinstance(result, dict):
             structured = result.get("structured_response")

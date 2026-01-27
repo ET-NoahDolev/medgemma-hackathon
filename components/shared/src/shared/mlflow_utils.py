@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import contextvars
+import json
 import logging
 import os
+import time
 from pathlib import Path
 from typing import TypeVar
 
@@ -65,9 +67,88 @@ def configure_mlflow_once(experiment_name: str) -> None:
         run_tracer_inline_env = os.getenv("MLFLOW_RUN_TRACER_INLINE", "true")
         run_tracer_inline = run_tracer_inline_env.lower() == "true"
 
+        # region agent log
+        try:
+            with open(
+                "/Users/noahdolevelixir/Code/gemma-hackathon/.cursor/debug.log",
+                "a",
+                encoding="utf-8",
+            ) as log_file:
+                log_file.write(
+                    json.dumps(
+                        {
+                            "sessionId": "debug-session",
+                            "runId": "trace-debug",
+                            "hypothesisId": "H1",
+                            "location": "mlflow_utils.py:72",
+                            "message": "configure_mlflow_once pre-autolog",
+                            "data": {
+                                "experiment_name": experiment_name,
+                                "tracking_uri": uri,
+                                "run_tracer_inline": run_tracer_inline,
+                                "has_langgraph": hasattr(mlflow, "langgraph"),
+                            },
+                            "timestamp": int(time.time() * 1000),
+                        }
+                    )
+                    + "\n"
+                )
+        except Exception:
+            pass
+        # endregion
+
         mlflow.langchain.autolog(run_tracer_inline=run_tracer_inline)
+        # region agent log
+        try:
+            with open(
+                "/Users/noahdolevelixir/Code/gemma-hackathon/.cursor/debug.log",
+                "a",
+                encoding="utf-8",
+            ) as log_file:
+                log_file.write(
+                    json.dumps(
+                        {
+                            "sessionId": "debug-session",
+                            "runId": "trace-debug",
+                            "hypothesisId": "H2",
+                            "location": "mlflow_utils.py:98",
+                            "message": "langchain autolog enabled",
+                            "data": {"run_tracer_inline": run_tracer_inline},
+                            "timestamp": int(time.time() * 1000),
+                        }
+                    )
+                    + "\n"
+                )
+        except Exception:
+            pass
+        # endregion
+
         if hasattr(mlflow, "langgraph"):
             mlflow.langgraph.autolog()
+            # region agent log
+            try:
+                with open(
+                    "/Users/noahdolevelixir/Code/gemma-hackathon/.cursor/debug.log",
+                    "a",
+                    encoding="utf-8",
+                ) as log_file:
+                    log_file.write(
+                        json.dumps(
+                            {
+                                "sessionId": "debug-session",
+                                "runId": "trace-debug",
+                                "hypothesisId": "H3",
+                                "location": "mlflow_utils.py:115",
+                                "message": "langgraph autolog enabled",
+                                "data": {"enabled": True},
+                                "timestamp": int(time.time() * 1000),
+                            }
+                        )
+                        + "\n"
+                    )
+            except Exception:
+                pass
+            # endregion
 
         logger.info(
             "MLflow configured: uri=%s experiment=%s run_tracer_inline=%s",
