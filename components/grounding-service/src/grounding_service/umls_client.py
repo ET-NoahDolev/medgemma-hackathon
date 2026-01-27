@@ -17,7 +17,7 @@ from collections.abc import Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Sequence, cast
+from typing import Any, Sequence, cast
 
 import diskcache  # type: ignore[import-untyped]
 import httpx
@@ -32,6 +32,71 @@ from tenacity import (
 logger = logging.getLogger(__name__)
 
 UMLS_DEFAULT_URL = "https://uts-ws.nlm.nih.gov/rest"
+
+
+class UmlsApiError(Exception):
+    """Base exception for all UMLS API errors."""
+
+    def __init__(
+        self,
+        message: str,
+        status_code: int | None = None,
+        response_body: str | None = None,
+    ) -> None:
+        """Initialize UMLS API error.
+
+        Args:
+            message: Error message.
+            status_code: HTTP status code if applicable.
+            response_body: Response body if applicable.
+        """
+        self.message = message
+        self.status_code = status_code
+        self.response_body = response_body
+        super().__init__(self.message)
+
+
+class UmlsApiClientError(UmlsApiError):
+    """4xx errors: client configuration or request issues."""
+
+    pass
+
+
+class UmlsApiServerError(UmlsApiError):
+    """5xx errors: server-side issues, should trigger retry."""
+
+    def __init__(
+        self,
+        message: str,
+        status_code: int | None = None,
+        response_body: str | None = None,
+    ) -> None:
+        """Initialize UMLS API server error.
+
+        Args:
+            message: Error message.
+            status_code: HTTP status code.
+            response_body: Response body.
+        """
+        super().__init__(message, status_code, response_body)
+
+
+class UmlsApiTimeoutError(UmlsApiError):
+    """Request timeout errors."""
+
+    pass
+
+
+class UmlsApiAuthenticationError(UmlsApiClientError):
+    """401/403: authentication or authorization failures."""
+
+    pass
+
+
+class UmlsApiRateLimitError(UmlsApiClientError):
+    """429: rate limit exceeded."""
+
+    pass
 
 
 class _ServerError(Exception):
@@ -70,6 +135,40 @@ class FieldMappingSuggestion:
     relation: str
     value: str
     confidence: float
+
+
+@dataclass
+class UmlsApiResponse:
+    """Structured response from UMLS API operations."""
+
+    success: bool
+    data: list[SnomedCandidate] | dict[str, Any] | None
+    error: dict[str, Any] | None = None
+
+    @classmethod
+    def success_response(
+        cls, data: list[SnomedCandidate] | dict[str, Any]
+    ) -> "UmlsApiResponse":
+        """Create a successful response."""
+        return cls(success=True, data=data, error=None)
+
+    @classmethod
+    def error_response(
+        cls,
+        error_type: str,
+        message: str,
+        status_code: int | None = None,
+        details: dict[str, Any] | None = None,
+    ) -> "UmlsApiResponse":
+        """Create an error response."""
+        error: dict[str, Any] = {
+            "type": error_type,
+            "message": message,
+            "status_code": status_code,
+        }
+        if details:
+            error["details"] = details
+        return cls(success=False, data=None, error=error)
 
 
 class UmlsClient:
@@ -127,6 +226,9 @@ class UmlsClient:
 
         Raises:
             ValueError: If the query is empty or API key is missing.
+            UmlsApiAuthenticationError: If authentication fails (401/403).
+            UmlsApiRateLimitError: If rate limit is exceeded (429).
+            UmlsApiServerError: If server error occurs (5xx).
         """
         if not query.strip():
             raise ValueError("query is required")
@@ -136,10 +238,23 @@ class UmlsClient:
         if cached is not None:
             return cached
 
-        candidates = self._fetch_from_api(query, limit)
-        if self._cache_ttl:
-            self._cache.set(cache_key, candidates, expire=self._cache_ttl)
-        return candidates
+        try:
+            candidates = self._fetch_from_api(query, limit)
+            if self._cache_ttl:
+                self._cache.set(cache_key, candidates, expire=self._cache_ttl)
+            return candidates
+        except (UmlsApiAuthenticationError, UmlsApiRateLimitError, UmlsApiServerError):
+            # Re-raise critical errors that callers should handle
+            raise
+        except UmlsApiClientError as exc:
+            # For other client errors, log and return empty list
+            # for backward compatibility
+            logger.error("UMLS API client error in search_snomed: %s", exc.message)
+            return []
+        except UmlsApiError as exc:
+            # For other API errors, log and return empty list
+            logger.warning("UMLS API error in search_snomed: %s", exc.message)
+            return []
 
     def _fetch_from_api(self, query: str, limit: int) -> list[SnomedCandidate]:
         """Execute HTTP request to UMLS API with retry on transient errors."""
@@ -158,15 +273,62 @@ class UmlsClient:
             data = self._request_with_retry(url, params)
             fallback = query if is_code_query else ""
             return self._parse_response(data, limit, fallback_code=fallback)
-        except httpx.HTTPStatusError as exc:
-            logger.warning("UMLS API HTTP error: %s", exc)
-            return []
+        except UmlsApiAuthenticationError as exc:
+            logger.error("UMLS API authentication error: %s", exc.message)
+            raise
+        except UmlsApiRateLimitError as exc:
+            logger.warning("UMLS API rate limit error: %s", exc.message)
+            raise
+        except UmlsApiClientError as exc:
+            logger.error("UMLS API client error: %s", exc.message)
+            raise
+        except UmlsApiServerError as exc:
+            logger.warning("UMLS API server error: %s", exc.message)
+            raise
         except httpx.RequestError as exc:
             logger.warning("UMLS API request error: %s", exc)
-            return []
+            raise UmlsApiError(f"Network request failed: {str(exc)}")
+
+    def _map_http_error(self, response: httpx.Response) -> UmlsApiError:
+        """Map HTTP response to appropriate UMLS API exception."""
+        status = response.status_code
+        body = response.text[:500]  # Limit body size
+
+        if status == 401 or status == 403:
+            return UmlsApiAuthenticationError(
+                message=f"Authentication failed: {body}",
+                status_code=status,
+                response_body=body,
+            )
+        elif status == 429:
+            return UmlsApiRateLimitError(
+                message=f"Rate limit exceeded: {body}",
+                status_code=status,
+                response_body=body,
+            )
+        elif 400 <= status < 500:
+            return UmlsApiClientError(
+                message=f"Client error {status}: {body}",
+                status_code=status,
+                response_body=body,
+            )
+        elif status >= 500:
+            return UmlsApiServerError(
+                message=f"Server error {status}: {body}",
+                status_code=status,
+                response_body=body,
+            )
+        else:
+            return UmlsApiError(
+                message=f"Unexpected status {status}: {body}",
+                status_code=status,
+                response_body=body,
+            )
 
     @retry(
-        retry=retry_if_exception_type((httpx.RequestError, _ServerError)),
+        retry=retry_if_exception_type(
+            (httpx.RequestError, _ServerError, UmlsApiRateLimitError)
+        ),
         stop=stop_after_attempt(3),
         wait=wait_exponential(multiplier=0.5, min=0.5, max=2),
         reraise=True,
@@ -183,7 +345,19 @@ class UmlsClient:
                 response.text[:100],
             )
             raise _ServerError(response.status_code, response.text)
-        response.raise_for_status()
+        if response.status_code == 429:
+            # Rate limit - raise exception to trigger retry
+            error = self._map_http_error(response)
+            logger.warning("UMLS API rate limit, will retry: %s", error.message)
+            raise UmlsApiRateLimitError(
+                error.message, error.status_code, error.response_body
+            )
+        if not response.is_success:
+            # Map other HTTP errors but don't retry (except 429 handled above)
+            error = self._map_http_error(response)
+            if isinstance(error, (UmlsApiAuthenticationError, UmlsApiClientError)):
+                logger.error("UMLS API client error: %s", error.message)
+            raise error
         return response.json()  # type: ignore[no-any-return]
 
     def _parse_response(
@@ -241,11 +415,8 @@ class UmlsClient:
             if self._cache_ttl:
                 self._cache.set(cache_key, snomed_code, expire=self._cache_ttl)
             return snomed_code
-        except httpx.HTTPStatusError as exc:
-            logger.warning("UMLS API HTTP error for CUI atoms %s: %s", cui, exc)
-            return ""
-        except httpx.RequestError as exc:
-            logger.warning("UMLS API request error for CUI atoms %s: %s", cui, exc)
+        except (UmlsApiError, httpx.RequestError) as exc:
+            logger.warning("UMLS API error for CUI atoms %s: %s", cui, exc)
             return ""
 
     @staticmethod
@@ -310,11 +481,8 @@ class UmlsClient:
             if self._cache_ttl:
                 self._cache.set(cache_key, data, expire=self._cache_ttl)
             return data
-        except httpx.HTTPStatusError as exc:
-            logger.warning("UMLS API HTTP error for CUI %s: %s", cui, exc)
-            return {}
-        except httpx.RequestError as exc:
-            logger.warning("UMLS API request error for CUI %s: %s", cui, exc)
+        except (UmlsApiError, httpx.RequestError) as exc:
+            logger.warning("UMLS API error for CUI %s: %s", cui, exc)
             return {}
 
     def get_snomed_details(self, snomed_code: str) -> dict[str, object]:
@@ -349,14 +517,9 @@ class UmlsClient:
             if self._cache_ttl:
                 self._cache.set(cache_key, data, expire=self._cache_ttl)
             return data
-        except httpx.HTTPStatusError as exc:
+        except (UmlsApiError, httpx.RequestError) as exc:
             logger.warning(
-                "UMLS API HTTP error for SNOMED code %s: %s", snomed_code, exc
-            )
-            return {}
-        except httpx.RequestError as exc:
-            logger.warning(
-                "UMLS API request error for SNOMED code %s: %s", snomed_code, exc
+                "UMLS API error for SNOMED code %s: %s", snomed_code, exc
             )
             return {}
 
@@ -399,6 +562,48 @@ class UmlsClient:
         except ValueError:
             return 7 * 24 * 60 * 60
         return ttl if ttl > 0 else 7 * 24 * 60 * 60
+
+    def check_health(self) -> dict[str, Any]:
+        """Check UMLS API health with a lightweight query.
+
+        Returns:
+            Dictionary with health status information.
+        """
+        import time
+
+        try:
+            start = time.time()
+            # Use a simple, cached query for health check
+            self.search_snomed("diabetes", limit=1)
+            elapsed_ms = (time.time() - start) * 1000
+
+            return {
+                "status": "healthy",
+                "api_available": True,
+                "response_time_ms": elapsed_ms,
+                "cache_status": "operational",
+            }
+        except UmlsApiServerError as e:
+            return {
+                "status": "degraded",
+                "api_available": False,
+                "last_error": f"Server error: {e.message}",
+                "cache_status": "operational",
+            }
+        except UmlsApiClientError as e:
+            return {
+                "status": "unhealthy",
+                "api_available": False,
+                "last_error": f"Client error: {e.message}",
+                "cache_status": "operational",
+            }
+        except Exception as e:
+            return {
+                "status": "unhealthy",
+                "api_available": False,
+                "last_error": f"Unexpected error: {str(e)}",
+                "cache_status": "unknown",
+            }
 
 
 @contextmanager

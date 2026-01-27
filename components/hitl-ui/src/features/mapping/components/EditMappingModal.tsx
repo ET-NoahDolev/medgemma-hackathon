@@ -82,19 +82,20 @@ export function EditMappingModal({
         Array<{ code: string; display: string; confidence: number }>
     >([]);
 
-    // Fetch grounding candidates when opening
+    // Fetch grounding candidates when opening (non-blocking)
     useEffect(() => {
         if (open && criterion.id) {
-            void groundCriterion
-                .mutateAsync(criterion.id)
-                .then((data) => {
+            // Open modal immediately, load candidates asynchronously
+            groundCriterion.mutate(criterion.id, {
+                onSuccess: (data) => {
                     setCandidates(data.candidates);
-                })
-                .catch(() => {
+                },
+                onError: () => {
                     toast.error('Grounding failed', {
                         description: 'Could not fetch SNOMED candidates. You can still edit manually.',
                     });
-                });
+                },
+            });
         }
     }, [open, criterion.id, groundCriterion]);
 

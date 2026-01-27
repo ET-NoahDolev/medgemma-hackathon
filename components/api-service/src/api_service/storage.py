@@ -61,6 +61,9 @@ class Criterion(SQLModel, table=True):
     computed_as: str | None = None
     triplet_confidence: float | None = None
     grounding_confidence: float | None = None
+    logical_operator: str | None = Field(
+        default=None, description="AND/OR operator for multiple conditions"
+    )
     hitl_status: str = Field(default="pending")
     hitl_entity: str | None = None
     hitl_relation: str | None = None
@@ -73,6 +76,11 @@ class Criterion(SQLModel, table=True):
     hitl_approved_by: str | None = None
     snomed_codes: list[str] = Field(
         default_factory=list, sa_column=Column(JSON, nullable=False)
+    )
+    grounding_terms: list[dict[str, object]] = Field(
+        default_factory=list,
+        sa_column=Column(JSON, nullable=False),
+        description="All grounding terms from AI grounding result",
     )
     evidence_spans: list[dict[str, object]] = Field(
         default_factory=list, sa_column=Column(JSON, nullable=False)
@@ -228,6 +236,17 @@ def _ensure_sqlite_criterion_columns(conn: Connection) -> None:
         (
             "hitl_approved_by",
             "ALTER TABLE criterion ADD COLUMN hitl_approved_by TEXT NULL",
+        ),
+        (
+            "logical_operator",
+            "ALTER TABLE criterion ADD COLUMN logical_operator TEXT NULL",
+        ),
+        (
+            "grounding_terms",
+            (
+                "ALTER TABLE criterion ADD COLUMN grounding_terms "
+                "TEXT NOT NULL DEFAULT '[]'"
+            ),
         ),
     ]
 
@@ -593,6 +612,8 @@ class Storage:
         computed_as: str | None = None,
         triplet_confidence: float | None = None,
         grounding_confidence: float | None = None,
+        logical_operator: str | None = None,
+        grounding_terms: list[dict[str, object]] | None = None,
         snomed_codes: list[str] | None = None,
         evidence_spans: list[dict[str, object]] | None = None,
     ) -> Criterion:
@@ -614,6 +635,8 @@ class Storage:
                 computed_as=computed_as,
                 triplet_confidence=triplet_confidence,
                 grounding_confidence=grounding_confidence,
+                logical_operator=logical_operator,
+                grounding_terms=grounding_terms or [],
                 snomed_codes=snomed_codes or [],
                 evidence_spans=evidence_spans or [],
             )

@@ -31,10 +31,21 @@ export function ProtocolListScreen() {
     fileInputRef.current?.click();
   };
 
-  const handleFileSelected = async (file: File | null) => {
+  const handleFileSelected = (file: File | null) => {
     if (!file) return;
-    const resp = await uploadProtocol.mutateAsync({ file, autoExtract: true });
-    navigate(`/protocols/${encodeURIComponent(resp.protocol_id)}`);
+    // Navigate immediately, let upload complete in background
+    uploadProtocol.mutate(
+      { file, autoExtract: true },
+      {
+        onSuccess: (resp) => {
+          navigate(`/protocols/${encodeURIComponent(resp.protocol_id)}`);
+        },
+        onError: (error) => {
+          console.error('Upload failed:', error);
+          // Error handling is done by the mutation hook
+        },
+      }
+    );
   };
 
   return (

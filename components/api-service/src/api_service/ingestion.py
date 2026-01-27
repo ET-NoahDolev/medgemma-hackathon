@@ -12,10 +12,10 @@ from extraction_service import pipeline as extraction_pipeline
 from extraction_service.tools import extract_triplet
 from grounding_service import umls_client
 from grounding_service.computed_fields import detect_computed_field
+from shared.mlflow_utils import set_trace_metadata
 
 from api_service.storage import Criterion as StorageCriterion
 from api_service.storage import Storage
-from shared.mlflow_utils import set_trace_metadata
 
 logger = logging.getLogger(__name__)
 
@@ -64,20 +64,28 @@ async def _ground_with_ai(
     criterion_type: str,
     session_id: str | None = None,
     user_id: str | None = None,
-) -> tuple[dict[str, Any], list[str]]:
+) -> tuple[dict[str, Any], list[str], list[dict[str, Any]], str | None]:
+    """Ground criterion with AI and return all terms.
+
+    Returns:
+        Tuple of (primary_term_dict, snomed_codes, all_terms_dicts, logical_operator)
+    """
     try:
         from grounding_service.agent import get_grounding_agent
     except ImportError:  # pragma: no cover
-        return {}, []
+        return {}, [], [], None
 
     agent = get_grounding_agent()
     # Pass session/user IDs to grounding agent which will set trace metadata
     result = await agent.ground(text, criterion_type, session_id, user_id)
     if not result.terms:
-        return {}, []
-    term = result.terms[0]
-    return (
-        {
+        return {}, [], [], None
+
+    # Store all terms as dicts for database storage
+    all_terms = []
+    snomed_codes = []
+    for term in result.terms:
+        term_dict = {
             "umls_concept": term.umls_concept,
             "umls_id": term.umls_id,
             "snomed_code": term.snomed_code,
@@ -89,9 +97,29 @@ async def _ground_with_ai(
             "relation_confidence": term.relation_confidence,
             "value_confidence": term.value_confidence,
             "umls_confidence": term.umls_confidence,
-        },
-        [term.snomed_code] if term.snomed_code else [],
-    )
+            "snippet": term.snippet,
+        }
+        all_terms.append(term_dict)
+        if term.snomed_code:
+            snomed_codes.append(term.snomed_code)
+
+    # Use first term as primary for backward compatibility
+    term = result.terms[0]
+    primary_dict = {
+        "umls_concept": term.umls_concept,
+        "umls_id": term.umls_id,
+        "snomed_code": term.snomed_code,
+        "relation": term.relation,
+        "value": term.value,
+        "unit": term.unit,
+        "computed_as": term.computed_as,
+        "grounding_confidence": term.confidence,
+        "relation_confidence": term.relation_confidence,
+        "value_confidence": term.value_confidence,
+        "umls_confidence": term.umls_confidence,
+    }
+
+    return primary_dict, snomed_codes, all_terms, result.logical_operator
 
 
 def _ground_baseline(text: str, api_key: str) -> tuple[dict[str, Any], list[str]]:
@@ -143,7 +171,7 @@ async def _build_criterion_payload(
     umls_api_key: str,
     session_id: str | None = None,
     user_id: str | None = None,
-) -> tuple[dict[str, Any], list[str]]:
+) -> tuple[dict[str, Any], list[str], list[dict[str, Any]], str | None]:
     triplet = await _extract_triplet(text, session_id=session_id, user_id=user_id)
 
     computed_as = None
@@ -158,19 +186,26 @@ async def _build_criterion_payload(
 
     grounding_payload: dict[str, Any] = {}
     snomed_codes: list[str] = []
+    grounding_terms: list[dict[str, Any]] = []
+    logical_operator: str | None = None
     if use_ai_grounding:
-        grounding_payload, snomed_codes = await _ground_with_ai(
-            text, criterion_type, session_id=session_id, user_id=user_id
+        grounding_payload, snomed_codes, grounding_terms, logical_operator = (
+            await _ground_with_ai(
+                text, criterion_type, session_id=session_id, user_id=user_id
+            )
         )
     if not grounding_payload:
         grounding_payload, snomed_codes = _ground_baseline(text, umls_api_key)
+        # Baseline grounding doesn't provide terms or logical operator
+        grounding_terms = []
+        logical_operator = None
 
     merged = _merge_fields(
         triplet=triplet,
         grounding=grounding_payload,
         computed_as=computed_as,
     )
-    return merged, snomed_codes
+    return merged, snomed_codes, grounding_terms, logical_operator
 
 
 async def ingest_protocol_document_text(
@@ -205,13 +240,15 @@ async def ingest_protocol_document_text(
 
     stored: list[StorageCriterion] = []
     for item in iterator:
-        payload, snomed_codes = await _build_criterion_payload(
-            text=item.text,
-            criterion_type=item.criterion_type,
-            use_ai_grounding=use_ai_grounding,
-            umls_api_key=umls_api_key,
-            session_id=session_id,
-            user_id=user_id,
+        payload, snomed_codes, grounding_terms, logical_operator = (
+            await _build_criterion_payload(
+                text=item.text,
+                criterion_type=item.criterion_type,
+                use_ai_grounding=use_ai_grounding,
+                umls_api_key=umls_api_key,
+                session_id=session_id,
+                user_id=user_id,
+            )
         )
         entity = payload.get("entity")
         stored.append(
@@ -229,6 +266,8 @@ async def ingest_protocol_document_text(
                 computed_as=payload.get("computed_as"),
                 triplet_confidence=None,
                 grounding_confidence=payload.get("grounding_confidence"),
+                logical_operator=logical_operator,
+                grounding_terms=grounding_terms,
                 snomed_codes=snomed_codes,
             )
         )

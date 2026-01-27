@@ -27,7 +27,6 @@ from fastapi import (
     File,
     Header,
     HTTPException,
-    Request,
     UploadFile,
 )
 from fastapi.middleware.cors import CORSMiddleware
@@ -217,6 +216,9 @@ class CriterionDetailResponse(BaseModel):
     confidence: float
     triplet_confidence: float | None
     grounding_confidence: float | None
+    logical_operator: str | None = None
+    grounding_terms: List[dict[str, object]] = []
+    umls_mappings: List[dict[str, object]] = []
     hitl_status: str
     hitl_entity: str | None
     hitl_umls_concept: str | None
@@ -935,6 +937,23 @@ async def ground_criterion(
 
 def _criterion_to_response(criterion: StorageCriterion) -> CriterionDetailResponse:
     snomed_code = criterion.snomed_codes[0] if criterion.snomed_codes else None
+
+    # Extract UMLS mappings from grounding_terms
+    umls_mappings = []
+    for term in criterion.grounding_terms:
+        if isinstance(term, dict):
+            mapping = {
+                "umls_concept": term.get("umls_concept"),
+                "umls_id": term.get("umls_id"),
+                "snomed_code": term.get("snomed_code"),
+                "confidence": term.get(
+                    "umls_confidence", term.get("grounding_confidence", 0.0)
+                ),
+            }
+            # Only include if at least one UMLS field is present
+            if mapping["umls_concept"] or mapping["umls_id"] or mapping["snomed_code"]:
+                umls_mappings.append(mapping)
+
     return CriterionDetailResponse(
         id=criterion.id,
         text=criterion.text,
@@ -953,6 +972,9 @@ def _criterion_to_response(criterion: StorageCriterion) -> CriterionDetailRespon
         confidence=criterion.confidence,
         triplet_confidence=criterion.triplet_confidence,
         grounding_confidence=criterion.grounding_confidence,
+        logical_operator=criterion.logical_operator,
+        grounding_terms=criterion.grounding_terms,
+        umls_mappings=umls_mappings,
         hitl_status=criterion.hitl_status,
         hitl_entity=criterion.hitl_entity,
         hitl_umls_concept=criterion.hitl_umls_concept,
@@ -1142,3 +1164,27 @@ def list_criterion_edits(
             for edit in edits
         ],
     )
+
+
+@app.get("/health/umls")
+def get_umls_health() -> dict[str, object]:
+    """Check UMLS API health status."""
+    api_key = _get_umls_api_key()
+    if not api_key:
+        return {
+            "status": "unhealthy",
+            "api_available": False,
+            "last_error": "UMLS_API_KEY not configured",
+        }
+
+    try:
+        with umls_client.UmlsClient(api_key=api_key) as client:
+            health = client.check_health()
+            return health
+    except Exception as e:
+        logger.error("Error checking UMLS health: %s", e)
+        return {
+            "status": "unhealthy",
+            "api_available": False,
+            "last_error": f"Error checking health: {str(e)}",
+        }

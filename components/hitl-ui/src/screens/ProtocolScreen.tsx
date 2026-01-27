@@ -43,6 +43,13 @@ interface Criterion {
   entity?: string | null;
   umlsConcept?: string | null;
   umlsId?: string | null;
+  umlsMappings?: Array<{
+    umls_concept?: string | null;
+    umls_id?: string | null;
+    snomed_code?: string | null;
+    confidence?: number;
+  }>;
+  logicalOperator?: string | null;
   calculatedBy?: string | null;
   relation?: string | null;
   value?: string | null;
@@ -125,6 +132,8 @@ export function ProtocolScreen() {
       entity: c.entity ?? null,
       umlsConcept: c.umls_concept ?? null,
       umlsId: c.umls_id ?? null,
+      umlsMappings: c.umls_mappings ?? [],
+      logicalOperator: c.logical_operator ?? null,
       calculatedBy: c.calculated_by ?? null,
       relation: c.relation ?? null,
       value: c.value ?? null,
@@ -229,16 +238,16 @@ export function ProtocolScreen() {
 
   const handleRunExtraction = () => {
     if (!activeProtocolId) return;
-    toast.promise(
-      extractCriteria.mutateAsync(activeProtocolId).then(() => {
+    // Non-blocking: use mutate instead of mutateAsync
+    extractCriteria.mutate(activeProtocolId, {
+      onSuccess: () => {
         setCriteria([]);
-      }),
-      {
-        loading: 'Starting extraction...',
-        success: 'Extraction started. Criteria will appear as they are processed.',
-        error: 'Failed to start extraction',
-      }
-    );
+        toast.success('Extraction started. Criteria will appear as they are processed.');
+      },
+      onError: () => {
+        toast.error('Failed to start extraction');
+      },
+    });
   };
 
   // State for mapping modal
@@ -478,14 +487,44 @@ export function ProtocolScreen() {
                                 </div>
                               )}
 
-                              {(criterion.umlsConcept || criterion.umlsId || criterion.snomedCode) && (
+                              {(criterion.umlsMappings && criterion.umlsMappings.length > 0) && (
                                 <div className="mt-1 text-xs text-gray-600">
-                                  <span className="font-medium text-gray-700">Grounding:</span>{' '}
-                                  {criterion.umlsConcept && <span>{criterion.umlsConcept}</span>}
-                                  {criterion.umlsId && <span> ({criterion.umlsId})</span>}
-                                  {criterion.snomedCode && <span> SNOMED {criterion.snomedCode}</span>}
+                                  <span className="font-medium text-gray-700">Grounding:</span>
+                                  {criterion.logicalOperator && (
+                                    <span className="ml-1 font-semibold text-gray-800">
+                                      [{criterion.logicalOperator}]
+                                    </span>
+                                  )}
+                                  <div className="mt-1 space-y-1">
+                                    {criterion.umlsMappings.map((mapping, idx) => (
+                                      <div key={idx} className="pl-2 border-l-2 border-gray-300">
+                                        {mapping.umls_concept && <span>{mapping.umls_concept}</span>}
+                                        {mapping.umls_id && (
+                                          <span className="text-gray-500"> ({mapping.umls_id})</span>
+                                        )}
+                                        {mapping.snomed_code && (
+                                          <span className="text-gray-500"> SNOMED {mapping.snomed_code}</span>
+                                        )}
+                                        {mapping.confidence !== undefined && (
+                                          <span className="text-gray-400 text-[10px] ml-1">
+                                            ({Math.round(mapping.confidence * 100)}%)
+                                          </span>
+                                        )}
+                                      </div>
+                                    ))}
+                                  </div>
                                 </div>
                               )}
+                              {/* Fallback to single mapping for backward compatibility */}
+                              {(!criterion.umlsMappings || criterion.umlsMappings.length === 0) &&
+                                (criterion.umlsConcept || criterion.umlsId || criterion.snomedCode) && (
+                                  <div className="mt-1 text-xs text-gray-600">
+                                    <span className="font-medium text-gray-700">Grounding:</span>{' '}
+                                    {criterion.umlsConcept && <span>{criterion.umlsConcept}</span>}
+                                    {criterion.umlsId && <span> ({criterion.umlsId})</span>}
+                                    {criterion.snomedCode && <span> SNOMED {criterion.snomedCode}</span>}
+                                  </div>
+                                )}
 
                               {criterion.calculatedBy && (
                                 <div className="mt-1 text-xs text-gray-600">
