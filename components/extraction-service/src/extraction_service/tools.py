@@ -17,13 +17,22 @@ from extraction_service.schemas import ExtractionResult
 try:
     from langchain_core.tools import tool
 except ImportError:  # pragma: no cover
-    # Minimal fallback so this module can be imported without LangChain installed.
-    def _tool(func=None, **_kwargs):  # type: ignore[no-redef]
-        if func is None:
-            return lambda f: f
-        return func
+    from typing import Callable, ParamSpec, TypeVar
 
-    tool = _tool  # type: ignore[assignment]
+    _P = ParamSpec("_P")
+    _R = TypeVar("_R")
+
+    def tool(  # type: ignore[no-redef]  # noqa: D417
+        func: Callable[_P, _R] | None = None, **_kwargs: Any
+    ) -> Callable[_P, _R] | Callable[[Callable[_P, _R]], Callable[_P, _R]]:
+        """Minimal fallback so this module can be imported without LangChain."""
+        if func is None:
+
+            def decorator(f: Callable[_P, _R]) -> Callable[_P, _R]:
+                return f
+
+            return decorator
+        return func
 
 logger = logging.getLogger(__name__)
 

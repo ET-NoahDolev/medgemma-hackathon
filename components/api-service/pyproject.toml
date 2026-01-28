@@ -61,6 +61,15 @@ mypy_path = [
 module = "yaml"
 ignore_missing_imports = true
 
+[[tool.mypy.overrides]]
+module = [
+    "grounding_service",
+    "grounding_service.*",
+    "fitz",
+    "fitz.*",
+]
+ignore_missing_imports = true
+
 [tool.pytest.ini_options]
 pythonpath = [
     "src",

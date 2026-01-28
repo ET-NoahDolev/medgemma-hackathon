@@ -77,20 +77,6 @@ class VertexContextCache:
 
     def get_or_create_cache(self, system_prompt: str) -> str:
         """Return cached content name for the given system prompt."""
-        # #region agent log
-        try:
-            _df = open("/Users/noahdolevelixir/Code/gemma-hackathon/.cursor/debug.log", "a")
-            _df.write(
-                '{"location":"vertex_cache.get_or_create_cache:entry","message":"get_or_create_cache entry","data":{"len_system_prompt":'
-                + str(len(system_prompt))
-                + '},"hypothesisId":"H1","timestamp":'
-                + str(int(time.time() * 1000))
-                + '}\n'
-            )
-            _df.close()
-        except Exception:
-            pass
-        # #endregion
         cache_key = hashlib.sha256(system_prompt.encode("utf-8")).hexdigest()
         with self._lock:
             cached_entry = self._cache.get(cache_key)
@@ -101,24 +87,6 @@ class VertexContextCache:
             with self._lock:
                 self._cache.pop(cache_key, None)
 
-        # #region agent log
-        try:
-            _df = open("/Users/noahdolevelixir/Code/gemma-hackathon/.cursor/debug.log", "a")
-            _df.write(
-                '{"location":"vertex_cache.get_or_create_cache:before_create","message":"creating Vertex cache - ONLY system_prompt goes here","data":{"cache_key":"'
-                + cache_key[:12]
-                + '","system_prompt_chars":'
-                + str(len(system_prompt))
-                + ',"system_prompt_preview":"'
-                + system_prompt[:200].replace('"', '\\"').replace('\n', '\\n')
-                + '..."},"hypothesisId":"H2","timestamp":'
-                + str(int(time.time() * 1000))
-                + '}\n'
-            )
-            _df.close()
-        except Exception:
-            pass
-        # #endregion
         client, types = self._get_client()
         cache = client.caches.create(
             model=self._model_path(),
@@ -143,22 +111,6 @@ class VertexContextCache:
         Falls back to uncached generation if the system prompt is below
         Vertex's 1024 token minimum for caching.
         """
-        # #region agent log
-        try:
-            _df = open("/Users/noahdolevelixir/Code/gemma-hackathon/.cursor/debug.log", "a")
-            _df.write(
-                '{"location":"vertex_cache.generate_with_cache:entry","message":"generate_with_cache - system is cached, user is NOT","data":{"len_system_chars":'
-                + str(len(system_prompt))
-                + ',"len_user_chars":'
-                + str(len(user_prompt))
-                + ',"note":"system_prompt goes to cache (must be >=1024 tokens), user_prompt sent at gen time"},"hypothesisId":"H1","timestamp":'
-                + str(int(time.time() * 1000))
-                + '}\n'
-            )
-            _df.close()
-        except Exception:
-            pass
-        # #endregion
         client, types = self._get_client()
 
         try:
@@ -173,18 +125,6 @@ class VertexContextCache:
         except Exception as exc:
             exc_str = str(exc).lower()
             if "minimum token" in exc_str or "1024" in exc_str:
-                # #region agent log
-                try:
-                    _df = open("/Users/noahdolevelixir/Code/gemma-hackathon/.cursor/debug.log", "a")
-                    _df.write(
-                        '{"location":"vertex_cache.generate_with_cache:fallback","message":"falling back to uncached generation","data":{"reason":"system_prompt below 1024 token minimum"},"hypothesisId":"H4","timestamp":'
-                        + str(int(time.time() * 1000))
-                        + '}\n'
-                    )
-                    _df.close()
-                except Exception:
-                    pass
-                # #endregion
                 logger.info(
                     "System prompt below 1024 token minimum for caching, "
                     "using uncached generation"

@@ -11,7 +11,6 @@ import httpx
 
 from data_pipeline.download_protocols import (
     DEFAULT_MANIFEST_PATH,
-    ProtocolRecord,
     ingest_local_protocols,
 )
 
@@ -41,7 +40,6 @@ def load_single_protocol(
     if not pdf_path.exists():
         raise FileNotFoundError(f"PDF not found: {pdf_path}")
 
-    title = _derive_title(pdf_path)
     with pdf_path.open("rb") as handle:
         response = httpx.post(
             f"{api_url.rstrip('/')}/v1/protocols/upload",

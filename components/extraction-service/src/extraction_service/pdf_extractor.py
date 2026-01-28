@@ -51,7 +51,7 @@ def _model_name() -> str:
 
 def _validate_result(payload: dict[str, Any]) -> PDFExtractionResult:
     if hasattr(PDFExtractionResult, "model_validate"):
-        return PDFExtractionResult.model_validate(payload)  # type: ignore[call-arg]
+        return PDFExtractionResult.model_validate(payload)
     return PDFExtractionResult.parse_obj(payload)
 
 

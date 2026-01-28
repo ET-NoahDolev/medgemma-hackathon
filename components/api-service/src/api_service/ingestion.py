@@ -2,59 +2,21 @@
 
 from __future__ import annotations
 
-import json
 import logging
 import os
 import re
-from typing import Any, Callable, Iterable, Iterator, Sequence, cast
+from typing import Any, Iterable, Iterator, Sequence, cast
 
-from anyio import to_thread
-from extraction_service import pipeline as extraction_pipeline
 from extraction_service.pdf_chunker import chunk_pdf, should_chunk_pdf
 from extraction_service.pdf_extractor import extract_criteria_from_pdf
-from extraction_service.tools import extract_triplet, extract_triplets_batch
+from extraction_service.tools import extract_triplets_batch
 from grounding_service import umls_client
 from grounding_service.computed_fields import detect_computed_field
-from shared.mlflow_utils import set_trace_metadata
 
 from api_service.storage import Criterion as StorageCriterion
 from api_service.storage import Storage
 
 logger = logging.getLogger(__name__)
-
-
-def _parse_triplet_payload(raw: str) -> dict[str, Any]:
-    try:
-        payload = json.loads(raw)
-    except json.JSONDecodeError:
-        return {}
-    if isinstance(payload, dict):
-        return payload
-    return {}
-
-
-def _select_primary_triplet(payload: dict[str, Any]) -> dict[str, Any]:
-    if "triplets" in payload and isinstance(payload["triplets"], list):
-        for item in payload["triplets"]:
-            if isinstance(item, dict):
-                return item
-        return {}
-    return payload
-
-
-def _triplet_from_extracted(item: object) -> dict[str, Any] | None:
-    entity = getattr(item, "entity", None)
-    relation = getattr(item, "relation", None)
-    value = getattr(item, "value", None)
-    unit = getattr(item, "unit", None)
-    if not any([entity, relation, value, unit]):
-        return None
-    return {
-        "entity": entity,
-        "relation": relation,
-        "value": value,
-        "unit": unit,
-    }
 
 
 def _normalize_criterion_text(text: str) -> str:
@@ -123,28 +85,81 @@ def _extract_triplets_batch(criteria_texts: list[str]) -> list[dict[str, Any]]:
     return _coerce_triplet_batch(payload, len(criteria_texts))
 
 
-async def _extract_triplet(
+async def _extract_pdf_criteria_items(
+    pdf_bytes: bytes,
+    *,
+    session_id: str | None,
+    user_id: str | None,
+    run_id: str | None,
+) -> list[object]:
+    items: list[object] = []
+    if should_chunk_pdf(pdf_bytes):
+        for chunk in chunk_pdf(pdf_bytes):
+            result = await extract_criteria_from_pdf(
+                pdf_bytes=chunk.data,
+                session_id=session_id,
+                user_id=user_id,
+                run_id=run_id,
+            )
+            items.extend(result.criteria)
+    else:
+        result = await extract_criteria_from_pdf(
+            pdf_bytes=pdf_bytes,
+            session_id=session_id,
+            user_id=user_id,
+            run_id=run_id,
+        )
+        items.extend(result.criteria)
+    return _deduplicate_snippets(items)
+
+
+def _apply_computed_field(
+    triplet: dict[str, Any]
+) -> tuple[dict[str, Any], str | None]:
+    computed_as = None
+    entity = triplet.get("entity")
+    unit = triplet.get("unit")
+    if isinstance(entity, str) and entity:
+        computed = detect_computed_field(entity)
+        if computed:
+            computed_as = computed.get("computation")
+            if not unit:
+                triplet = {**triplet, "unit": computed.get("output_unit")}
+    return triplet, computed_as
+
+
+async def _resolve_grounding(
+    *,
     text: str,
-    session_id: str | None = None,
-    user_id: str | None = None,
-    run_id: str | None = None,
-) -> dict[str, Any]:
-    # Set trace metadata before tool invocation
-    set_trace_metadata(user_id=user_id, session_id=session_id, run_id=run_id)
-    raw: str = await to_thread.run_sync(_run_extract_triplet, text)
-    payload = _parse_triplet_payload(raw)
-    return _select_primary_triplet(payload)
-
-
-def _run_extract_triplet(text: str) -> str:
-    tool = extract_triplet
-    # LangChain @tool expects .invoke(input: dict) mapping param names to values
-    if hasattr(tool, "invoke"):
-        return cast(Any, tool).invoke({"text": text})
-    if hasattr(tool, "run"):
-        return cast(Any, tool).run({"text": text})
-    extractor = cast(Callable[[str], str], tool)
-    return extractor(text)
+    criterion_type: str,
+    umls_api_key: str,
+    use_ai_grounding: bool,
+    session_id: str | None,
+    user_id: str | None,
+    run_id: str | None,
+) -> tuple[dict[str, Any], list[str], list[dict[str, Any]], str | None]:
+    grounding_payload: dict[str, Any] = {}
+    snomed_codes: list[str] = []
+    grounding_terms: list[dict[str, Any]] = []
+    logical_operator: str | None = None
+    if use_ai_grounding:
+        try:
+            grounding_payload, snomed_codes, grounding_terms, logical_operator = (
+                await _ground_with_ai(
+                    text,
+                    criterion_type,
+                    session_id=session_id,
+                    user_id=user_id,
+                    run_id=run_id,
+                )
+            )
+        except Exception as exc:
+            logger.warning("AI grounding failed; falling back to baseline: %s", exc)
+    if not grounding_payload:
+        grounding_payload, snomed_codes = _ground_baseline(text, umls_api_key)
+        grounding_terms = []
+        logical_operator = None
+    return grounding_payload, snomed_codes, grounding_terms, logical_operator
 
 
 async def _ground_with_ai(
@@ -252,136 +267,6 @@ def _merge_fields(
     }
 
 
-async def _build_criterion_payload(
-    *,
-    text: str,
-    criterion_type: str,
-    use_ai_grounding: bool,
-    umls_api_key: str,
-    extracted_triplet: dict[str, Any] | None = None,
-    session_id: str | None = None,
-    user_id: str | None = None,
-    run_id: str | None = None,
-) -> tuple[dict[str, Any], list[str], list[dict[str, Any]], str | None]:
-    if extracted_triplet is not None:
-        triplet = extracted_triplet
-    else:
-        triplet = await _extract_triplet(
-            text, session_id=session_id, user_id=user_id, run_id=run_id
-        )
-
-    computed_as = None
-    entity = triplet.get("entity")
-    unit = triplet.get("unit")
-    if isinstance(entity, str) and entity:
-        computed = detect_computed_field(entity)
-        if computed:
-            computed_as = computed.get("computation")
-            if not unit:
-                triplet["unit"] = computed.get("output_unit")
-
-    grounding_payload: dict[str, Any] = {}
-    snomed_codes: list[str] = []
-    grounding_terms: list[dict[str, Any]] = []
-    logical_operator: str | None = None
-    if use_ai_grounding:
-        try:
-            grounding_payload, snomed_codes, grounding_terms, logical_operator = (
-                await _ground_with_ai(
-                    text,
-                    criterion_type,
-                    session_id=session_id,
-                    user_id=user_id,
-                    run_id=run_id,
-                )
-            )
-        except Exception as exc:
-            logger.warning("AI grounding failed; falling back to baseline: %s", exc)
-    if not grounding_payload:
-        grounding_payload, snomed_codes = _ground_baseline(text, umls_api_key)
-        # Baseline grounding doesn't provide terms or logical operator
-        grounding_terms = []
-        logical_operator = None
-
-    merged = _merge_fields(
-        triplet=triplet,
-        grounding=grounding_payload,
-        computed_as=computed_as,
-    )
-    return merged, snomed_codes, grounding_terms, logical_operator
-
-
-async def ingest_protocol_document_text(
-    *,
-    protocol_id: str,
-    document_text: str,
-    storage: Storage,
-    umls_api_key: str,
-    session_id: str | None = None,
-    user_id: str | None = None,
-    run_id: str | None = None,
-) -> list[StorageCriterion]:
-    """Extract criteria, ground them, and store results in the database.
-
-    Args:
-        protocol_id: Protocol identifier.
-        document_text: Document text to extract from.
-        storage: Storage instance for persistence.
-        umls_api_key: UMLS API key for grounding.
-        session_id: Optional session ID for trace grouping.
-        user_id: Optional user ID for trace grouping.
-        run_id: Optional run ID to group all traces from a single extraction run.
-    """
-    use_ai_grounding = os.getenv("USE_AI_GROUNDING", "false").lower() == "true"
-    logger.info("Ingestion: use_ai_grounding=%s", use_ai_grounding)
-
-    if not hasattr(extraction_pipeline, "extract_criteria_async"):
-        raise RuntimeError("Extraction pipeline does not support async extraction.")
-
-    items = await extraction_pipeline.extract_criteria_async(
-        document_text, session_id=session_id, user_id=user_id, run_id=run_id
-    )
-    iterator = iter(items)
-
-    stored: list[StorageCriterion] = []
-    for item in iterator:
-        payload, snomed_codes, grounding_terms, logical_operator = (
-            await _build_criterion_payload(
-                text=item.text,
-                criterion_type=item.criterion_type,
-                use_ai_grounding=use_ai_grounding,
-                umls_api_key=umls_api_key,
-                extracted_triplet=_triplet_from_extracted(item),
-                session_id=session_id,
-                user_id=user_id,
-                run_id=run_id,
-            )
-        )
-        entity = payload.get("entity")
-        stored.append(
-            storage.create_criterion_detail(
-                protocol_id=protocol_id,
-                text=item.text,
-                criterion_type=item.criterion_type,
-                confidence=item.confidence,
-                entity=entity if isinstance(entity, str) else None,
-                relation=payload.get("relation"),
-                value=payload.get("value"),
-                unit=payload.get("unit"),
-                umls_concept=payload.get("umls_concept"),
-                umls_id=payload.get("umls_id"),
-                computed_as=payload.get("computed_as"),
-                triplet_confidence=None,
-                grounding_confidence=payload.get("grounding_confidence"),
-                logical_operator=logical_operator,
-                grounding_terms=grounding_terms,
-                snomed_codes=snomed_codes,
-            )
-        )
-
-    return stored
-
-
 async def ingest_protocol_from_pdf(
     *,
     protocol_id: str,
@@ -406,27 +291,12 @@ async def ingest_protocol_from_pdf(
     use_ai_grounding = os.getenv("USE_AI_GROUNDING", "false").lower() == "true"
     logger.info("Ingestion: use_ai_grounding=%s", use_ai_grounding)
 
-    if should_chunk_pdf(pdf_bytes):
-        chunks = chunk_pdf(pdf_bytes)
-        extracted_items = []
-        for chunk in chunks:
-            result = await extract_criteria_from_pdf(
-                pdf_bytes=chunk.data,
-                session_id=session_id,
-                user_id=user_id,
-                run_id=run_id,
-            )
-            extracted_items.extend(result.criteria)
-    else:
-        result = await extract_criteria_from_pdf(
-            pdf_bytes=pdf_bytes,
-            session_id=session_id,
-            user_id=user_id,
-            run_id=run_id,
-        )
-        extracted_items = list(result.criteria)
-
-    deduped_items = _deduplicate_snippets(extracted_items)
+    deduped_items = await _extract_pdf_criteria_items(
+        pdf_bytes,
+        session_id=session_id,
+        user_id=user_id,
+        run_id=run_id,
+    )
     if not deduped_items:
         return []
 
@@ -442,39 +312,18 @@ async def ingest_protocol_from_pdf(
             criterion_type = cast(str, getattr(item, "criterion_type", ""))
             confidence = float(getattr(item, "confidence", 0.0))
 
-            computed_as = None
-            entity = triplet.get("entity")
-            unit = triplet.get("unit")
-            if isinstance(entity, str) and entity:
-                computed = detect_computed_field(entity)
-                if computed:
-                    computed_as = computed.get("computation")
-                    if not unit:
-                        triplet["unit"] = computed.get("output_unit")
-
-            grounding_payload: dict[str, Any] = {}
-            snomed_codes: list[str] = []
-            grounding_terms: list[dict[str, Any]] = []
-            logical_operator: str | None = None
-            if use_ai_grounding:
-                try:
-                    grounding_payload, snomed_codes, grounding_terms, logical_operator = (
-                        await _ground_with_ai(
-                            text,
-                            criterion_type,
-                            session_id=session_id,
-                            user_id=user_id,
-                            run_id=run_id,
-                        )
-                    )
-                except Exception as exc:
-                    logger.warning(
-                        "AI grounding failed; falling back to baseline: %s", exc
-                    )
-            if not grounding_payload:
-                grounding_payload, snomed_codes = _ground_baseline(text, umls_api_key)
-                grounding_terms = []
-                logical_operator = None
+            triplet, computed_as = _apply_computed_field(triplet)
+            grounding_payload, snomed_codes, grounding_terms, logical_operator = (
+                await _resolve_grounding(
+                    text=text,
+                    criterion_type=criterion_type,
+                    umls_api_key=umls_api_key,
+                    use_ai_grounding=use_ai_grounding,
+                    session_id=session_id,
+                    user_id=user_id,
+                    run_id=run_id,
+                )
+            )
 
             merged = _merge_fields(
                 triplet=triplet,
@@ -488,7 +337,11 @@ async def ingest_protocol_from_pdf(
                     text=text,
                     criterion_type=criterion_type,
                     confidence=confidence,
-                    entity=merged.get("entity") if isinstance(merged.get("entity"), str) else None,
+                    entity=(
+                        merged.get("entity")
+                        if isinstance(merged.get("entity"), str)
+                        else None
+                    ),
                     relation=merged.get("relation"),
                     value=merged.get("value"),
                     unit=merged.get("unit"),

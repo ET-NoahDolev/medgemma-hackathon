@@ -132,27 +132,6 @@ def create_structured_extractor(
         )
 
         if os.getenv("ENABLE_VERTEX_CACHE", "").lower() == "true":
-            # #region agent log
-            import time as _time
-            try:
-                _df = open("/Users/noahdolevelixir/Code/gemma-hackathon/.cursor/debug.log", "a")
-                _df.write(
-                    '{"location":"agent_factory.invoke:before_cache","message":"prompts after render","data":{"len_system":'
-                    + str(len(system_prompt))
-                    + ',"len_user":'
-                    + str(len(user_prompt))
-                    + ',"system_preview":"'
-                    + system_prompt[:150].replace('"', '\\"').replace('\n', '\\n')
-                    + '...","user_preview":"'
-                    + user_prompt[:150].replace('"', '\\"').replace('\n', '\\n')
-                    + '..."},"hypothesisId":"H6","timestamp":'
-                    + str(int(_time.time() * 1000))
-                    + '}\n'
-                )
-                _df.close()
-            except Exception:
-                pass
-            # #endregion
             try:
                 from inference.vertex_cache import get_vertex_cache
 

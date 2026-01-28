@@ -1,36 +1,32 @@
 from __future__ import annotations
 
-import time
-
 import pytest
 from fastapi.testclient import TestClient
+
+from api_service.storage import Storage, get_engine, reset_storage
 
 
 @pytest.fixture()
 def setup_criterion(client: TestClient) -> tuple[str, str]:
-    """Create protocol and extract criteria."""
-    resp = client.post(
-        "/v1/protocols",
-        json={"title": "Test", "document_text": "Inclusion: Age >= 18"},
+    """Create protocol and criterion directly via storage (bypassing extraction)."""
+    reset_storage()
+    storage = Storage(get_engine())
+    protocol = storage.create_protocol(
+        title="Test",
+        document_text="Inclusion: Age >= 18",
     )
-    protocol_id = resp.json()["protocol_id"]
-    client.post(f"/v1/protocols/{protocol_id}/extract")
-
-    # Poll for criteria to appear (extraction runs in background)
-    max_wait = 5.0  # seconds
-    start_time = time.time()
-    while time.time() - start_time < max_wait:
-        criteria_resp = client.get(f"/v1/protocols/{protocol_id}/criteria")
-        if criteria_resp.status_code == 200:
-            criteria = criteria_resp.json().get("criteria", [])
-            if criteria:
-                return criteria[0]["id"], protocol_id
-        time.sleep(0.1)  # Small delay between polls
-
-    # If we get here, extraction didn't complete in time
-    raise TimeoutError(
-        f"Extraction did not complete within {max_wait}s for protocol {protocol_id}"
+    criterion = storage.create_criterion_detail(
+        protocol_id=protocol.id,
+        text="Age >= 18",
+        criterion_type="inclusion",
+        confidence=0.9,
+        entity="age",
+        relation=">=",
+        value="18",
+        unit="years",
+        snomed_codes=["371273006"],
     )
+    return criterion.id, protocol.id
 
 
 class TestHitlFeedbackPersistence:

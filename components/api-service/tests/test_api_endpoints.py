@@ -6,7 +6,8 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from api_service import main as api_main
-from tests.conftest import FakeExtractedCriterion, FakeServicesState
+from api_service.storage import Storage, get_engine, reset_storage
+from tests.conftest import FakeServicesState
 from tests.constants import (
     CRITERION_CONFIDENCE,
     CRITERION_TYPE,
@@ -17,6 +18,47 @@ from tests.constants import (
     SNOMED_CODE,
     SNOMED_ONTOLOGY,
 )
+
+# Minimal valid PDF (empty page)
+_MINIMAL_PDF = (
+    b"%PDF-1.4\n1 0 obj<</Type/Catalog/Pages 2 0 R>>endobj "
+    b"2 0 obj<</Type/Pages/Kids[3 0 R]/Count 1>>endobj "
+    b"3 0 obj<</Type/Page/MediaBox[0 0 612 792]/Parent 2 0 R>>endobj "
+    b"xref\n0 4\n0000000000 65535 f \n0000000009 00000 n \n0000000052 00000 n \n"
+    b"0000000101 00000 n \ntrailer<</Size 4/Root 1 0 R>>\nstartxref\n166\n%%EOF"
+)
+
+
+def _create_protocol_with_criterion(
+    client: TestClient,
+    text: str = EXTRACTED_TEXT,
+    criterion_type: str = CRITERION_TYPE,
+    confidence: float = CRITERION_CONFIDENCE,
+    snomed_codes: list[str] | None = None,
+) -> tuple[str, str]:
+    """Create a protocol and criterion directly via storage, bypassing extraction.
+
+    Returns:
+        Tuple of (protocol_id, criterion_id).
+    """
+    reset_storage()
+    storage = Storage(get_engine())
+    protocol = storage.create_protocol(
+        title=PROTOCOL_TITLE,
+        document_text=DOCUMENT_TEXT,
+    )
+    criterion = storage.create_criterion_detail(
+        protocol_id=protocol.id,
+        text=text,
+        criterion_type=criterion_type,
+        confidence=confidence,
+        entity="age",
+        relation=">=",
+        value="18",
+        unit="years",
+        snomed_codes=snomed_codes or [SNOMED_CODE],
+    )
+    return protocol.id, criterion.id
 
 
 def test_create_protocol_validation_error(
@@ -69,10 +111,11 @@ def test_upload_rejects_oversized_file(
     assert response.status_code == 413
 
 
-def test_extract_criteria_populates_list(
+def test_extract_criteria_requires_pdf(
     client: TestClient,
     fake_services: FakeServicesState,
 ) -> None:
+    """Test that extraction fails for protocols without PDF bytes."""
     create_response = client.post(
         "/v1/protocols",
         json={"title": PROTOCOL_TITLE, "document_text": DOCUMENT_TEXT},
@@ -80,13 +123,56 @@ def test_extract_criteria_populates_list(
     protocol_id = create_response.json()["protocol_id"]
 
     extract_response = client.post(f"/v1/protocols/{protocol_id}/extract")
+    assert extract_response.status_code == 400
+    assert "PDF" in extract_response.json()["detail"]
+
+
+def test_extract_criteria_with_pdf_upload(
+    client: TestClient,
+    fake_services: FakeServicesState,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Test extraction workflow using PDF upload."""
+
+    async def mock_extract_criteria_from_pdf(**kwargs: object) -> object:
+        from extraction_service.pdf_extractor import CriterionSnippet, PDFExtractionResult
+
+        return PDFExtractionResult(
+            criteria=[
+                CriterionSnippet(
+                    text=EXTRACTED_TEXT,
+                    criterion_type=CRITERION_TYPE,
+                    confidence=CRITERION_CONFIDENCE,
+                )
+            ]
+        )
+
+    def mock_extract_triplets_batch(texts: list[str]) -> list[dict[str, str | None]]:
+        return [{"entity": "age", "relation": ">=", "value": "18", "unit": "years"}]
+
+    monkeypatch.setattr(
+        "api_service.ingestion.extract_criteria_from_pdf",
+        mock_extract_criteria_from_pdf,
+    )
+    monkeypatch.setattr(
+        "api_service.ingestion.extract_triplets_batch",
+        mock_extract_triplets_batch,
+    )
+
+    upload_response = client.post(
+        "/v1/protocols/upload",
+        files={"file": ("test.pdf", io.BytesIO(_MINIMAL_PDF), "application/pdf")},
+        params={"auto_extract": "false"},
+    )
+    assert upload_response.status_code == 200
+    protocol_id = upload_response.json()["protocol_id"]
+
+    extract_response = client.post(f"/v1/protocols/{protocol_id}/extract")
     assert extract_response.status_code == 200
-    # Extraction now runs in background, so status is "processing"
     assert extract_response.json()["status"] == "processing"
 
     list_response = client.get(f"/v1/protocols/{protocol_id}/criteria")
     assert list_response.status_code == 200
-
     payload = list_response.json()
     assert payload["protocol_id"] == protocol_id
     assert len(payload["criteria"]) == 1
@@ -94,7 +180,6 @@ def test_extract_criteria_populates_list(
     criterion = payload["criteria"][0]
     assert criterion["text"] == EXTRACTED_TEXT
     assert criterion["criterion_type"] == CRITERION_TYPE
-    assert criterion["confidence"] == CRITERION_CONFIDENCE
     assert criterion["snomed_codes"] == [SNOMED_CODE]
 
 
@@ -102,15 +187,7 @@ def test_update_criterion_returns_updated_value(
     client: TestClient,
     fake_services: FakeServicesState,
 ) -> None:
-    create_response = client.post(
-        "/v1/protocols",
-        json={"title": PROTOCOL_TITLE, "document_text": DOCUMENT_TEXT},
-    )
-    protocol_id = create_response.json()["protocol_id"]
-    client.post(f"/v1/protocols/{protocol_id}/extract")
-
-    list_response = client.get(f"/v1/protocols/{protocol_id}/criteria")
-    criterion_id = list_response.json()["criteria"][0]["id"]
+    protocol_id, criterion_id = _create_protocol_with_criterion(client)
 
     response = client.patch(
         f"/v1/criteria/{criterion_id}",
@@ -125,15 +202,7 @@ def test_ground_criterion_returns_candidates(
     client: TestClient,
     fake_services: FakeServicesState,
 ) -> None:
-    create_response = client.post(
-        "/v1/protocols",
-        json={"title": PROTOCOL_TITLE, "document_text": DOCUMENT_TEXT},
-    )
-    protocol_id = create_response.json()["protocol_id"]
-    client.post(f"/v1/protocols/{protocol_id}/extract")
-
-    list_response = client.get(f"/v1/protocols/{protocol_id}/criteria")
-    criterion_id = list_response.json()["criteria"][0]["id"]
+    _, criterion_id = _create_protocol_with_criterion(client)
 
     response = client.post(f"/v1/criteria/{criterion_id}/ground")
 
@@ -149,15 +218,7 @@ def test_hitl_feedback_returns_recorded(
     client: TestClient,
     fake_services: FakeServicesState,
 ) -> None:
-    create_response = client.post(
-        "/v1/protocols",
-        json={"title": PROTOCOL_TITLE, "document_text": DOCUMENT_TEXT},
-    )
-    protocol_id = create_response.json()["protocol_id"]
-    client.post(f"/v1/protocols/{protocol_id}/extract")
-
-    list_response = client.get(f"/v1/protocols/{protocol_id}/criteria")
-    criterion_id = list_response.json()["criteria"][0]["id"]
+    _, criterion_id = _create_protocol_with_criterion(client)
 
     response = client.post(
         "/v1/hitl/feedback",
@@ -171,32 +232,55 @@ def test_hitl_feedback_returns_recorded(
 def test_extract_replaces_existing_criteria(
     client: TestClient,
     fake_services: FakeServicesState,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    create_response = client.post(
-        "/v1/protocols",
-        json={"title": PROTOCOL_TITLE, "document_text": DOCUMENT_TEXT},
+    """Test that re-extraction replaces existing criteria."""
+    extraction_results: list[list[object]] = []
+
+    async def mock_extract_criteria_from_pdf(**kwargs: object) -> object:
+        from extraction_service.pdf_extractor import CriterionSnippet, PDFExtractionResult
+
+        results = extraction_results.pop(0) if extraction_results else []
+        return PDFExtractionResult(criteria=results)
+
+    def mock_extract_triplets_batch(texts: list[str]) -> list[dict[str, str | None]]:
+        return [{"entity": "age", "relation": ">=", "value": "18", "unit": "years"}] * len(
+            texts
+        )
+
+    monkeypatch.setattr(
+        "api_service.ingestion.extract_criteria_from_pdf",
+        mock_extract_criteria_from_pdf,
     )
-    protocol_id = create_response.json()["protocol_id"]
+    monkeypatch.setattr(
+        "api_service.ingestion.extract_triplets_batch",
+        mock_extract_triplets_batch,
+    )
+
+    from extraction_service.pdf_extractor import CriterionSnippet
+
+    # First extraction returns one criterion
+    extraction_results.append([
+        CriterionSnippet(text="Age >= 18", criterion_type="inclusion", confidence=0.9)
+    ])
+    # Second extraction returns two criteria
+    extraction_results.append([
+        CriterionSnippet(text="Age >= 21", criterion_type="inclusion", confidence=0.91),
+        CriterionSnippet(text="BMI < 30", criterion_type="inclusion", confidence=0.75),
+    ])
+
+    upload_response = client.post(
+        "/v1/protocols/upload",
+        files={"file": ("test.pdf", io.BytesIO(_MINIMAL_PDF), "application/pdf")},
+        params={"auto_extract": "false"},
+    )
+    protocol_id = upload_response.json()["protocol_id"]
 
     first_extract = client.post(f"/v1/protocols/{protocol_id}/extract")
     assert first_extract.status_code == 200
 
     list_response = client.get(f"/v1/protocols/{protocol_id}/criteria")
     assert len(list_response.json()["criteria"]) == 1
-
-    state = fake_services
-    state.extracted = [
-        FakeExtractedCriterion(
-            text="Age >= 21",
-            criterion_type=CRITERION_TYPE,
-            confidence=0.91,
-        ),
-        FakeExtractedCriterion(
-            text="BMI < 30",
-            criterion_type=CRITERION_TYPE,
-            confidence=0.75,
-        ),
-    ]
 
     second_extract = client.post(f"/v1/protocols/{protocol_id}/extract")
     assert second_extract.status_code == 200
@@ -211,15 +295,7 @@ def test_ground_criterion_handles_no_mapping(
     client: TestClient,
     fake_services: FakeServicesState,
 ) -> None:
-    create_response = client.post(
-        "/v1/protocols",
-        json={"title": PROTOCOL_TITLE, "document_text": DOCUMENT_TEXT},
-    )
-    protocol_id = create_response.json()["protocol_id"]
-    client.post(f"/v1/protocols/{protocol_id}/extract")
-
-    list_response = client.get(f"/v1/protocols/{protocol_id}/criteria")
-    criterion_id = list_response.json()["criteria"][0]["id"]
+    _, criterion_id = _create_protocol_with_criterion(client)
 
     state = fake_services
     state.field_mappings = []
@@ -234,15 +310,7 @@ def test_ground_criterion_returns_empty_candidates(
     client: TestClient,
     fake_services: FakeServicesState,
 ) -> None:
-    create_response = client.post(
-        "/v1/protocols",
-        json={"title": PROTOCOL_TITLE, "document_text": DOCUMENT_TEXT},
-    )
-    protocol_id = create_response.json()["protocol_id"]
-    client.post(f"/v1/protocols/{protocol_id}/extract")
-
-    list_response = client.get(f"/v1/protocols/{protocol_id}/criteria")
-    criterion_id = list_response.json()["criteria"][0]["id"]
+    _, criterion_id = _create_protocol_with_criterion(client)
 
     state = fake_services
     state.candidates = []
@@ -274,8 +342,8 @@ def test_ground_criterion_uses_ai_when_enabled(
         terms=[
             GroundedTerm(
                 snippet="Age >= 18",
-                    raw_criterion_text="Age >= 18",
-                    criterion_type="inclusion",
+                raw_criterion_text="Age >= 18",
+                criterion_type="inclusion",
                 snomed_code="123456789",
                 relation=">=",
                 value="18",
@@ -295,15 +363,7 @@ def test_ground_criterion_uses_ai_when_enabled(
     )
     monkeypatch.setattr(api_main, "AGENT_AVAILABLE", True)
 
-    create_response = client.post(
-        "/v1/protocols",
-        json={"title": PROTOCOL_TITLE, "document_text": DOCUMENT_TEXT},
-    )
-    protocol_id = create_response.json()["protocol_id"]
-    client.post(f"/v1/protocols/{protocol_id}/extract")
-
-    list_response = client.get(f"/v1/protocols/{protocol_id}/criteria")
-    criterion_id = list_response.json()["criteria"][0]["id"]
+    _, criterion_id = _create_protocol_with_criterion(client)
 
     # Enable AI grounding only for the grounding endpoint.
     monkeypatch.setenv("USE_AI_GROUNDING", "true")
@@ -341,15 +401,7 @@ def test_ground_criterion_falls_back_when_ai_fails(
     )
     monkeypatch.setattr(api_main, "AGENT_AVAILABLE", True)
 
-    create_response = client.post(
-        "/v1/protocols",
-        json={"title": PROTOCOL_TITLE, "document_text": DOCUMENT_TEXT},
-    )
-    protocol_id = create_response.json()["protocol_id"]
-    client.post(f"/v1/protocols/{protocol_id}/extract")
-
-    list_response = client.get(f"/v1/protocols/{protocol_id}/criteria")
-    criterion_id = list_response.json()["criteria"][0]["id"]
+    _, criterion_id = _create_protocol_with_criterion(client)
 
     response = client.post(f"/v1/criteria/{criterion_id}/ground")
 

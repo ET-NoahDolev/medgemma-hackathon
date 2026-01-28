@@ -57,7 +57,7 @@ def should_chunk_pdf(pdf_bytes: bytes) -> bool:
     if len(pdf_bytes) > max_bytes:
         return True
     doc = fitz.open(stream=pdf_bytes, filetype="pdf")
-    page_count = doc.page_count
+    page_count: int = doc.page_count
     doc.close()
     return page_count > max_pages
 

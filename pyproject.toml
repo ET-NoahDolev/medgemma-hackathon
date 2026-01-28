@@ -39,6 +39,7 @@ dependencies = [
     "vertexai>=1.43.0",
     "google-genai>=1.55.0",
     "sentence-transformers>=5.2.2",
+    "python-multipart>=0.0.21",
 ]
 
 [dependency-groups]
@@ -99,10 +100,18 @@ ignore_missing_imports = true
 
 [[tool.mypy.overrides]]
 module = [
+    "fitz",
+    "fitz.*",
+]
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = [
     "data_pipeline",
     "data_pipeline.download_protocols",
     "extraction_service",
-    "extraction_service.pipeline",
+    "grounding_service",
+    "grounding_service.*",
     "shared",
     "shared.models",
 ]
@@ -137,6 +146,9 @@ markers = [
 ]
 filterwarnings = [
     "ignore:Inheritance class AiohttpClientSession.*:DeprecationWarning:google\\.genai\\._api_client",
+    "ignore:builtin type swigvarlink has no __module__ attribute:DeprecationWarning",
+    "ignore:builtin type SwigPyPacked has no __module__ attribute:DeprecationWarning",
+    "ignore:builtin type SwigPyObject has no __module__ attribute:DeprecationWarning",
 ]
 pythonpath = [
     "components/api-service/src",
