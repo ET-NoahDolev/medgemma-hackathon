@@ -197,15 +197,18 @@ async def _build_criterion_payload(
     grounding_terms: list[dict[str, Any]] = []
     logical_operator: str | None = None
     if use_ai_grounding:
-        grounding_payload, snomed_codes, grounding_terms, logical_operator = (
-            await _ground_with_ai(
-                text,
-                criterion_type,
-                session_id=session_id,
-                user_id=user_id,
-                run_id=run_id,
+        try:
+            grounding_payload, snomed_codes, grounding_terms, logical_operator = (
+                await _ground_with_ai(
+                    text,
+                    criterion_type,
+                    session_id=session_id,
+                    user_id=user_id,
+                    run_id=run_id,
+                )
             )
-        )
+        except Exception as exc:
+            logger.warning("AI grounding failed; falling back to baseline: %s", exc)
     if not grounding_payload:
         grounding_payload, snomed_codes = _ground_baseline(text, umls_api_key)
         # Baseline grounding doesn't provide terms or logical operator
