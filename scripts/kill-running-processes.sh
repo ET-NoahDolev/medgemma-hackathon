@@ -1,121 +1,81 @@
 #!/usr/bin/env bash
-# Kill any running processes from previous sessions (API server, UI, MLflow, etc.)
+# Kill API and frontend UI processes (including uvicorn reload/workers and Vite dev server trees).
 
 set -euo pipefail
-
-# Get the repo root directory
-REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
 # Default ports (can be overridden via env)
 API_PORT="${API_PORT:-8000}"
 UI_PORT="${UI_PORT:-3000}"
-MLFLOW_PORT="${MLFLOW_PORT:-5000}"
 
-echo "🔍 Searching for running processes..."
+echo "🔍 Searching for API and frontend UI processes (API port ${API_PORT}, UI port ${UI_PORT})..."
 
-# Find processes by port
-find_processes_by_port() {
+# Output PIDs for the given port via lsof; no extra echo of PIDs (caller parses lines).
+pids_on_port() {
     local port=$1
-    local name=$2
-    echo ""
-    echo "Checking port ${port} (${name})..."
-    
     if command -v lsof >/dev/null 2>&1; then
-        # macOS/Linux with lsof
-        local pids=$(lsof -ti ":$port" 2>/dev/null || true)
-        if [ -n "$pids" ]; then
-            echo "  Found processes on port ${port}:"
-            for pid in $pids; do
-                ps -p "$pid" -o pid=,command= 2>/dev/null || true
-            done
-            echo "$pids"
-        else
-            echo "  No processes found on port ${port}"
-            echo ""
-        fi
+        lsof -ti ":$port" 2>/dev/null || true
     elif command -v netstat >/dev/null 2>&1; then
-        # Alternative: netstat (less reliable)
-        local pids=$(netstat -tuln 2>/dev/null | grep ":$port " | awk '{print $NF}' | cut -d'/' -f1 | sort -u || true)
-        if [ -n "$pids" ]; then
-            echo "  Found processes on port ${port}:"
-            for pid in $pids; do
-                ps -p "$pid" -o pid=,command= 2>/dev/null || true
-            done
-            echo "$pids"
-        else
-            echo "  No processes found on port ${port}"
-            echo ""
-        fi
+        netstat -tuln 2>/dev/null | grep ":$port " | awk '{print $NF}' | cut -d'/' -f1 | sort -u || true
     else
-        echo "  ⚠️  Cannot check port ${port}: lsof or netstat not available"
-        echo ""
+        true
     fi
 }
 
-# Find processes by command pattern
-find_processes_by_pattern() {
-    local pattern=$1
-    local name=$2
-    echo ""
-    echo "Checking for ${name} processes..."
-    
-    # Find processes matching the pattern
-    local pids=$(pgrep -f "$pattern" 2>/dev/null || true)
-    if [ -n "$pids" ]; then
-        echo "  Found ${name} processes:"
-        for pid in $pids; do
-            ps -p "$pid" -o pid=,command= 2>/dev/null || true
-        done
-        echo "$pids"
-    else
-        echo "  No ${name} processes found"
-        echo ""
-    fi
+# Recursively collect descendant PIDs (children, grandchildren, ...).
+descendants_of() {
+    local pid=$1
+    local kids
+    kids=$(pgrep -P "$pid" 2>/dev/null || true)
+    for k in $kids; do
+        echo "$k"
+        descendants_of "$k"
+    done
 }
 
-# Collect all PIDs to kill
-PIDS_TO_KILL=""
+# Collect PIDs for API and frontend UI: port listeners and known process patterns.
+# Includes all descendants so we kill reload watchers, async workers, and Vite parent/child trees.
+collect_pids_to_kill() {
+    local roots=""
 
-# Check ports
-API_PIDS=$(find_processes_by_port "$API_PORT" "API server")
-if [ -n "$API_PIDS" ]; then
-    PIDS_TO_KILL="$PIDS_TO_KILL $API_PIDS"
-fi
+    # API: processes on API port
+    local p
+    for p in $(pids_on_port "$API_PORT"); do
+        [ -z "$p" ] && continue
+        roots="$roots $p"
+    done
+    # API: uvicorn api_service.main (parent and/or worker)
+    for p in $(pgrep -f "uvicorn.*api_service\.main" 2>/dev/null || true); do
+        [ -z "$p" ] && continue
+        roots="$roots $p"
+    done
 
-UI_PIDS=$(find_processes_by_port "$UI_PORT" "Frontend UI")
-if [ -n "$UI_PIDS" ]; then
-    PIDS_TO_KILL="$PIDS_TO_KILL $UI_PIDS"
-fi
+    # Frontend: processes on UI port
+    for p in $(pids_on_port "$UI_PORT"); do
+        [ -z "$p" ] && continue
+        roots="$roots $p"
+    done
+    # Frontend: Vite dev server (e.g. npm run dev -- --port N)
+    for p in $(pgrep -f "vite.*--port" 2>/dev/null || true); do
+        [ -z "$p" ] && continue
+        roots="$roots $p"
+    done
 
-MLFLOW_PIDS=$(find_processes_by_port "$MLFLOW_PORT" "MLflow UI")
-if [ -n "$MLFLOW_PIDS" ]; then
-    PIDS_TO_KILL="$PIDS_TO_KILL $MLFLOW_PIDS"
-fi
+    roots=$(echo "$roots" | tr ' ' '\n' | sort -u | grep -v '^$' | tr '\n' ' ')
+    local out="$roots"
+    for r in $roots; do
+        out="$out $(descendants_of "$r")"
+    done
+    echo "$out" | tr ' ' '\n' | sort -u | grep -v '^$' | tr '\n' ' '
+}
 
-# Check for uvicorn processes
-UVICORN_PIDS=$(find_processes_by_pattern "uvicorn.*api_service.main" "uvicorn API")
-if [ -n "$UVICORN_PIDS" ]; then
-    PIDS_TO_KILL="$PIDS_TO_KILL $UVICORN_PIDS"
-fi
-
-# Check for npm/vite processes
-VITE_PIDS=$(find_processes_by_pattern "vite.*--port.*${UI_PORT}" "Vite dev server")
-if [ -n "$VITE_PIDS" ]; then
-    PIDS_TO_KILL="$PIDS_TO_KILL $VITE_PIDS"
-fi
-
-# Check for mlflow ui processes
-MLFLOW_UI_PIDS=$(find_processes_by_pattern "mlflow.*ui" "MLflow UI")
-if [ -n "$MLFLOW_UI_PIDS" ]; then
-    PIDS_TO_KILL="$PIDS_TO_KILL $MLFLOW_UI_PIDS"
-fi
+PIDS_TO_KILL=$(collect_pids_to_kill)
 
 # Remove duplicates and empty values
 PIDS_TO_KILL=$(echo "$PIDS_TO_KILL" | tr ' ' '\n' | sort -u | grep -v '^$' | tr '\n' ' ')
 
 if [ -z "$PIDS_TO_KILL" ]; then
     echo ""
-    echo "✅ No running processes found to kill"
+    echo "✅ No API or frontend UI processes found to kill"
     exit 0
 fi
 
