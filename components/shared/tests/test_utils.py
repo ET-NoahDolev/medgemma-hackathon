@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 import sys
 from pathlib import Path
 from types import SimpleNamespace
@@ -62,5 +63,9 @@ def test_configure_mlflow_once_sets_tracking(monkeypatch: pytest.MonkeyPatch) ->
     mlflow_utils.configure_mlflow_once("medgemma-extraction")
 
     assert calls["uri"] == ["sqlite:///tmp/mlflow.db"]
-    assert calls["experiment"] == ["medgemma-extraction"]
+    assert len(calls["experiment"]) == 1
+    experiment_name = calls["experiment"][0]
+    assert experiment_name.startswith("medgemma-extraction-")
+    suffix = experiment_name.removeprefix("medgemma-extraction-")
+    assert re.fullmatch(r"\d{8}-\d{6}", suffix)
     assert calls["autolog"] == ["called", "called"]

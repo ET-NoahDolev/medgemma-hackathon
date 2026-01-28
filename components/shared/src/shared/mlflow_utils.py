@@ -3,6 +3,7 @@ from __future__ import annotations
 import contextvars
 import logging
 import os
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import TypeVar
 
@@ -45,7 +46,8 @@ def configure_mlflow_once(experiment_name: str) -> None:
     delay trace visibility.
 
     Args:
-        experiment_name: The MLflow experiment name to use.
+        experiment_name: The MLflow experiment name to use. A UTC timestamp
+            suffix is appended to separate runs by session.
     """
     try:
         import mlflow
@@ -56,7 +58,8 @@ def configure_mlflow_once(experiment_name: str) -> None:
     try:
         uri = get_mlflow_tracking_uri()
         mlflow.set_tracking_uri(uri)
-        mlflow.set_experiment(experiment_name)
+        experiment_name_with_timestamp = _format_experiment_name(experiment_name)
+        mlflow.set_experiment(experiment_name_with_timestamp)
 
         # Enable run_tracer_inline for async operations (ainvoke) to ensure
         # proper context propagation. This makes the tracer run in the main
@@ -73,11 +76,20 @@ def configure_mlflow_once(experiment_name: str) -> None:
         logger.info(
             "MLflow configured: uri=%s experiment=%s run_tracer_inline=%s",
             uri,
-            experiment_name,
+            experiment_name_with_timestamp,
             run_tracer_inline,
         )
     except Exception as exc:  # noqa: BLE001 - surface config issues without crashing
         logger.warning("MLflow configuration failed: %s", exc)
+
+
+def _format_experiment_name(
+    experiment_name: str, timestamp: datetime | None = None
+) -> str:
+    """Return an MLflow experiment name with a UTC timestamp suffix."""
+    resolved_timestamp = timestamp or datetime.now(timezone.utc)
+    suffix = resolved_timestamp.strftime("%Y%m%d-%H%M%S")
+    return f"{experiment_name}-{suffix}"
 
 
 def set_trace_metadata(

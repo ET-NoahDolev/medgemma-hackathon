@@ -9,7 +9,14 @@ from __future__ import annotations
 import os
 from typing import Any, Callable
 
+import requests
 from shared.lazy_cache import lazy_singleton
+from tenacity import (
+    retry,
+    retry_if_exception,
+    stop_after_attempt,
+    wait_exponential,
+)
 
 from inference.config import AgentConfig
 
@@ -245,6 +252,104 @@ def _build_gemma_prompt(messages: list[Any]) -> str:
     return "\n".join(prompt_parts) + "\n<start_of_turn>model\n"
 
 
+def _is_retryable_error(exception: BaseException) -> bool:
+    """Check if an exception is retryable (transient error).
+
+    Args:
+        exception: The exception to check.
+
+    Returns:
+        True if the exception is retryable, False otherwise.
+    """
+    # Retry on network/connection errors
+    if isinstance(
+        exception,
+        (
+            requests.exceptions.ConnectionError,
+            requests.exceptions.Timeout,
+            requests.exceptions.ChunkedEncodingError,
+        ),
+    ):
+        return True
+
+    # Retry on Google API transient server errors
+    try:
+        from google.api_core import exceptions as google_exceptions
+
+        if isinstance(
+            exception,
+            (
+                google_exceptions.ServiceUnavailable,
+                google_exceptions.InternalServerError,
+                google_exceptions.DeadlineExceeded,
+                google_exceptions.ResourceExhausted,  # Rate limiting - can retry
+            ),
+        ):
+            return True
+
+        # Do NOT retry on client errors (authentication, authorization, invalid args)
+        if isinstance(
+            exception,
+            (
+                google_exceptions.PermissionDenied,
+                google_exceptions.Unauthenticated,
+                google_exceptions.InvalidArgument,
+                google_exceptions.NotFound,
+                google_exceptions.AlreadyExists,
+                google_exceptions.FailedPrecondition,
+                google_exceptions.OutOfRange,
+            ),
+        ):
+            return False
+    except ImportError:
+        # If google.api_core is not available, only check requests exceptions
+        pass
+
+    # Default: don't retry on unknown exceptions
+    return False
+
+
+@retry(
+    retry=retry_if_exception(_is_retryable_error),
+    stop=stop_after_attempt(3),
+    wait=wait_exponential(multiplier=1, min=1, max=10),
+    reraise=True,
+)
+def _predict_with_retry(
+    endpoint: Any, instances: list[dict[str, Any]], parameters: dict[str, Any]
+) -> Any:
+    """Call Vertex AI endpoint.predict with retry on transient errors.
+
+    Retries on:
+    - Network errors (ConnectionError, Timeout, ChunkedEncodingError)
+    - Transient server errors (ServiceUnavailable, InternalServerError,
+      DeadlineExceeded)
+    - Rate limiting (ResourceExhausted)
+
+    Does NOT retry on:
+    - Authentication errors (Unauthenticated)
+    - Authorization errors (PermissionDenied)
+    - Client errors (InvalidArgument, NotFound, etc.)
+
+    Args:
+        endpoint: Vertex AI Endpoint object.
+        instances: List of prediction instances.
+        parameters: Prediction parameters.
+
+    Returns:
+        Prediction response from the endpoint.
+
+    Raises:
+        requests.exceptions.ConnectionError: If connection errors persist after retries.
+        requests.exceptions.Timeout: If timeout errors persist after retries.
+        google.api_core.exceptions.PermissionDenied: If permission denied
+            (not retried).
+        google.api_core.exceptions.Unauthenticated: If authentication fails
+            (not retried).
+    """
+    return endpoint.predict(instances=instances, parameters=parameters)
+
+
 def _build_vertex_endpoint_model(
     *,
     endpoint_id: str,
@@ -325,7 +430,9 @@ def _build_vertex_endpoint_model(
                     "Calling Vertex AI endpoint.predict for endpoint: %s",
                     self.endpoint_resource_name,
                 )
-                response = endpoint.predict(instances=[instance], parameters=parameters)
+                response = _predict_with_retry(
+                    endpoint=endpoint, instances=[instance], parameters=parameters
+                )
                 duration = time.time() - start_time
                 logger.debug(
                     "Vertex AI endpoint.predict succeeded in %.2f seconds",
