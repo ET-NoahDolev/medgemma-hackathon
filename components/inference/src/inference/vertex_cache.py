@@ -138,7 +138,11 @@ class VertexContextCache:
         return cache.name
 
     def generate_with_cache(self, system_prompt: str, user_prompt: str) -> str:
-        """Generate a response using cached system prompt context."""
+        """Generate a response using cached system prompt context.
+
+        Falls back to uncached generation if the system prompt is below
+        Vertex's 1024 token minimum for caching.
+        """
         # #region agent log
         try:
             _df = open("/Users/noahdolevelixir/Code/gemma-hackathon/.cursor/debug.log", "a")
@@ -156,14 +160,49 @@ class VertexContextCache:
             pass
         # #endregion
         client, types = self._get_client()
-        cache_name = self.get_or_create_cache(system_prompt)
-        response = client.models.generate_content(
-            model=self._model_path(),
-            contents=[
-                types.Content(role="user", parts=[types.Part(text=user_prompt)])
-            ],
-            config=types.GenerateContentConfig(cached_content=cache_name),
-        )
+
+        try:
+            cache_name = self.get_or_create_cache(system_prompt)
+            response = client.models.generate_content(
+                model=self._model_path(),
+                contents=[
+                    types.Content(role="user", parts=[types.Part(text=user_prompt)])
+                ],
+                config=types.GenerateContentConfig(cached_content=cache_name),
+            )
+        except Exception as exc:
+            exc_str = str(exc).lower()
+            if "minimum token" in exc_str or "1024" in exc_str:
+                # #region agent log
+                try:
+                    _df = open("/Users/noahdolevelixir/Code/gemma-hackathon/.cursor/debug.log", "a")
+                    _df.write(
+                        '{"location":"vertex_cache.generate_with_cache:fallback","message":"falling back to uncached generation","data":{"reason":"system_prompt below 1024 token minimum"},"hypothesisId":"H4","timestamp":'
+                        + str(int(time.time() * 1000))
+                        + '}\n'
+                    )
+                    _df.close()
+                except Exception:
+                    pass
+                # #endregion
+                logger.info(
+                    "System prompt below 1024 token minimum for caching, "
+                    "using uncached generation"
+                )
+                response = client.models.generate_content(
+                    model=self._model_path(),
+                    contents=[
+                        types.Content(
+                            role="user",
+                            parts=[
+                                types.Part(text=f"{system_prompt}\n\n{user_prompt}")
+                            ],
+                        )
+                    ],
+                )
+            else:
+                raise
+
         return response.text or ""
 
 
