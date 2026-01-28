@@ -13,18 +13,6 @@ SRC_DIR = ROOT_DIR / "src"
 if str(SRC_DIR) not in sys.path:
     sys.path.insert(0, str(SRC_DIR))
 
-if "extraction_service" not in sys.modules:
-    extraction_service = types.ModuleType("extraction_service")
-    extraction_pipeline = types.ModuleType("extraction_service.pipeline")
-
-    def _extract_criteria(_text: str) -> list[object]:
-        return []
-
-    setattr(extraction_pipeline, "extract_criteria", _extract_criteria)
-    setattr(extraction_service, "pipeline", extraction_pipeline)
-    sys.modules["extraction_service"] = extraction_service
-    sys.modules["extraction_service.pipeline"] = extraction_pipeline
-
 if "grounding_service" not in sys.modules:
     grounding_service = types.ModuleType("grounding_service")
     umls_client = types.ModuleType("grounding_service.umls_client")

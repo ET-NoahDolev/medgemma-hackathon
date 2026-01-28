@@ -8,6 +8,7 @@ import os
 import threading
 import time
 from dataclasses import dataclass
+from typing import Any
 
 from shared.lazy_cache import lazy_singleton
 
@@ -57,7 +58,7 @@ class ExtractionSemanticCache:
         self._lock = threading.Lock()
         self._encoder = self._load_encoder()
 
-    def _load_encoder(self):  # type: ignore[no-untyped-def]
+    def _load_encoder(self) -> Any:
         try:
             from sentence_transformers import SentenceTransformer
         except ImportError as exc:  # pragma: no cover
@@ -68,7 +69,8 @@ class ExtractionSemanticCache:
 
     def _embed(self, text: str) -> list[float]:
         embedding = self._encoder.encode(text, convert_to_numpy=True)
-        return embedding.tolist()
+        result: list[float] = embedding.tolist()
+        return result
 
     def get(self, text: str) -> tuple[ExtractionResult | None, float]:
         """Return cached extraction result and similarity score."""
@@ -120,7 +122,8 @@ def _cosine_similarity(a: list[float], b: list[float]) -> float:
     norm_b = sum(y * y for y in b) ** 0.5
     if norm_a == 0.0 or norm_b == 0.0:
         return 0.0
-    return dot / (norm_a * norm_b)
+    result: float = dot / (norm_a * norm_b)
+    return result
 
 
 @lazy_singleton

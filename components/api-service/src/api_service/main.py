@@ -5,21 +5,16 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
-import tempfile
 import uuid
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager, nullcontext
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from enum import Enum
-from pathlib import Path
 from typing import Any, List
 
 import anyio
-from anyio import to_thread
-from data_pipeline.download_protocols import extract_text_from_pdf
 from dotenv import find_dotenv, load_dotenv
-from extraction_service import pipeline as extraction_pipeline  # noqa: F401
 from fastapi import (
     BackgroundTasks,
     Body,
@@ -36,7 +31,7 @@ from pydantic import BaseModel
 from shared.mlflow_utils import configure_mlflow_once
 
 from api_service.dependencies import get_storage
-from api_service.ingestion import ingest_protocol_document_text
+from api_service.ingestion import ingest_protocol_from_pdf
 from api_service.storage import Criterion as StorageCriterion
 from api_service.storage import Storage, init_db, reset_storage
 
@@ -428,13 +423,20 @@ def create_protocol(
 
 async def _run_extraction(
     protocol_id: str,
-    document_text: str,
+    pdf_bytes: bytes,
     storage: Storage,
     session_id: str | None = None,
     user_id: str | None = None,
 ) -> None:
-    """Run extraction in background task (streaming)."""
-    # Generate a unique run ID for this extraction to group all traces
+    """Run PDF extraction in background task.
+
+    Args:
+        protocol_id: Protocol identifier.
+        pdf_bytes: PDF content to extract from.
+        storage: Storage instance for persistence.
+        session_id: Optional session ID for trace grouping.
+        user_id: Optional user ID for trace grouping.
+    """
     run_id = str(uuid.uuid4())
     logger.info("Starting extraction run_id=%s protocol_id=%s", run_id, protocol_id)
     try:
@@ -444,7 +446,6 @@ async def _run_extraction(
             progress_message="Starting extraction…",
             processed_count=0,
         )
-        # Clear existing criteria first to support re-runs.
         storage.update_protocol_status(
             protocol_id=protocol_id,
             progress_message="Clearing previous criteria…",
@@ -455,18 +456,17 @@ async def _run_extraction(
             protocol_id=protocol_id,
             progress_message="Extracting and grounding criteria…",
         )
-        # Start a root trace so MLflow autolog can attach spans.
-        # Without this, autolog fails with "No active trace" / "set_span_type".
         span_ctx: Any = nullcontext()
         try:
             import mlflow
+
             span_ctx = mlflow.start_span("ingest_protocol")
         except (ImportError, AttributeError):
             pass
         with span_ctx:
-            criteria = await ingest_protocol_document_text(
+            criteria = await ingest_protocol_from_pdf(
                 protocol_id=protocol_id,
-                document_text=document_text,
+                pdf_bytes=pdf_bytes,
                 storage=storage,
                 umls_api_key=_get_umls_api_key(),
                 session_id=session_id,
@@ -505,31 +505,37 @@ async def _run_extraction(
 
 def _run_extraction_sync(
     protocol_id: str,
-    document_text: str,
+    pdf_bytes: bytes,
     storage: Storage,
     session_id: str | None = None,
     user_id: str | None = None,
 ) -> None:
-    """Run extraction from sync background tasks."""
+    """Run PDF extraction from sync background tasks.
+
+    Args:
+        protocol_id: Protocol identifier.
+        pdf_bytes: PDF content to extract from.
+        storage: Storage instance for persistence.
+        session_id: Optional session ID for trace grouping.
+        user_id: Optional user ID for trace grouping.
+    """
     try:
         loop = asyncio.get_running_loop()
     except RuntimeError:
         anyio.run(
             _run_extraction,
             protocol_id,
-            document_text,
+            pdf_bytes,
             storage,
             session_id,
             user_id,
         )
         return
 
-    # Create and track the task
     task = loop.create_task(
-        _run_extraction(protocol_id, document_text, storage, session_id, user_id)
+        _run_extraction(protocol_id, pdf_bytes, storage, session_id, user_id)
     )
     _background_tasks.add(task)
-    # Remove task from set when it completes
     task.add_done_callback(_background_tasks.discard)
 
 
@@ -553,47 +559,36 @@ async def upload_protocol(
         )
 
     bytes_read = 0
-    with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as tmp:
-        tmp_path = Path(tmp.name)
-        while True:
-            chunk = await file.read(1024 * 1024)
-            if not chunk:
-                break
-            bytes_read += len(chunk)
-            if bytes_read > get_config().max_upload_bytes:
-                tmp_path.unlink(missing_ok=True)
-                raise HTTPException(status_code=413, detail="File too large")
-            tmp.write(chunk)
+    chunks: list[bytes] = []
+    while True:
+        chunk = await file.read(1024 * 1024)
+        if not chunk:
+            break
+        bytes_read += len(chunk)
+        if bytes_read > get_config().max_upload_bytes:
+            raise HTTPException(status_code=413, detail="File too large")
+        chunks.append(chunk)
+    pdf_bytes = b"".join(chunks)
 
-    with tmp_path.open("rb") as handle:
-        header = handle.read(4)
-    if header != b"%PDF":
-        tmp_path.unlink(missing_ok=True)
+    if not pdf_bytes.startswith(b"%PDF"):
         raise HTTPException(status_code=400, detail="Invalid PDF file")
 
-    try:
-        document_text = await to_thread.run_sync(extract_text_from_pdf, tmp_path)
-    finally:
-        tmp_path.unlink(missing_ok=True)
-
-    if not document_text:
-        raise HTTPException(
-            status_code=400, detail="No text could be extracted from the PDF"
-        )
-
     title = filename.replace(".pdf", "").replace("_", " ").strip() or "Protocol"
-    protocol = storage.create_protocol(title=title, document_text=document_text)
+    protocol = storage.create_protocol(
+        title=title,
+        document_text="[PDF attached - extraction pending]",
+        pdf_bytes=pdf_bytes,
+    )
 
     if auto_extract:
         storage.update_protocol_status(
             protocol_id=protocol.id,
             progress_message="Queued for extraction…",
         )
-        # Run extraction in background to avoid blocking the response
         background_tasks.add_task(
             _run_extraction_sync,
             protocol.id,
-            protocol.document_text,
+            pdf_bytes,
             storage,
             session_context.get("session_id"),
             session_context.get("user_id"),
@@ -617,16 +612,20 @@ def extract_criteria(
     protocol = storage.get_protocol(protocol_id)
     if protocol is None:
         raise HTTPException(status_code=404, detail="Protocol not found")
+    if protocol.pdf_bytes is None:
+        raise HTTPException(
+            status_code=400,
+            detail="Protocol has no PDF content; upload a PDF first.",
+        )
 
     storage.update_protocol_status(
         protocol_id=protocol_id,
         progress_message="Queued for extraction…",
     )
-    # Run extraction in background to avoid blocking the response
     background_tasks.add_task(
         _run_extraction_sync,
         protocol_id,
-        protocol.document_text,
+        protocol.pdf_bytes,
         storage,
         session_context.get("session_id"),
         session_context.get("user_id"),
@@ -781,7 +780,7 @@ def _infer_field_from_snippet(snippet: str) -> str:
     return "unknown"
 
 
-def _extract_field_mapping_from_terms(terms: list) -> FieldMappingResponse | None:
+def _extract_field_mapping_from_terms(terms: list[Any]) -> FieldMappingResponse | None:
     """Extract field mapping from first term with relation and value."""
     for term in terms:
         if term.relation and term.value:

@@ -6,8 +6,7 @@ import re
 from dataclasses import asdict, dataclass
 from pathlib import Path
 
-from pypdf import PdfReader
-from shared.models import Document, Protocol
+from shared.models import Protocol
 
 
 @dataclass
@@ -19,7 +18,7 @@ class ProtocolRecord:
         title: Trial title.
         condition: Primary condition or disease area.
         phase: Trial phase label.
-        document_text: Extracted protocol text for NLP processing.
+        pdf_path: Local path to the protocol PDF.
 
     Examples:
         >>> ProtocolRecord(
@@ -27,14 +26,14 @@ class ProtocolRecord:
         ...     title="Example Trial",
         ...     condition="Melanoma",
         ...     phase="Phase 2",
-        ...     document_text="Inclusion: Age >= 18.",
+        ...     pdf_path="/path/to/protocol.pdf",
         ... )
         ProtocolRecord(
         ...     nct_id='NCT00000000',
         ...     title='Example Trial',
         ...     condition='Melanoma',
         ...     phase='Phase 2',
-        ...     document_text='Inclusion: Age >= 18.',
+        ...     pdf_path='/path/to/protocol.pdf',
         ... )
 
     Notes:
@@ -45,7 +44,7 @@ class ProtocolRecord:
     title: str
     condition: str
     phase: str
-    document_text: str
+    pdf_path: str
     source: str | None = None
     registry_id: str | None = None
     registry_type: str | None = None
@@ -64,16 +63,6 @@ class ProtocolRecord:
             registry_type=self.registry_type,
         )
 
-    def to_document(self, doc_id: str, protocol_id: str) -> Document:
-        """Convert to shared Document model."""
-        return Document(
-            id=doc_id,
-            protocol_id=protocol_id,
-            text=self.document_text,
-            source_url=self.source_url,
-        )
-
-
 DEFAULT_MANIFEST_PATH = (
     Path(__file__).resolve().parents[4] / "data" / "protocols" / "manifest.jsonl"
 )
@@ -81,21 +70,7 @@ DEFAULT_MANIFEST_PATH = (
 logger = logging.getLogger(__name__)
 
 
-def extract_text_from_pdf(path: Path) -> str:
-    """Extract text from a PDF file using pypdf."""
-    reader = PdfReader(str(path))
-    chunks: list[str] = []
-    for page in reader.pages:
-        page_text = page.extract_text() or ""
-        if page_text:
-            chunks.append(page_text)
-    return "\n".join(chunks).strip()
-
-
-def _derive_title(path: Path, text: str) -> str:
-    first_line = next((line.strip() for line in text.splitlines() if line.strip()), "")
-    if first_line and len(first_line) >= 5:
-        return first_line[:200]
+def _derive_title(path: Path) -> str:
     fallback = path.stem.replace("_", " ").replace("-", " ").strip()
     return fallback or "Protocol"
 
@@ -150,17 +125,8 @@ def _build_record_from_entry(entry: dict[str, object]) -> ProtocolRecord | None:
     if not pdf_path.exists():
         logger.warning("Missing PDF at %s", pdf_path)
         return None
-    try:
-        text = extract_text_from_pdf(pdf_path)
-    except Exception as exc:  # pragma: no cover - defensive
-        logger.warning("Failed to read %s: %s", pdf_path, exc)
-        return None
-    if not text:
-        logger.warning("Empty text extracted from %s", pdf_path)
-        return None
-
     url = _get_optional_str(entry, "url") or ""
-    title = _derive_title(pdf_path, text)
+    title = _derive_title(pdf_path)
     registry_id = _get_optional_str(entry, "registry_id")
     registry_type = _get_optional_str(entry, "registry_type")
     if not registry_id or not registry_type:
@@ -172,7 +138,7 @@ def _build_record_from_entry(entry: dict[str, object]) -> ProtocolRecord | None:
         title=title,
         condition="",
         phase="",
-        document_text=text,
+        pdf_path=str(pdf_path),
         source=_get_optional_str(entry, "source"),
         registry_id=registry_id,
         registry_type=registry_type,
@@ -183,7 +149,7 @@ def _build_record_from_entry(entry: dict[str, object]) -> ProtocolRecord | None:
 def ingest_local_protocols(
     manifest_path: Path = DEFAULT_MANIFEST_PATH, limit: int = 50
 ) -> list[ProtocolRecord]:
-    """Load protocol PDFs referenced in a manifest and extract document text."""
+    """Load protocol PDFs referenced in a manifest."""
     if limit <= 0:
         raise ValueError("limit must be positive")
     if not manifest_path.exists():

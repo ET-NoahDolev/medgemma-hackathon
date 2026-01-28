@@ -9,35 +9,38 @@ def test_load_single_protocol_posts_and_extracts(tmp_path: Path) -> None:
     pdf = tmp_path / "test.pdf"
     pdf.write_bytes(b"%PDF-1.4 fake")
 
-    with patch("data_pipeline.loader.extract_text_from_pdf") as mock_extract:
-        mock_extract.return_value = "Protocol text"
-        with patch("data_pipeline.loader.httpx.post") as mock_post:
-            mock_post.return_value = MagicMock(
-                status_code=200,
-                json=lambda: {"protocol_id": "proto-1"},
-                raise_for_status=lambda: None,
-            )
+    with patch("data_pipeline.loader.httpx.post") as mock_post:
+        mock_post.return_value = MagicMock(
+            status_code=200,
+            json=lambda: {"protocol_id": "proto-1"},
+            raise_for_status=lambda: None,
+        )
 
-            protocol_id = load_single_protocol(pdf, "http://localhost:8000")
+        protocol_id = load_single_protocol(pdf, "http://localhost:8000")
 
     assert protocol_id == "proto-1"
-    assert mock_post.call_count == 2
+    assert mock_post.call_count == 1
 
 
 def test_bulk_load_protocols_posts_records(tmp_path: Path) -> None:
+    pdf_one = tmp_path / "trial-1.pdf"
+    pdf_one.write_bytes(b"%PDF-1.4 fake")
+    pdf_two = tmp_path / "trial-2.pdf"
+    pdf_two.write_bytes(b"%PDF-1.4 fake")
+
     record = ProtocolRecord(
         nct_id="NCT12345678",
         title="Trial 1",
         condition="Cancer",
         phase="Phase 1",
-        document_text="Inclusion: Age >= 18",
+        pdf_path=str(pdf_one),
     )
     record_two = ProtocolRecord(
         nct_id="NCT99999999",
         title="Trial 2",
         condition="Melanoma",
         phase="Phase 2",
-        document_text="Exclusion: Pregnant",
+        pdf_path=str(pdf_two),
     )
 
     with patch("data_pipeline.loader.ingest_local_protocols") as mock_ingest:

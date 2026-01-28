@@ -132,41 +132,33 @@ def create_structured_extractor(
         )
 
         if os.getenv("ENABLE_VERTEX_CACHE", "").lower() == "true":
-            # #region agent log
-            import time as _time
-            try:
-                _df = open("/Users/noahdolevelixir/Code/gemma-hackathon/.cursor/debug.log", "a")
-                _df.write(
-                    '{"location":"agent_factory.invoke:before_cache","message":"prompts after render","data":{"len_system":'
-                    + str(len(system_prompt))
-                    + ',"len_user":'
-                    + str(len(user_prompt))
-                    + ',"system_preview":"'
-                    + system_prompt[:150].replace('"', '\\"').replace('\n', '\\n')
-                    + '...","user_preview":"'
-                    + user_prompt[:150].replace('"', '\\"').replace('\n', '\\n')
-                    + '..."},"hypothesisId":"H6","timestamp":'
-                    + str(int(_time.time() * 1000))
-                    + '}\n'
-                )
-                _df.close()
-            except Exception:
-                pass
-            # #endregion
             try:
                 from inference.vertex_cache import get_vertex_cache
 
                 cache = get_vertex_cache()
                 response_text = cache.generate_with_cache(system_prompt, user_prompt)
+                logger.info(
+                    "Structured extractor: parsing Vertex cache response (len=%d)",
+                    len(response_text or ""),
+                )
                 parsed = json.loads(response_text)
-                return response_schema(**parsed)
+                result = response_schema(**parsed)
+                logger.info(
+                    "Structured extractor: returning result from Vertex cache (%s)",
+                    response_schema.__name__,
+                )
+                return result
             except (
                 json.JSONDecodeError,
                 ValidationError,
                 TypeError,
                 ValueError,
             ) as exc:
-                logger.debug("Vertex cache parse failed, falling back: %s", exc)
+                logger.info(
+                    "Vertex cache response was not valid JSON / failed validation, "
+                    "using structured model fallback: %s",
+                    exc,
+                )
 
         structured_model = _get_structured_model()
         result = await structured_model.ainvoke(
@@ -304,7 +296,24 @@ def create_react_agent(
 
         parsed_direct = _try_parse_last_message(messages, response_schema)
         if parsed_direct is not None:
+            logger.info(
+                "ReAct agent: returning result from last message (%s)",
+                response_schema.__name__,
+            )
             return parsed_direct
+
+        last_ai = next(
+            (m for m in reversed(messages) if getattr(m, "type", None) == "ai"),
+            None,
+        )
+        last_has_tool_calls = bool(
+            getattr(last_ai, "tool_calls", None) if last_ai else True
+        )
+        logger.info(
+            "ReAct agent: last message has no parseable JSON (tool_calls=%s), "
+            "using with_structured_output on full conversation",
+            last_has_tool_calls,
+        )
 
         # Convert agent messages to format expected by structured model
         # Include full conversation history (system, user, tool calls, tool responses)
@@ -322,8 +331,16 @@ def create_react_agent(
         structured_result = await structured_model.ainvoke(structured_messages)
 
         if isinstance(structured_result, response_schema):
+            logger.info(
+                "ReAct agent: returning result from with_structured_output (%s)",
+                response_schema.__name__,
+            )
             return structured_result
         if isinstance(structured_result, dict):
+            logger.info(
+                "ReAct agent: returning result from with_structured_output (%s)",
+                response_schema.__name__,
+            )
             return response_schema(**structured_result)
 
         raise ValueError(

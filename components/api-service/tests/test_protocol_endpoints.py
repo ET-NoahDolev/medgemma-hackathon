@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from fastapi.testclient import TestClient
 
+from api_service.storage import Storage, get_engine, reset_storage
+
 
 class TestListProtocols:
     def test_list_empty(self, client: TestClient) -> None:
@@ -61,16 +63,20 @@ class TestGetProtocol:
         assert resp.status_code == 404
 
     def test_get_protocol_includes_criteria_count(self, client: TestClient) -> None:
-        create_resp = client.post(
-            "/v1/protocols",
-            json={
-                "title": "Trial",
-                "document_text": "Inclusion: Age >= 18. Exclusion: Pregnant.",
-            },
+        # Create protocol and criterion directly via storage (bypassing extraction)
+        reset_storage()
+        storage = Storage(get_engine())
+        protocol = storage.create_protocol(
+            title="Trial",
+            document_text="Inclusion: Age >= 18. Exclusion: Pregnant.",
         )
-        protocol_id = create_resp.json()["protocol_id"]
-        client.post(f"/v1/protocols/{protocol_id}/extract")
+        storage.create_criterion_detail(
+            protocol_id=protocol.id,
+            text="Age >= 18",
+            criterion_type="inclusion",
+            confidence=0.9,
+        )
 
-        resp = client.get(f"/v1/protocols/{protocol_id}")
+        resp = client.get(f"/v1/protocols/{protocol.id}")
         assert "criteria_count" in resp.json()
         assert resp.json()["criteria_count"] >= 1

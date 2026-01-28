@@ -1,34 +1,32 @@
 # extraction-service
 
-Hierarchical extraction pipeline for MedGemma Task A. Produces atomic
-inclusion/exclusion criteria from clinical trial protocols.
+Gemini-based extraction pipeline for MedGemma Task A. Produces atomic
+inclusion/exclusion criteria from clinical trial protocol PDFs.
 
 ## Responsibilities
 
-- Filter pages for eligibility criteria content (Gemini).
-- Filter paragraphs for criteria statements (Gemini or MedGemma).
-- Extract atomic criteria with confidence scores (Gemini or MedGemma).
+- Extract criteria directly from PDF attachments (Gemini).
+- Batch MedGemma triplet extraction for entity/relation/value.
 
 ## Key Module
 
-- `extraction_service/pipeline.py`
+- `extraction_service/pdf_extractor.py`
 
 ## Architecture
 
-The extraction service uses a hierarchical three-stage LangGraph pipeline:
-1. **Page Filter**: Identifies pages containing eligibility criteria (structured extractor)
-2. **Paragraph Filter**: Narrows down to specific paragraphs (structured extractor or MedGemma)
-3. **Criteria Extraction**: Extracts atomic criteria with entity/relation/value triplets (structured extractor or MedGemma)
+The extraction service uses a two-stage pipeline:
+1. **PDF Extraction**: Gemini extracts eligibility criteria directly from PDFs.
+2. **Triplet Extraction**: MedGemma batches entity/relation/value extraction.
 
 See the [LangGraph Architecture diagram](../../docs/diagrams/langgraph-architecture.md) for detailed information.
 
 ## Example Usage
 
 ```python
-from extraction_service.pipeline import extract_criteria
+from extraction_service.pdf_extractor import extract_criteria_from_pdf
 
-criteria = extract_criteria("Inclusion: Age >= 18...")
-for item in criteria:
+result = await extract_criteria_from_pdf(pdf_path=Path("protocol.pdf"))
+for item in result.criteria:
     print(item.text, item.criterion_type, item.confidence)
 ```
 
@@ -39,15 +37,10 @@ The pipeline reads configuration from environment variables:
 - `GEMINI_MODEL_NAME` (default: `gemini-2.5-pro`)
 - `GCP_PROJECT_ID` (required for Vertex Gemini)
 - `GCP_REGION` (default: `europe-west4`)
-- `EXTRACTION_MAX_PAGE_CHARS` (default: `4000`)
-- `EXTRACTION_MAX_PAGES_PER_BATCH` (default: `6`)
-- `EXTRACTION_MAX_PARAGRAPHS_PER_BATCH` (default: `10`)
-- `EXTRACTION_MAX_CONCURRENCY` (default: `5`)
-- `USE_MEDGEMMA_PARAGRAPH_FILTER` (default: `false`) toggles MedGemma for paragraph filtering.
-- `USE_MEDGEMMA_EXTRACTION` (default: `false`) toggles single-pass MedGemma extraction.
-- `ENABLE_EXTRACTION_SEMANTIC_CACHE` (default: `false`) enables semantic cache for extraction results.
-- `EXTRACTION_SEMANTIC_SIMILARITY_THRESHOLD` (default: `0.95`) cache hit threshold.
-- `EXTRACTION_SEMANTIC_CACHE_TTL_SECONDS` (default: `3600`) cache entry TTL.
+- `ENABLE_PDF_CHUNKING` (default: `false`) toggles PDF splitting for large documents.
+- `PDF_CHUNK_MAX_PAGES` (default: `50`) maximum pages per chunk when enabled.
+- `PDF_CHUNK_MAX_BYTES` (default: `10485760`) maximum bytes before chunking.
+- `MEDGEMMA_BATCH_SIZE` (default: `10`) criteria per MedGemma triplet batch.
 
 ## Tests
 

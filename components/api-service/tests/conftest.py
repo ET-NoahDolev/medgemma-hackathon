@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, cast
+from typing import Any, Iterator, cast
 
 import pytest
 from fastapi.testclient import TestClient
@@ -19,7 +19,21 @@ api_main_any = cast(Any, api_main)
 def isolate_db(monkeypatch: pytest.MonkeyPatch, tmp_path: Any) -> None:
     """Use a unique SQLite DB per test so parallel workers (-n auto) do not race."""
     db_url = f"sqlite:///{tmp_path}/api_test.db"
+    try:
+        if get_engine.cache_info().currsize > 0:
+            engine = get_engine()
+            engine.dispose()
+    finally:
+        get_engine.cache_clear()
     monkeypatch.setenv("API_SERVICE_DB_URL", db_url)
+
+
+@pytest.fixture(autouse=True, scope="session")
+def dispose_engine_after_session() -> Iterator[None]:
+    yield
+    if get_engine.cache_info().currsize > 0:
+        engine = get_engine()
+        engine.dispose()
     get_engine.cache_clear()
 
 @dataclass
@@ -77,36 +91,6 @@ def force_fast_test_settings(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("USE_AI_GROUNDING", "false")
 
 
-@pytest.fixture(autouse=True)
-def stub_model_extraction(
-    monkeypatch: pytest.MonkeyPatch, request: pytest.FixtureRequest
-) -> None:
-    """Stub extraction to keep tests deterministic."""
-    if "fake_services" in request.fixturenames:
-        return
-
-    async def _extract_criteria_async(
-        _text: str,
-        session_id: str | None = None,
-        user_id: str | None = None,
-        run_id: str | None = None,
-    ) -> list[FakeExtractedCriterion]:
-        _ = session_id  # Unused but required for signature compatibility
-        _ = user_id  # Unused but required for signature compatibility
-        _ = run_id  # Unused but required for signature compatibility
-        return [
-            FakeExtractedCriterion(
-                text=constants.EXTRACTED_TEXT,
-                criterion_type=constants.CRITERION_TYPE,
-                confidence=constants.CRITERION_CONFIDENCE,
-            )
-        ]
-
-    monkeypatch.setattr(
-        api_main_any.extraction_pipeline,
-        "extract_criteria_async",
-        _extract_criteria_async,
-    )
 
 
 @pytest.fixture()
@@ -136,23 +120,6 @@ def fake_services(monkeypatch: pytest.MonkeyPatch) -> FakeServicesState:
             )
         ],
     )
-
-    def _extract_criteria(_text: str) -> list[FakeExtractedCriterion]:
-        return state.extracted
-
-    def _extract_criteria_stream(_text: str):
-        yield from state.extracted
-
-    async def _extract_criteria_async(
-        _text: str,
-        session_id: str | None = None,
-        user_id: str | None = None,
-        run_id: str | None = None,
-    ):
-        _ = session_id  # Unused but required for signature compatibility
-        _ = user_id  # Unused but required for signature compatibility
-        _ = run_id  # Unused but required for signature compatibility
-        return state.extracted
 
     class FakeUmlsClient:
         def __init__(
@@ -185,27 +152,9 @@ def fake_services(monkeypatch: pytest.MonkeyPatch) -> FakeServicesState:
     def _propose_field_mapping(_text: str) -> list[FakeFieldMapping]:
         return state.field_mappings
 
-    monkeypatch.setattr(
-        api_main_any.extraction_pipeline, "extract_criteria", _extract_criteria
-    )
-    monkeypatch.setattr(
-        api_main_any.extraction_pipeline,
-        "extract_criteria_stream",
-        _extract_criteria_stream,
-    )
-    monkeypatch.setattr(
-        api_main_any.extraction_pipeline,
-        "extract_criteria_async",
-        _extract_criteria_async,
-    )
     monkeypatch.setattr(api_main_any.umls_client, "UmlsClient", FakeUmlsClient)
     monkeypatch.setattr(
         api_main_any.umls_client, "propose_field_mapping", _propose_field_mapping
-    )
-    monkeypatch.setattr(
-        ingestion,
-        "extract_triplet",
-        lambda _text: '{"entity":"age","relation":">=","value":"18","unit":"years"}',
     )
 
     return state

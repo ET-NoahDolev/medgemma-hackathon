@@ -11,18 +11,13 @@ import httpx
 
 from data_pipeline.download_protocols import (
     DEFAULT_MANIFEST_PATH,
-    ProtocolRecord,
-    extract_text_from_pdf,
     ingest_local_protocols,
 )
 
 logger = logging.getLogger(__name__)
 
 
-def _derive_title(path: Path, text: str) -> str:
-    first_line = next((line.strip() for line in text.splitlines() if line.strip()), "")
-    if first_line and len(first_line) >= 5:
-        return first_line[:200]
+def _derive_title(path: Path) -> str:
     fallback = path.stem.replace("_", " ").replace("-", " ").strip()
     return fallback or "Protocol"
 
@@ -45,48 +40,18 @@ def load_single_protocol(
     if not pdf_path.exists():
         raise FileNotFoundError(f"PDF not found: {pdf_path}")
 
-    text = extract_text_from_pdf(pdf_path)
-    if not text:
-        raise ValueError(f"No text extracted from {pdf_path}")
-
-    title = _derive_title(pdf_path, text)
-    response = httpx.post(
-        f"{api_url.rstrip('/')}/v1/protocols",
-        json={"title": title, "document_text": text},
-        timeout=30.0,
-    )
+    with pdf_path.open("rb") as handle:
+        response = httpx.post(
+            f"{api_url.rstrip('/')}/v1/protocols/upload",
+            params={"auto_extract": str(auto_extract).lower()},
+            files={"file": (pdf_path.name, handle, "application/pdf")},
+            timeout=60.0,
+        )
     response.raise_for_status()
     payload = cast(dict[str, str], response.json())
     protocol_id = payload["protocol_id"]
 
-    if auto_extract:
-        extract_resp = httpx.post(
-            f"{api_url.rstrip('/')}/v1/protocols/{protocol_id}/extract",
-            timeout=30.0,
-        )
-        extract_resp.raise_for_status()
-
     return protocol_id
-
-
-def _record_payload(record: ProtocolRecord) -> dict[str, object]:
-    payload: dict[str, object] = {
-        "title": record.title,
-        "document_text": record.document_text,
-    }
-    if record.nct_id:
-        payload["nct_id"] = record.nct_id
-    if record.condition:
-        payload["condition"] = record.condition
-    if record.phase:
-        payload["phase"] = record.phase
-    if record.source:
-        payload["source"] = record.source
-    if record.registry_id:
-        payload["registry_id"] = record.registry_id
-    if record.registry_type:
-        payload["registry_type"] = record.registry_type
-    return payload
 
 
 def bulk_load_protocols(
@@ -110,11 +75,14 @@ def bulk_load_protocols(
     protocol_ids: list[str] = []
 
     for record in records:
-        response = httpx.post(
-            f"{api_url.rstrip('/')}/v1/protocols",
-            json=_record_payload(record),
-            timeout=30.0,
-        )
+        pdf_path = Path(record.pdf_path)
+        with pdf_path.open("rb") as handle:
+            response = httpx.post(
+                f"{api_url.rstrip('/')}/v1/protocols/upload",
+                params={"auto_extract": str(auto_extract).lower()},
+                files={"file": (pdf_path.name, handle, "application/pdf")},
+                timeout=60.0,
+            )
         if response.status_code != 200:
             logger.warning(
                 "Failed to create protocol %s (%s)",
@@ -125,18 +93,6 @@ def bulk_load_protocols(
         payload = cast(dict[str, str], response.json())
         protocol_id = payload["protocol_id"]
         protocol_ids.append(protocol_id)
-
-        if auto_extract:
-            extract_resp = httpx.post(
-                f"{api_url.rstrip('/')}/v1/protocols/{protocol_id}/extract",
-                timeout=30.0,
-            )
-            if extract_resp.status_code != 200:
-                logger.warning(
-                    "Failed to extract criteria for %s (%s)",
-                    protocol_id,
-                    extract_resp.text,
-                )
 
     return protocol_ids
 

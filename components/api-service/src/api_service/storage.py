@@ -11,7 +11,7 @@ from typing import Any, Iterable, cast
 from typing import Protocol as TypingProtocol
 
 from shared.models import Protocol as SharedProtocol
-from sqlalchemy import JSON, Column, delete, func, text
+from sqlalchemy import JSON, Column, LargeBinary, delete, func, text
 from sqlalchemy.engine import Connection, Engine
 from sqlalchemy.exc import OperationalError
 from sqlmodel import Field, Session, SQLModel, col, create_engine, select
@@ -35,6 +35,9 @@ class Protocol(SQLModel, table=True):
     id: str = Field(primary_key=True)
     title: str
     document_text: str
+    pdf_bytes: bytes | None = Field(
+        default=None, sa_column=Column(LargeBinary, nullable=True)
+    )
     nct_id: str | None = None
     condition: str | None = None
     phase: str | None = None
@@ -330,6 +333,7 @@ class Storage:
         *,
         title: str,
         document_text: str,
+        pdf_bytes: bytes | None = None,
         nct_id: str | None = None,
         condition: str | None = None,
         phase: str | None = None,
@@ -344,6 +348,7 @@ class Storage:
                 id=protocol_id,
                 title=title.strip(),
                 document_text=document_text,
+                pdf_bytes=pdf_bytes,
                 nct_id=_norm_opt(nct_id),
                 condition=_norm_opt(condition),
                 phase=_norm_opt(phase),
@@ -359,7 +364,7 @@ class Storage:
             return protocol
 
     def create_protocol_from_shared(
-        self, shared: SharedProtocol, document_text: str
+        self, shared: SharedProtocol, document_text: str, pdf_bytes: bytes | None = None
     ) -> Protocol:
         """Create a Protocol from a shared Protocol model and document text."""
         with Session(self._engine) as session:
@@ -368,6 +373,7 @@ class Storage:
                 id=protocol_id,
                 title=shared.title.strip(),
                 document_text=document_text,
+                pdf_bytes=pdf_bytes,
                 nct_id=_norm_opt(getattr(shared, "nct_id", None)),
                 condition=_norm_opt(getattr(shared, "condition", None)),
                 phase=_norm_opt(getattr(shared, "phase", None)),

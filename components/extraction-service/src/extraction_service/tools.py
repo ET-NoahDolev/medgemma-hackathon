@@ -17,13 +17,22 @@ from extraction_service.schemas import ExtractionResult
 try:
     from langchain_core.tools import tool
 except ImportError:  # pragma: no cover
-    # Minimal fallback so this module can be imported without LangChain installed.
-    def _tool(func=None, **_kwargs):  # type: ignore[no-redef]
-        if func is None:
-            return lambda f: f
-        return func
+    from typing import Callable, ParamSpec, TypeVar
 
-    tool = _tool  # type: ignore[assignment]
+    _P = ParamSpec("_P")
+    _R = TypeVar("_R")
+
+    def tool(  # type: ignore[no-redef]  # noqa: D417
+        func: Callable[_P, _R] | None = None, **_kwargs: Any
+    ) -> Callable[_P, _R] | Callable[[Callable[_P, _R]], Callable[_P, _R]]:
+        """Minimal fallback so this module can be imported without LangChain."""
+        if func is None:
+
+            def decorator(f: Callable[_P, _R]) -> Callable[_P, _R]:
+                return f
+
+            return decorator
+        return func
 
 logger = logging.getLogger(__name__)
 
@@ -184,6 +193,42 @@ def extract_triplet(text: str) -> str:
 
     normalized = _normalize_triplet_payload(payload)
     return json.dumps(normalized, separators=(",", ":"))
+
+
+def extract_triplets_batch(criteria_texts: list[str]) -> list[dict[str, Any]]:
+    """Extract entity/relation/value triplets for multiple criteria in one call.
+
+    Args:
+        criteria_texts: Criterion text strings.
+
+    Returns:
+        List of triplet dictionaries in the same order as inputs.
+    """
+    if not criteria_texts:
+        return []
+    prompt = (
+        "Extract entity/relation/value triplets for each criterion below.\n\n"
+        "Return ONLY a JSON array matching input order. Each item should be an "
+        "object with keys: entity, relation, value, unit.\n\n"
+        "Criteria:\n"
+        + "\n".join(
+            f"{index + 1}. {text}" for index, text in enumerate(criteria_texts)
+        )
+    )
+    result = _invoke_medgemma(prompt)
+    try:
+        payload = json.loads(result)
+    except json.JSONDecodeError as exc:
+        raise ValueError("MedGemma returned invalid JSON for batch triplets.") from exc
+    if not isinstance(payload, list):
+        raise ValueError("MedGemma batch triplet payload is not a list.")
+    normalized: list[dict[str, Any]] = []
+    for item in payload:
+        if isinstance(item, dict):
+            normalized.append(_normalize_triplet_payload(item))
+        else:
+            normalized.append({})
+    return normalized
 
 
 def _clarify_ambiguity_impl(question: str, text: str) -> str:
