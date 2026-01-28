@@ -9,10 +9,18 @@ from fastapi.testclient import TestClient
 import api_service.ingestion as ingestion
 import api_service.main as api_main
 from api_service.main import app
-from api_service.storage import reset_storage
+from api_service.storage import get_engine, reset_storage
 from tests import constants
 
 api_main_any = cast(Any, api_main)
+
+
+@pytest.fixture(autouse=True)
+def isolate_db(monkeypatch: pytest.MonkeyPatch, tmp_path: Any) -> None:
+    """Use a unique SQLite DB per test so parallel workers (-n auto) do not race."""
+    db_url = f"sqlite:///{tmp_path}/api_test.db"
+    monkeypatch.setenv("API_SERVICE_DB_URL", db_url)
+    get_engine.cache_clear()
 
 @dataclass
 class FakeExtractedCriterion:

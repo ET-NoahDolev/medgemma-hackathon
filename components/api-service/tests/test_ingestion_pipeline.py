@@ -6,7 +6,7 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from api_service.ingestion import _ground_with_ai, ingest_protocol_document_text
-from api_service.storage import Storage, get_engine
+from api_service.storage import Storage, get_engine, reset_storage
 
 
 @dataclass
@@ -30,6 +30,7 @@ async def test_ingestion_pipeline_stores_triplet_and_grounding(
     monkeypatch: pytest.MonkeyPatch,
     fake_services,
 ) -> None:
+    reset_storage()
     storage = Storage(get_engine())
 
     def _extract_criteria_stream(_text: str):
