@@ -6,8 +6,8 @@ inclusion/exclusion criteria from clinical trial protocols.
 ## Responsibilities
 
 - Filter pages for eligibility criteria content (Gemini).
-- Filter paragraphs for criteria statements (Gemini).
-- Extract atomic criteria with confidence scores (Gemini + MedGemma tools).
+- Filter paragraphs for criteria statements (Gemini or MedGemma).
+- Extract atomic criteria with confidence scores (Gemini or MedGemma).
 
 ## Key Module
 
@@ -17,8 +17,8 @@ inclusion/exclusion criteria from clinical trial protocols.
 
 The extraction service uses a hierarchical three-stage LangGraph pipeline:
 1. **Page Filter**: Identifies pages containing eligibility criteria (structured extractor)
-2. **Paragraph Filter**: Narrows down to specific paragraphs (structured extractor)
-3. **Criteria Extraction**: Extracts atomic criteria with entity/relation/value triplets (ReAct agent with tools)
+2. **Paragraph Filter**: Narrows down to specific paragraphs (structured extractor or MedGemma)
+3. **Criteria Extraction**: Extracts atomic criteria with entity/relation/value triplets (structured extractor or MedGemma)
 
 See the [LangGraph Architecture diagram](../../docs/diagrams/langgraph-architecture.md) for detailed information.
 
@@ -42,6 +42,12 @@ The pipeline reads configuration from environment variables:
 - `EXTRACTION_MAX_PAGE_CHARS` (default: `4000`)
 - `EXTRACTION_MAX_PAGES_PER_BATCH` (default: `6`)
 - `EXTRACTION_MAX_PARAGRAPHS_PER_BATCH` (default: `10`)
+- `EXTRACTION_MAX_CONCURRENCY` (default: `5`)
+- `USE_MEDGEMMA_PARAGRAPH_FILTER` (default: `false`) toggles MedGemma for paragraph filtering.
+- `USE_MEDGEMMA_EXTRACTION` (default: `false`) toggles single-pass MedGemma extraction.
+- `ENABLE_EXTRACTION_SEMANTIC_CACHE` (default: `false`) enables semantic cache for extraction results.
+- `EXTRACTION_SEMANTIC_SIMILARITY_THRESHOLD` (default: `0.95`) cache hit threshold.
+- `EXTRACTION_SEMANTIC_CACHE_TTL_SECONDS` (default: `3600`) cache entry TTL.
 
 ## Tests
 
