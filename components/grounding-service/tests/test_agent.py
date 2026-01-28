@@ -72,10 +72,14 @@ async def test_ground_returns_structured_result():
 
 
 @pytest.mark.asyncio
-async def test_ground_fallback_on_invoke_error():
+async def test_ground_fallback_on_invoke_error(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """Test that ground() raises errors when agent invoke fails."""
     async def failing_invoke(*_args: object, **_kwargs: object) -> None:
         raise ValueError("Invalid JSON")
+
+    monkeypatch.setenv("ENABLE_GROUNDING_SEMANTIC_CACHE", "false")
 
     with patch("grounding_service.agent.ChatGoogleGenerativeAI"):
         with patch("inference.create_react_agent") as mock_create:

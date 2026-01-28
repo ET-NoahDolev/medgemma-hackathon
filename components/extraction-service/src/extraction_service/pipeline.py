@@ -11,7 +11,10 @@ from pathlib import Path
 from typing import AsyncIterator, Iterable, Iterator, Sequence, cast
 
 import anyio
-from inference.agent_factory import create_structured_extractor
+from inference.agent_factory import (  # noqa: F401
+    create_react_agent,
+    create_structured_extractor,
+)
 from inference.model_factory import create_gemini_model_loader
 from shared.mlflow_utils import set_trace_metadata
 
