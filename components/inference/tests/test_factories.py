@@ -241,6 +241,49 @@ async def test_create_react_agent_smoke(
 
 
 @pytest.mark.asyncio
+async def test_create_react_agent_direct_parse(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    (tmp_path / "sys.j2").write_text("system")
+    (tmp_path / "user.j2").write_text("user")
+
+    from langchain_core.messages import AIMessage
+    from pydantic import BaseModel
+
+    class DummySchema(BaseModel):
+        ok: bool = False
+
+    class DummyAgent:
+        async def ainvoke(
+            self, _payload: object, *, config: object | None = None
+        ) -> dict[str, object]:
+            return {"messages": [AIMessage(content='{"ok": true}')]}
+
+    class DummyModel:
+        def with_structured_output(self, schema: type[Any]) -> Any:
+            raise AssertionError("Structured output should not be called")
+
+    def dummy_model_loader() -> DummyModel:
+        return DummyModel()
+
+    def _create_agent(**_kw: Any) -> DummyAgent:
+        return DummyAgent()
+
+    monkeypatch.setattr("langchain.agents.create_agent", _create_agent)
+
+    invoke = create_react_agent(
+        model_loader=dummy_model_loader,
+        prompts_dir=tmp_path,
+        tools=[],
+        response_schema=DummySchema,
+        system_template="sys.j2",
+        user_template="user.j2",
+    )
+    result = await invoke({})
+    assert result.ok is True
+
+
+@pytest.mark.asyncio
 async def test_create_structured_extractor_smoke(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:

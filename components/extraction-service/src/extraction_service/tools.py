@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import contextvars
 import json
 import logging
+import threading
 from pathlib import Path
 from typing import Any
 
@@ -26,6 +28,10 @@ logger = logging.getLogger(__name__)
 # Initialize Jinja2 environment for prompt templates
 _PROMPTS_DIR = Path(__file__).parent / "prompts"
 _JINJA_ENV = Environment(loader=FileSystemLoader(str(_PROMPTS_DIR)))
+
+_clarify_cache_ctx: contextvars.ContextVar["ClarifyAmbiguityCache | None"] = (
+    contextvars.ContextVar("clarify_ambiguity_cache", default=None)
+)
 
 
 RELATION_NORMALIZATION = {
@@ -151,28 +157,41 @@ class ClarifyAmbiguityCache:
     def __init__(self) -> None:
         """Initialize an empty cache."""
         self._cache: dict[tuple[str, str], str] = {}
+        self._lock = threading.Lock()
 
     def clarify(self, question: str, text: str) -> str:
         """Return clarification for (question, text), using cache on repeated calls."""
         key = (question.strip().lower(), text.strip().lower())
-        if key in self._cache:
+        with self._lock:
+            cached = self._cache.get(key)
+        if cached is not None:
             logger.debug("Returning cached clarification for: %s", question[:50])
-            return f"[Already answered] {self._cache[key]}"
+            return f"[Already answered] {cached}"
         result = _clarify_ambiguity_impl(question, text)
-        self._cache[key] = result
+        with self._lock:
+            self._cache[key] = result
         return result
 
     def reset(self) -> None:
         """Clear the cache (e.g. between paragraphs)."""
-        self._cache.clear()
+        with self._lock:
+            self._cache.clear()
 
 
-def make_clarify_ambiguity_tool(cache: ClarifyAmbiguityCache) -> Any:
-    """Return a LangChain tool that delegates to the given cache (per-paragraph use)."""
+def set_clarify_cache(cache: ClarifyAmbiguityCache | None) -> None:
+    """Set the current clarify cache for this async context."""
+    _clarify_cache_ctx.set(cache)
+
+
+def make_clarify_ambiguity_tool() -> Any:
+    """Return a LangChain tool that delegates to the active cache."""
 
     @tool
     def clarify_ambiguity_cached(question: str, text: str) -> str:
         """Clarify an ambiguous criterion (cached per paragraph)."""
+        cache = _clarify_cache_ctx.get()
+        if cache is None:
+            return _clarify_ambiguity_impl(question, text)
         return cache.clarify(question, text)
 
     return clarify_ambiguity_cached

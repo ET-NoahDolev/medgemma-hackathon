@@ -1,0 +1,15 @@
+Extract all eligibility criteria from the paragraph below.
+
+For each criterion:
+1. Extract the exact text snippet.
+2. Classify as "inclusion" or "exclusion".
+3. Provide a confidence score between 0 and 1.
+
+If the paragraph is ambiguous, return your best extraction without using tools.
+Do not call any tools. Return a structured response in one pass.
+
+Return ONLY a JSON object matching this shape:
+{"criteria":[{"text":"...", "criterion_type":"inclusion", "confidence":0.85}]}
+
+Paragraph:
+{{ paragraph.text }}

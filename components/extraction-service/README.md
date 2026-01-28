@@ -13,6 +13,15 @@ inclusion/exclusion criteria from clinical trial protocols.
 
 - `extraction_service/pipeline.py`
 
+## Architecture
+
+The extraction service uses a hierarchical three-stage LangGraph pipeline:
+1. **Page Filter**: Identifies pages containing eligibility criteria (structured extractor)
+2. **Paragraph Filter**: Narrows down to specific paragraphs (structured extractor)
+3. **Criteria Extraction**: Extracts atomic criteria with entity/relation/value triplets (ReAct agent with tools)
+
+See the [LangGraph Architecture diagram](../../docs/diagrams/langgraph-architecture.md) for detailed information.
+
 ## Example Usage
 
 ```python

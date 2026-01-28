@@ -38,6 +38,16 @@ The documentation includes:
 
 This repository is organized as a **component-based monorepo**, where each service component operates independently while sharing common models and utilities.
 
+### LangGraph Agent Architecture
+
+The system uses **LangGraph ReAct agents** for extraction and grounding tasks. The architecture includes:
+
+- **Agent Factory**: Centralized agent creation with lazy model loading and Jinja2 prompt rendering
+- **Extraction Pipeline**: Hierarchical three-stage extraction (Page Filter → Paragraph Filter → Criteria Extraction)
+- **Grounding Pipeline**: Single ReAct agent with UMLS tools for SNOMED grounding
+
+📖 See the [LangGraph Architecture diagram](https://et-noahdolev.github.io/medgemma-hackathon/hackathon/docs/diagrams/langgraph-architecture/) for detailed information.
+
 ### System Flow
 
 ```

@@ -11,6 +11,16 @@ UMLS REST client and grounding helpers for Task B. Retrieves SNOMED candidates a
 ## Key Module
 
 - `grounding_service/umls_client.py`
+- `grounding_service/agent.py` (LangGraph ReAct agent)
+
+## Architecture
+
+The grounding service uses a LangGraph ReAct agent with three tools:
+1. **interpret_medical_text**: MedGemma-based medical text interpretation
+2. **search_concepts_tool**: UMLS concept search for SNOMED candidates
+3. **get_semantic_type_tool**: Semantic type lookup for UMLS concepts
+
+See the [LangGraph Architecture diagram](../../docs/diagrams/langgraph-architecture.md) for detailed information.
 
 ## Example Usage
 

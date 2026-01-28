@@ -289,6 +289,10 @@ def test_ground_criterion_uses_ai_when_enabled(
 
     # Mock get_grounding_agent to return our mock
     monkeypatch.setattr(api_main, "get_grounding_agent", lambda: mock_agent)
+    monkeypatch.setattr(
+        "grounding_service.agent.get_grounding_agent",
+        lambda: mock_agent,
+    )
     monkeypatch.setattr(api_main, "AGENT_AVAILABLE", True)
 
     create_response = client.post(
@@ -331,6 +335,10 @@ def test_ground_criterion_falls_back_when_ai_fails(
     mock_agent.ground = AsyncMock(side_effect=Exception("AI model error"))
 
     monkeypatch.setattr(api_main, "get_grounding_agent", lambda: mock_agent)
+    monkeypatch.setattr(
+        "grounding_service.agent.get_grounding_agent",
+        lambda: mock_agent,
+    )
     monkeypatch.setattr(api_main, "AGENT_AVAILABLE", True)
 
     create_response = client.post(

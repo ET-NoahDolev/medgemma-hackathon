@@ -2,12 +2,13 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import os
 import re
 from dataclasses import dataclass
 from pathlib import Path
-from typing import AsyncIterator, Iterable, Iterator, Sequence
+from typing import AsyncIterator, Iterable, Iterator, Sequence, cast
 
 import anyio
 from inference.agent_factory import create_react_agent, create_structured_extractor
@@ -30,6 +31,7 @@ from extraction_service.tools import (
     ClarifyAmbiguityCache,
     extract_triplet,
     make_clarify_ambiguity_tool,
+    set_clarify_cache,
 )
 
 logger = logging.getLogger(__name__)
@@ -47,6 +49,7 @@ class ExtractionConfig:
     max_page_chars: int = 4000
     max_pages_per_batch: int = 6
     max_paragraphs_per_batch: int = 10
+    max_concurrency: int = 5
 
     @classmethod
     def from_env(cls) -> "ExtractionConfig":
@@ -60,6 +63,7 @@ class ExtractionConfig:
             max_paragraphs_per_batch=_read_int_env(
                 "EXTRACTION_MAX_PARAGRAPHS_PER_BATCH", 10
             ),
+            max_concurrency=_read_int_env("EXTRACTION_MAX_CONCURRENCY", 5),
         )
 
 
@@ -89,15 +93,24 @@ class ExtractionPipeline:
             system_template="system.j2",
             user_template="filter_paragraphs.j2",
         )
-        self._clarify_cache = ClarifyAmbiguityCache()
         self._extract_agent = create_react_agent(
             model_loader=self._model_loader,
             prompts_dir=self._prompts_dir,
-            tools=[extract_triplet, make_clarify_ambiguity_tool(self._clarify_cache)],
+            tools=[
+                extract_triplet,
+                make_clarify_ambiguity_tool(),
+            ],
             response_schema=ExtractionResult,
             system_template="system.j2",
             user_template="extract_criteria.j2",
             recursion_limit=8,  # 2 tools, simpler task
+        )
+        self._direct_extract_agent = create_structured_extractor(
+            model_loader=self._model_loader,
+            prompts_dir=self._prompts_dir,
+            response_schema=ExtractionResult,
+            system_template="system.j2",
+            user_template="extract_criteria_direct.j2",
         )
 
     async def extract_criteria_async(
@@ -201,16 +214,50 @@ class ExtractionPipeline:
         user_id: str | None = None,
         run_id: str | None = None,
     ) -> list[ExtractedCriterion]:
+        if not paragraphs:
+            return []
+
+        semaphore = asyncio.Semaphore(self.config.max_concurrency)
+
+        async def extract_with_semaphore(
+            paragraph: Paragraph,
+        ) -> tuple[Paragraph, list[ExtractedCriterion]]:
+            async with semaphore:
+                extracted = await self._extract_from_paragraph(
+                    paragraph, session_id, user_id, run_id
+                )
+                return paragraph, extracted
+
+        results = await asyncio.gather(
+            *(extract_with_semaphore(p) for p in paragraphs),
+            return_exceptions=True,
+        )
+
         criteria: list[ExtractedCriterion] = []
         failed = 0
-        for paragraph in paragraphs:
-            extracted = await self._extract_from_paragraph(
-                paragraph, session_id, user_id, run_id
+        for result in results:
+            if isinstance(result, BaseException):
+                failed += 1
+                logger.warning(
+                    "Extraction failed for paragraph: %s",
+                    result,
+                    exc_info=True,
+                )
+                continue
+            paragraph, extracted = cast(
+                tuple[Paragraph, list[ExtractedCriterion]], result
             )
             if not extracted:
                 # Empty can mean recursion limit or genuinely no criteria
                 failed += 1
+                logger.debug(
+                    "Extraction empty for paragraph page=%s index=%s",
+                    paragraph.page_number,
+                    paragraph.paragraph_index,
+                )
+                continue
             criteria.extend(extracted)
+
         if failed and paragraphs:
             logger.info(
                 "Extraction: %d/%d paragraphs yielded no criteria",
@@ -226,13 +273,21 @@ class ExtractionPipeline:
         user_id: str | None = None,
         run_id: str | None = None,
     ) -> list[ExtractedCriterion]:
-        # Reset per-paragraph cache so we do not reuse clarifications across snippets
-        self._clarify_cache.reset()
         # Set trace metadata before agent invocation
         set_trace_metadata(user_id=user_id, session_id=session_id, run_id=run_id)
+        cache = ClarifyAmbiguityCache()
+        set_clarify_cache(cache)
         try:
+            direct_result = await self._direct_extract_agent(
+                {"paragraph": paragraph}
+            )
+            if direct_result.criteria and all(
+                item.confidence >= 0.8 for item in direct_result.criteria
+            ):
+                return direct_result.criteria
+
             result = await self._extract_agent({"paragraph": paragraph})
-            return result.criteria
+            return result.criteria or direct_result.criteria
         except RecursionError as e:
             logger.warning(
                 "Extraction hit recursion limit for paragraph page=%s index=%s: %s",
@@ -241,6 +296,8 @@ class ExtractionPipeline:
                 e,
             )
             return []
+        finally:
+            set_clarify_cache(None)
 
 
 def extract_criteria(document_text: str) -> list[ExtractedCriterion]:

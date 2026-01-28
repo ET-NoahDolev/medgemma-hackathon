@@ -39,3 +39,12 @@ flowchart LR
 - `criteria`: atomic criteria with type and evidence spans.
 - `groundings`: SNOMED candidates, confidence scores, and field/relation/value mappings.
 - `hitl_edits`: nurse actions for audit and retraining.
+
+## LangGraph Agent Architecture
+
+The system uses LangGraph's ReAct agents for extraction and grounding tasks. See the [LangGraph Architecture diagram](../diagrams/langgraph-architecture.md) for detailed information about:
+
+- Agent factory pattern for reusable agent creation
+- Hierarchical extraction pipeline (Page Filter → Paragraph Filter → Criteria Extraction)
+- Grounding service with UMLS tools
+- Tool composition and structured output patterns

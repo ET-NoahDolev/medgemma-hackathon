@@ -86,6 +86,43 @@ async def test_ground_fallback_on_invoke_error():
                 await agent.ground("Age >= 18", "inclusion")
 
 
+@pytest.mark.asyncio
+async def test_ground_uses_cache_when_enabled(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    cached = GroundingResult(
+        terms=[
+            GroundedTerm(
+                snippet="Hypertension",
+                raw_criterion_text="Hypertension",
+                criterion_type="inclusion",
+                snomed_code="123",
+                relation="=",
+                value="Hypertension",
+                confidence=0.8,
+            )
+        ],
+        reasoning="cached",
+    )
+
+    class DummyCache:
+        def get(self, _text: str) -> tuple[GroundingResult | None, float]:
+            return cached, 0.99
+
+        def set(self, _text: str, _result: GroundingResult) -> None:
+            raise AssertionError("Cache set should not be called on hit")
+
+    monkeypatch.setenv("ENABLE_GROUNDING_SEMANTIC_CACHE", "true")
+    monkeypatch.setattr("grounding_service.agent.get_grounding_cache", DummyCache)
+
+    agent = GroundingAgent()
+    agent._get_agent = AsyncMock()
+
+    result = await agent.ground("Hypertension", "inclusion")
+    assert result == cached
+    agent._get_agent.assert_not_awaited()
+
+
 def test_get_grounding_agent_singleton():
     """Test that get_grounding_agent returns a singleton."""
     # Clear singleton

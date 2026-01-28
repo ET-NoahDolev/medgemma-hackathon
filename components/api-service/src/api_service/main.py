@@ -8,12 +8,12 @@ import os
 import tempfile
 import uuid
 from collections.abc import AsyncIterator
-from contextlib import asynccontextmanager
+from contextlib import asynccontextmanager, nullcontext
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from enum import Enum
 from pathlib import Path
-from typing import List
+from typing import Any, List
 
 import anyio
 from anyio import to_thread
@@ -455,15 +455,24 @@ async def _run_extraction(
             protocol_id=protocol_id,
             progress_message="Extracting and grounding criteria…",
         )
-        criteria = await ingest_protocol_document_text(
-            protocol_id=protocol_id,
-            document_text=document_text,
-            storage=storage,
-            umls_api_key=_get_umls_api_key(),
-            session_id=session_id,
-            user_id=user_id,
-            run_id=run_id,
-        )
+        # Start a root trace so MLflow autolog can attach spans.
+        # Without this, autolog fails with "No active trace" / "set_span_type".
+        span_ctx: Any = nullcontext()
+        try:
+            import mlflow
+            span_ctx = mlflow.start_span("ingest_protocol")
+        except (ImportError, AttributeError):
+            pass
+        with span_ctx:
+            criteria = await ingest_protocol_document_text(
+                protocol_id=protocol_id,
+                document_text=document_text,
+                storage=storage,
+                umls_api_key=_get_umls_api_key(),
+                session_id=session_id,
+                user_id=user_id,
+                run_id=run_id,
+            )
         count = len(criteria)
         storage.update_protocol_status(
             protocol_id=protocol_id,
