@@ -1,6 +1,7 @@
 """LangGraph ReAct agent for grounding clinical trial criteria."""
 
 import logging
+import os
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -28,6 +29,7 @@ else:
 from shared.mlflow_utils import set_trace_metadata
 
 from grounding_service.schemas import GroundingResult
+from grounding_service.semantic_cache import get_grounding_cache
 from grounding_service.tools import interpret_medical_text
 from grounding_service.umls_client import UmlsClient, get_umls_api_key
 
@@ -170,13 +172,31 @@ class GroundingAgent:
         # Set trace metadata before agent invocation
         set_trace_metadata(user_id=user_id, session_id=session_id, run_id=run_id)
 
+        cache_enabled = (
+            os.getenv("ENABLE_GROUNDING_SEMANTIC_CACHE", "").lower() == "true"
+        )
+        if cache_enabled:
+            cache = get_grounding_cache()
+            cached_result, similarity = cache.get(criterion_text)
+            if cached_result is not None:
+                logger.debug(
+                    "Grounding cache hit (similarity=%.3f) for %s",
+                    similarity,
+                    criterion_text[:80],
+                )
+                return cached_result
+
         agent = await self._get_agent()
-        return await agent(
+        result = await agent(
             {
                 "criterion_text": criterion_text,
                 "criterion_type": criterion_type,
             }
         )
+        if cache_enabled:
+            cache = get_grounding_cache()
+            cache.set(criterion_text, result)
+        return result
 
 
 # Singleton instance

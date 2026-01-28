@@ -2,12 +2,14 @@
 
 from __future__ import annotations
 
+import json
 import logging
+import os
 from pathlib import Path
 from typing import Any, Awaitable, Callable, Mapping, TypeVar
 
 from jinja2 import Environment, FileSystemLoader
-from pydantic import BaseModel
+from pydantic import BaseModel, ValidationError
 from shared.lazy_cache import lazy_singleton
 
 logger = logging.getLogger(__name__)
@@ -28,6 +30,66 @@ def render_prompts(
     system_tpl = jinja_env.get_template(system_template)
     user_tpl = jinja_env.get_template(user_template)
     return system_tpl.render(**prompt_vars), user_tpl.render(**prompt_vars)
+
+
+def _count_tool_call_steps(messages: list[Any]) -> int:
+    return sum(1 for message in messages if getattr(message, "tool_calls", None))
+
+
+def _try_parse_last_message(
+    messages: list[Any], response_schema: type[TModel]
+) -> TModel | None:
+    last_ai_message = next(
+        (message for message in reversed(messages) if message.type == "ai"),
+        None,
+    )
+    if not last_ai_message or getattr(last_ai_message, "tool_calls", None):
+        return None
+    if not isinstance(last_ai_message.content, str):
+        return None
+    parsed = _try_parse_json_text(last_ai_message.content)
+    if parsed is None:
+        return None
+    try:
+        return response_schema(**parsed)
+    except (ValidationError, TypeError):
+        return None
+
+
+def _try_parse_json_text(text: str) -> dict[str, Any] | None:
+    trimmed = text.strip()
+    if not trimmed:
+        return None
+    candidates = [trimmed]
+    if "{" in trimmed and "}" in trimmed:
+        start = trimmed.find("{")
+        end = trimmed.rfind("}")
+        if 0 <= start < end:
+            candidates.append(trimmed[start : end + 1])
+    for candidate in candidates:
+        try:
+            parsed = json.loads(candidate)
+        except json.JSONDecodeError:
+            continue
+        if isinstance(parsed, dict):
+            return parsed
+    return None
+
+
+def _log_agent_metrics(tool_call_steps: int, recursion_limit: int) -> None:
+    try:
+        import mlflow
+    except ImportError:
+        return
+
+    metadata = {
+        "agent.tool_call_steps": str(tool_call_steps),
+        "agent.recursion_limit": str(recursion_limit),
+    }
+    try:
+        mlflow.update_current_trace(metadata=metadata)
+    except (AttributeError, RuntimeError, ValueError):
+        return
 
 
 def create_structured_extractor(
@@ -69,11 +131,50 @@ def create_structured_extractor(
             prompt_vars=prompt_vars,
         )
 
+        if os.getenv("ENABLE_VERTEX_CACHE", "").lower() == "true":
+            # #region agent log
+            import time as _time
+            try:
+                _df = open("/Users/noahdolevelixir/Code/gemma-hackathon/.cursor/debug.log", "a")
+                _df.write(
+                    '{"location":"agent_factory.invoke:before_cache","message":"prompts after render","data":{"len_system":'
+                    + str(len(system_prompt))
+                    + ',"len_user":'
+                    + str(len(user_prompt))
+                    + ',"system_preview":"'
+                    + system_prompt[:150].replace('"', '\\"').replace('\n', '\\n')
+                    + '...","user_preview":"'
+                    + user_prompt[:150].replace('"', '\\"').replace('\n', '\\n')
+                    + '..."},"hypothesisId":"H6","timestamp":'
+                    + str(int(_time.time() * 1000))
+                    + '}\n'
+                )
+                _df.close()
+            except Exception:
+                pass
+            # #endregion
+            try:
+                from inference.vertex_cache import get_vertex_cache
+
+                cache = get_vertex_cache()
+                response_text = cache.generate_with_cache(system_prompt, user_prompt)
+                parsed = json.loads(response_text)
+                return response_schema(**parsed)
+            except (
+                json.JSONDecodeError,
+                ValidationError,
+                TypeError,
+                ValueError,
+            ) as exc:
+                logger.debug("Vertex cache parse failed, falling back: %s", exc)
+
         structured_model = _get_structured_model()
-        result = await structured_model.ainvoke([
-            ("system", system_prompt),
-            ("user", user_prompt),
-        ])
+        result = await structured_model.ainvoke(
+            [
+                ("system", system_prompt),
+                ("user", user_prompt),
+            ]
+        )
 
         # with_structured_output returns the Pydantic instance directly
         if isinstance(result, response_schema):
@@ -191,6 +292,19 @@ def create_react_agent(
         messages = result.get("messages", []) if isinstance(result, dict) else []
         if not messages:
             raise ValueError("Agent returned no messages")
+
+        tool_call_steps = _count_tool_call_steps(messages)
+        if tool_call_steps >= max(1, recursion_limit // 2):
+            logger.warning(
+                "Agent nearing recursion limit: tool_call_steps=%s limit=%s",
+                tool_call_steps,
+                recursion_limit,
+            )
+        _log_agent_metrics(tool_call_steps, recursion_limit)
+
+        parsed_direct = _try_parse_last_message(messages, response_schema)
+        if parsed_direct is not None:
+            return parsed_direct
 
         # Convert agent messages to format expected by structured model
         # Include full conversation history (system, user, tool calls, tool responses)

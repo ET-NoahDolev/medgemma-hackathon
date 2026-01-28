@@ -39,6 +39,21 @@ def _select_primary_triplet(payload: dict[str, Any]) -> dict[str, Any]:
     return payload
 
 
+def _triplet_from_extracted(item: object) -> dict[str, Any] | None:
+    entity = getattr(item, "entity", None)
+    relation = getattr(item, "relation", None)
+    value = getattr(item, "value", None)
+    unit = getattr(item, "unit", None)
+    if not any([entity, relation, value, unit]):
+        return None
+    return {
+        "entity": entity,
+        "relation": relation,
+        "value": value,
+        "unit": unit,
+    }
+
+
 async def _extract_triplet(
     text: str,
     session_id: str | None = None,
@@ -174,13 +189,17 @@ async def _build_criterion_payload(
     criterion_type: str,
     use_ai_grounding: bool,
     umls_api_key: str,
+    extracted_triplet: dict[str, Any] | None = None,
     session_id: str | None = None,
     user_id: str | None = None,
     run_id: str | None = None,
 ) -> tuple[dict[str, Any], list[str], list[dict[str, Any]], str | None]:
-    triplet = await _extract_triplet(
-        text, session_id=session_id, user_id=user_id, run_id=run_id
-    )
+    if extracted_triplet is not None:
+        triplet = extracted_triplet
+    else:
+        triplet = await _extract_triplet(
+            text, session_id=session_id, user_id=user_id, run_id=run_id
+        )
 
     computed_as = None
     entity = triplet.get("entity")
@@ -197,15 +216,18 @@ async def _build_criterion_payload(
     grounding_terms: list[dict[str, Any]] = []
     logical_operator: str | None = None
     if use_ai_grounding:
-        grounding_payload, snomed_codes, grounding_terms, logical_operator = (
-            await _ground_with_ai(
-                text,
-                criterion_type,
-                session_id=session_id,
-                user_id=user_id,
-                run_id=run_id,
+        try:
+            grounding_payload, snomed_codes, grounding_terms, logical_operator = (
+                await _ground_with_ai(
+                    text,
+                    criterion_type,
+                    session_id=session_id,
+                    user_id=user_id,
+                    run_id=run_id,
+                )
             )
-        )
+        except Exception as exc:
+            logger.warning("AI grounding failed; falling back to baseline: %s", exc)
     if not grounding_payload:
         grounding_payload, snomed_codes = _ground_baseline(text, umls_api_key)
         # Baseline grounding doesn't provide terms or logical operator
@@ -260,6 +282,7 @@ async def ingest_protocol_document_text(
                 criterion_type=item.criterion_type,
                 use_ai_grounding=use_ai_grounding,
                 umls_api_key=umls_api_key,
+                extracted_triplet=_triplet_from_extracted(item),
                 session_id=session_id,
                 user_id=user_id,
                 run_id=run_id,

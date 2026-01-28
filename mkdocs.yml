@@ -97,6 +97,7 @@ nav:
   - Diagrams:
     - HITL Flow: diagrams/hitl-flow.md
     - Grounding Flow: diagrams/grounding-flow.md
+    - LangGraph Architecture: diagrams/langgraph-architecture.md
   - Phases:
     - Week 1: phases/week-1.md
     - Week 2: phases/week-2.md

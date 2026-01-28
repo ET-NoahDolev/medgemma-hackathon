@@ -35,6 +35,10 @@ class ExtractedCriterion(BaseModel):
     confidence: float = Field(
         0.75, ge=0.0, le=1.0, description="Model confidence score"
     )
+    entity: str | None = Field(None, description="Primary entity, if extracted")
+    relation: str | None = Field(None, description="Relation/operator, if extracted")
+    value: str | None = Field(None, description="Value, if extracted")
+    unit: str | None = Field(None, description="Unit, if extracted")
 
 
 class ExtractionResult(BaseModel):

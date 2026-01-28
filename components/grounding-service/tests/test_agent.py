@@ -72,18 +72,60 @@ async def test_ground_returns_structured_result():
 
 
 @pytest.mark.asyncio
-async def test_ground_fallback_on_invoke_error():
+async def test_ground_fallback_on_invoke_error(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """Test that ground() raises errors when agent invoke fails."""
-    # The agent is called directly with await, so it needs to be an AsyncMock
-    mock_agent = AsyncMock(side_effect=ValueError("Invalid JSON"))
+    async def failing_invoke(*_args: object, **_kwargs: object) -> None:
+        raise ValueError("Invalid JSON")
+
+    monkeypatch.setenv("ENABLE_GROUNDING_SEMANTIC_CACHE", "false")
 
     with patch("grounding_service.agent.ChatGoogleGenerativeAI"):
         with patch("inference.create_react_agent") as mock_create:
-            mock_create.return_value = mock_agent
+            mock_create.return_value = failing_invoke
             agent = GroundingAgent()
+            agent._agent = None  # force _get_agent to run under the patch
             # Error should be raised, not caught
             with pytest.raises(ValueError, match="Invalid JSON"):
                 await agent.ground("Age >= 18", "inclusion")
+
+
+@pytest.mark.asyncio
+async def test_ground_uses_cache_when_enabled(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    cached = GroundingResult(
+        terms=[
+            GroundedTerm(
+                snippet="Hypertension",
+                raw_criterion_text="Hypertension",
+                criterion_type="inclusion",
+                snomed_code="123",
+                relation="=",
+                value="Hypertension",
+                confidence=0.8,
+            )
+        ],
+        reasoning="cached",
+    )
+
+    class DummyCache:
+        def get(self, _text: str) -> tuple[GroundingResult | None, float]:
+            return cached, 0.99
+
+        def set(self, _text: str, _result: GroundingResult) -> None:
+            raise AssertionError("Cache set should not be called on hit")
+
+    monkeypatch.setenv("ENABLE_GROUNDING_SEMANTIC_CACHE", "true")
+    monkeypatch.setattr("grounding_service.agent.get_grounding_cache", DummyCache)
+
+    agent = GroundingAgent()
+    agent._get_agent = AsyncMock()
+
+    result = await agent.ground("Hypertension", "inclusion")
+    assert result == cached
+    agent._get_agent.assert_not_awaited()
 
 
 def test_get_grounding_agent_singleton():

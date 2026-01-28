@@ -2,15 +2,19 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import os
 import re
 from dataclasses import dataclass
 from pathlib import Path
-from typing import AsyncIterator, Iterable, Iterator, Sequence
+from typing import AsyncIterator, Iterable, Iterator, Sequence, cast
 
 import anyio
-from inference.agent_factory import create_react_agent, create_structured_extractor
+from inference.agent_factory import (  # noqa: F401
+    create_react_agent,
+    create_structured_extractor,
+)
 from inference.model_factory import create_gemini_model_loader
 from shared.mlflow_utils import set_trace_metadata
 
@@ -26,10 +30,10 @@ from extraction_service.schemas import (
     PageFilterResult,
     ParagraphFilterResult,
 )
+from extraction_service.semantic_cache import get_extraction_cache
 from extraction_service.tools import (
-    ClarifyAmbiguityCache,
-    extract_triplet,
-    make_clarify_ambiguity_tool,
+    extract_criteria_medgemma,
+    paragraph_contains_criteria,
 )
 
 logger = logging.getLogger(__name__)
@@ -47,6 +51,10 @@ class ExtractionConfig:
     max_page_chars: int = 4000
     max_pages_per_batch: int = 6
     max_paragraphs_per_batch: int = 10
+    max_concurrency: int = 5
+    use_medgemma_paragraph_filter: bool = False
+    use_medgemma_extraction: bool = False
+    enable_extraction_semantic_cache: bool = False
 
     @classmethod
     def from_env(cls) -> "ExtractionConfig":
@@ -59,6 +67,14 @@ class ExtractionConfig:
             max_pages_per_batch=_read_int_env("EXTRACTION_MAX_PAGES_PER_BATCH", 6),
             max_paragraphs_per_batch=_read_int_env(
                 "EXTRACTION_MAX_PARAGRAPHS_PER_BATCH", 10
+            ),
+            max_concurrency=_read_int_env("EXTRACTION_MAX_CONCURRENCY", 5),
+            use_medgemma_paragraph_filter=_read_bool_env(
+                "USE_MEDGEMMA_PARAGRAPH_FILTER", False
+            ),
+            use_medgemma_extraction=_read_bool_env("USE_MEDGEMMA_EXTRACTION", False),
+            enable_extraction_semantic_cache=_read_bool_env(
+                "ENABLE_EXTRACTION_SEMANTIC_CACHE", False
             ),
         )
 
@@ -89,15 +105,12 @@ class ExtractionPipeline:
             system_template="system.j2",
             user_template="filter_paragraphs.j2",
         )
-        self._clarify_cache = ClarifyAmbiguityCache()
-        self._extract_agent = create_react_agent(
+        self._direct_extract_agent = create_structured_extractor(
             model_loader=self._model_loader,
             prompts_dir=self._prompts_dir,
-            tools=[extract_triplet, make_clarify_ambiguity_tool(self._clarify_cache)],
             response_schema=ExtractionResult,
             system_template="system.j2",
-            user_template="extract_criteria.j2",
-            recursion_limit=8,  # 2 tools, simpler task
+            user_template="extract_criteria_direct.j2",
         )
 
     async def extract_criteria_async(
@@ -184,6 +197,11 @@ class ExtractionPipeline:
             if not paragraphs:
                 continue
             for batch in _chunked(paragraphs, self.config.max_paragraphs_per_batch):
+                if self.config.use_medgemma_paragraph_filter:
+                    relevant.extend(
+                        await self._filter_paragraphs_with_medgemma(batch)
+                    )
+                    continue
                 result = await self._paragraph_filter_agent(
                     {"page_number": page.page_number, "paragraphs": batch}
                 )
@@ -201,16 +219,50 @@ class ExtractionPipeline:
         user_id: str | None = None,
         run_id: str | None = None,
     ) -> list[ExtractedCriterion]:
+        if not paragraphs:
+            return []
+
+        semaphore = asyncio.Semaphore(self.config.max_concurrency)
+
+        async def extract_with_semaphore(
+            paragraph: Paragraph,
+        ) -> tuple[Paragraph, list[ExtractedCriterion]]:
+            async with semaphore:
+                extracted = await self._extract_from_paragraph(
+                    paragraph, session_id, user_id, run_id
+                )
+                return paragraph, extracted
+
+        results = await asyncio.gather(
+            *(extract_with_semaphore(p) for p in paragraphs),
+            return_exceptions=True,
+        )
+
         criteria: list[ExtractedCriterion] = []
         failed = 0
-        for paragraph in paragraphs:
-            extracted = await self._extract_from_paragraph(
-                paragraph, session_id, user_id, run_id
+        for result in results:
+            if isinstance(result, BaseException):
+                failed += 1
+                logger.warning(
+                    "Extraction failed for paragraph: %s",
+                    result,
+                    exc_info=True,
+                )
+                continue
+            paragraph, extracted = cast(
+                tuple[Paragraph, list[ExtractedCriterion]], result
             )
             if not extracted:
                 # Empty can mean recursion limit or genuinely no criteria
                 failed += 1
+                logger.debug(
+                    "Extraction empty for paragraph page=%s index=%s",
+                    paragraph.page_number,
+                    paragraph.paragraph_index,
+                )
+                continue
             criteria.extend(extracted)
+
         if failed and paragraphs:
             logger.info(
                 "Extraction: %d/%d paragraphs yielded no criteria",
@@ -226,21 +278,62 @@ class ExtractionPipeline:
         user_id: str | None = None,
         run_id: str | None = None,
     ) -> list[ExtractedCriterion]:
-        # Reset per-paragraph cache so we do not reuse clarifications across snippets
-        self._clarify_cache.reset()
         # Set trace metadata before agent invocation
         set_trace_metadata(user_id=user_id, session_id=session_id, run_id=run_id)
-        try:
-            result = await self._extract_agent({"paragraph": paragraph})
-            return result.criteria
-        except RecursionError as e:
-            logger.warning(
-                "Extraction hit recursion limit for paragraph page=%s index=%s: %s",
-                paragraph.page_number,
-                paragraph.paragraph_index,
-                e,
+
+        if self.config.enable_extraction_semantic_cache:
+            cache = get_extraction_cache()
+            cached, similarity = cache.get(paragraph.text)
+            if cached is not None:
+                logger.debug(
+                    "Extraction cache hit (similarity=%.3f) for page=%s index=%s",
+                    similarity,
+                    paragraph.page_number,
+                    paragraph.paragraph_index,
+                )
+                return cached.criteria
+
+        if self.config.use_medgemma_extraction:
+            result = await anyio.to_thread.run_sync(
+                extract_criteria_medgemma, paragraph.text
             )
-            return []
+        else:
+            result = await self._direct_extract_agent({"paragraph": paragraph})
+
+        if self.config.enable_extraction_semantic_cache:
+            cache = get_extraction_cache()
+            cache.set(paragraph.text, result)
+
+        return result.criteria
+
+    async def _filter_paragraphs_with_medgemma(
+        self, paragraphs: Sequence[Paragraph]
+    ) -> list[Paragraph]:
+        semaphore = asyncio.Semaphore(self.config.max_concurrency)
+
+        async def check_paragraph(
+            paragraph: Paragraph,
+        ) -> tuple[Paragraph, bool]:
+            async with semaphore:
+                has_criteria = await anyio.to_thread.run_sync(
+                    paragraph_contains_criteria, paragraph.text
+                )
+                return paragraph, has_criteria
+
+        results = await asyncio.gather(
+            *(check_paragraph(p) for p in paragraphs), return_exceptions=True
+        )
+        relevant: list[Paragraph] = []
+        for result in results:
+            if isinstance(result, BaseException):
+                logger.warning(
+                    "Paragraph filter failed: %s", result, exc_info=True
+                )
+                continue
+            paragraph, has_criteria = result
+            if has_criteria:
+                relevant.append(paragraph)
+        return relevant
 
 
 def extract_criteria(document_text: str) -> list[ExtractedCriterion]:
@@ -327,6 +420,18 @@ def _read_int_env(name: str, default: int) -> int:
         return int(raw)
     except ValueError as exc:
         raise ValueError(f"Invalid integer for {name}: {raw}") from exc
+
+
+def _read_bool_env(name: str, default: bool) -> bool:
+    raw = os.getenv(name)
+    if raw is None:
+        return default
+    value = raw.strip().lower()
+    if value in {"1", "true", "yes", "y"}:
+        return True
+    if value in {"0", "false", "no", "n"}:
+        return False
+    raise ValueError(f"Invalid boolean for {name}: {raw}")
 
 
 async def _collect_stream(
