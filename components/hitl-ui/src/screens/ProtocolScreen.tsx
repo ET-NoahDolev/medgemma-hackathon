@@ -3,7 +3,6 @@ import { Link, useNavigate, useParams } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { GlassButton } from '@/components/ui/glass-button';
 import { Card, CardContent } from '@/components/ui/card';
-import { ScrollArea } from '@/components/ui/scroll-area';
 import { ConfidenceChip } from '@/components/common/ConfidenceChip';
 import { Badge } from '@/components/ui/badge';
 import { CriteriaEditPanel } from '@/features/protocols/components/CriteriaEditPanel';
@@ -424,7 +423,7 @@ export function ProtocolScreen() {
       </div>
 
       {/* Criteria List */}
-      <ScrollArea className="flex-1 min-h-0 bg-transparent">
+      <div className="flex-1 min-h-0 overflow-y-auto bg-transparent">
         <div className="p-6 max-w-5xl mx-auto">
           {/* Extraction / Loading State */}
           {((isLoading && criteria.length === 0) || (uploaded && criteria.length === 0)) && (
@@ -622,7 +621,7 @@ export function ProtocolScreen() {
             </div>
           ))}
         </div>
-      </ScrollArea>
+      </div>
 
       {/* Edit Panel (Text) */}
       {selectedCriterion && (

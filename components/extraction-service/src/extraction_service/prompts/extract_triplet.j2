@@ -1,6 +1,51 @@
-Extract structured entity/relation/value triplets from this criterion.
-Return compact JSON with keys: entity, relation, value, unit, modifiers.
-If multiple constraints exist, return JSON with keys: triplets (array), logical_operator (AND/OR).
-Normalize relations to one of: >, <, >=, <=, =, !=, present, absent, between.
+Extract the clinical concept(s) from this eligibility criterion.
+
+## CRITICAL: Condition vs Setting
+
+Extract the DISEASE/CONDITION, not the care setting:
+
+| Criterion | WRONG | CORRECT |
+|-----------|-------|---------|
+| "Hospitalized due to COVID-19" | Hospitalized | COVID-19 |
+| "Requiring oxygen for hypoxemia" | Oxygen | Hypoxemia |
+| "On dialysis for CKD" | Dialysis | Chronic kidney disease |
+
+## Entity Types (in priority order)
+
+1. Disease/Infection: "SARS-CoV-2 infection", "Type 2 Diabetes"
+2. Lab test: "HbA1c", "PCR test", "creatinine"
+3. Procedure: "chemotherapy", "surgery"
+4. Medication: "metformin", "insulin"
+5. Demographic: "Date of birth" (for age)
+
+## Relations
+
+- Numeric: >, <, >=, <=, =, !=, between
+- Presence: present, absent
+
+## Compound Criteria (AND/OR)
+
+If multiple distinct conditions are joined, extract each:
+
+Input: "SARS-CoV-2 infection AND hospitalization required"
+Output:
+{
+  "triplets": [
+    {"entity": "SARS-CoV-2 infection", "relation": "present", "value": null, "unit": null},
+    {"entity": "Hospitalization", "relation": "present", "value": null, "unit": null}
+  ],
+  "logical_operator": "AND"
+}
+
+## Simple Output
+
+For single concepts: {"entity": "...", "relation": "...", "value": "...", "unit": "..."}
+
+## Examples
+
+"Age ≥18" → {"entity": "Date of birth", "relation": ">=", "value": "18", "unit": "years"}
+"Diagnosed with diabetes" → {"entity": "Diabetes Mellitus", "relation": "present", "value": null, "unit": null}
+"No chemotherapy" → {"entity": "Chemotherapy", "relation": "absent", "value": null, "unit": null}
+"Hospitalized for COVID" → {"entity": "COVID-19", "relation": "present", "value": null, "unit": null}
 
 Criterion: {{ text }}

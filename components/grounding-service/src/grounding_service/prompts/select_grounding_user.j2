@@ -1,0 +1,36 @@
+Select the best UMLS/SNOMED codes for this criterion:
+
+## Original Criterion
+Text: {{ criterion_text }}
+Type: {{ criterion_type }}
+
+## Extracted Terms (Step 1)
+{% for term in extracted_terms %}
+- Term: "{{ term.term }}"
+  Snippet: "{{ term.snippet }}"
+  {% if term.relation %}Relation: {{ term.relation }}{% endif %}
+  {% if term.value %}Value: {{ term.value }}{% endif %}
+  {% if term.unit %}Unit: {{ term.unit }}{% endif %}
+  {% if term.is_computed %}Computed: {{ term.computed_expression }}{% endif %}
+{% endfor %}
+
+## UMLS Search Results (Step 2)
+{% for term, candidates in umls_candidates.items() %}
+### "{{ term }}"
+{% if candidates %}
+{% for c in candidates %}
+- SNOMED: {{ c.snomed_code }} | CUI: {{ c.cui }} | Name: "{{ c.display }}"
+{% endfor %}
+{% else %}
+No UMLS matches found.
+{% endif %}
+{% endfor %}
+
+## Instructions
+
+1. For each extracted term, select the best matching SNOMED code from the search results
+2. If no good match exists, omit that term
+3. Preserve relation/value/unit from the extracted terms
+4. Set appropriate confidence scores
+
+Return a GroundingResult with the selected terms.

@@ -149,7 +149,7 @@ def init_db() -> None:
 
 
 def _ensure_sqlite_protocol_progress_columns(engine: Engine) -> None:
-    """Ensure progress/status columns exist on the Protocol table for SQLite.
+    """Ensure expected columns exist on the Protocol table for SQLite.
 
     SQLModel's `create_all()` does not add columns to existing tables. During
     local development, the persisted SQLite DB can drift behind the model
@@ -171,6 +171,10 @@ def _ensure_sqlite_protocol_progress_columns(engine: Engine) -> None:
         # NOTE: SQLite supports ADD COLUMN but has limitations; keep this minimal and
         # additive.
         migrations: list[str] = []
+        if "pdf_bytes" not in existing:
+            migrations.append(
+                "ALTER TABLE protocol ADD COLUMN pdf_bytes BLOB NULL"
+            )
         if "processing_status" not in existing:
             migrations.append(
                 "ALTER TABLE protocol ADD COLUMN processing_status "

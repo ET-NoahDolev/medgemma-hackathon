@@ -61,6 +61,10 @@ def _try_parse_json_text(text: str) -> dict[str, Any] | None:
     if not trimmed:
         return None
     candidates = [trimmed]
+    if "```" in trimmed:
+        fenced = _extract_code_fence(trimmed)
+        if fenced:
+            candidates.insert(0, fenced)
     if "{" in trimmed and "}" in trimmed:
         start = trimmed.find("{")
         end = trimmed.rfind("}")
@@ -73,6 +77,22 @@ def _try_parse_json_text(text: str) -> dict[str, Any] | None:
             continue
         if isinstance(parsed, dict):
             return parsed
+    return None
+
+
+def _extract_code_fence(text: str) -> str | None:
+    lines = text.splitlines()
+    fence_start = None
+    for idx, line in enumerate(lines):
+        if line.strip().startswith("```"):
+            fence_start = idx
+            break
+    if fence_start is None:
+        return None
+    for idx in range(fence_start + 1, len(lines)):
+        if lines[idx].strip().startswith("```"):
+            fenced_body = "\n".join(lines[fence_start + 1 : idx]).strip()
+            return fenced_body or None
     return None
 
 

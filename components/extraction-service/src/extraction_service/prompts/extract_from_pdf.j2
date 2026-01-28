@@ -2,24 +2,48 @@ You are analyzing a clinical trial protocol PDF document.
 
 Extract ALL eligibility criteria (inclusion and exclusion) from this document.
 
-For each criterion found:
-1. Extract the EXACT text snippet as it appears in the document
+## Rules
+
+1. Extract each criterion as a SINGLE, ATOMIC requirement
 2. Classify as "inclusion" or "exclusion"
 3. Provide a confidence score (0.0-1.0)
 
-Return a JSON object with this structure:
+## CRITICAL: Split Compound Criteria
+
+When a criterion contains multiple distinct requirements joined by AND, split them:
+
+WRONG (compound):
+```
+"Age >= 18 years AND diagnosed with Type 2 Diabetes AND HbA1c > 7%"
+```
+
+CORRECT (split into 3):
+```
+"Age >= 18 years"
+"Diagnosed with Type 2 Diabetes"  
+"HbA1c > 7%"
+```
+
+Also split lettered sub-items (a. b. c.) into separate criteria.
+
+Keep OR criteria together (they represent alternatives for one requirement).
+
+## Output Format
+
+```json
 {
   "criteria": [
     {"text": "Age >= 18 years", "criterion_type": "inclusion", "confidence": 0.95},
+    {"text": "Diagnosed with Type 2 Diabetes", "criterion_type": "inclusion", "confidence": 0.95},
     {"text": "No prior chemotherapy", "criterion_type": "exclusion", "confidence": 0.90}
   ]
 }
+```
 
-Important:
-- Include ALL criteria found in the document
-- Preserve exact wording from the document
+## Important
+
+- Extract ALL criteria from the document
+- Preserve clinical terminology exactly
 - Do not summarize or paraphrase
-
-CRITICAL: 
-- NEVER HALLUCINATE OR INVENT CRITERIA. ONLY EXTRACT WHAT IS WRITTEN IN THE DOCUMENT.
-- DO NOT MISS ANY CRITERIA - PREFER MISTAKING A SNIPPET FOR A CRITERIA OVER MISSING A CRITERIA.
+- NEVER HALLUCINATE - only extract what is written
+- SPLIT compound AND criteria into separate items

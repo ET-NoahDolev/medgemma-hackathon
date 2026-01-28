@@ -49,7 +49,7 @@ export function ProtocolListScreen() {
   };
 
   return (
-    <div className="flex flex-col h-full">
+    <div className="flex flex-col min-h-screen">
       <div className="bg-white border-b border-gray-200 p-6">
         <div className="flex items-start justify-between gap-4">
           <div>
@@ -93,7 +93,7 @@ export function ProtocolListScreen() {
         )}
       </div>
 
-      <div className="flex-1 bg-transparent p-6 max-w-6xl mx-auto w-full">
+      <div className="bg-transparent p-6 max-w-6xl mx-auto w-full">
         {isLoading ? (
           <ProtocolListSkeleton count={6} />
         ) : (

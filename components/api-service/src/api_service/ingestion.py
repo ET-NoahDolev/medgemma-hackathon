@@ -12,6 +12,7 @@ from extraction_service.pdf_extractor import extract_criteria_from_pdf
 from extraction_service.tools import extract_triplets_batch
 from grounding_service import umls_client
 from grounding_service.computed_fields import detect_computed_field
+from grounding_service.schemas import GroundingResult
 
 from api_service.storage import Criterion as StorageCriterion
 from api_service.storage import Storage
@@ -128,40 +129,49 @@ def _apply_computed_field(
     return triplet, computed_as
 
 
-async def _resolve_grounding(
-    *,
-    text: str,
-    criterion_type: str,
-    triplet: dict[str, Any] | None,
-    umls_api_key: str,
-    use_ai_grounding: bool,
-    session_id: str | None,
-    user_id: str | None,
-    run_id: str | None,
+def _coerce_grounding_result(
+    result: GroundingResult,
 ) -> tuple[dict[str, Any], list[str], list[dict[str, Any]], str | None]:
-    grounding_payload: dict[str, Any] = {}
+    if not result.terms:
+        return {}, [], [], None
+
+    all_terms: list[dict[str, Any]] = []
     snomed_codes: list[str] = []
-    grounding_terms: list[dict[str, Any]] = []
-    logical_operator: str | None = None
-    if use_ai_grounding:
-        try:
-            grounding_payload, snomed_codes, grounding_terms, logical_operator = (
-                await _ground_with_ai(
-                    text,
-                    criterion_type,
-                    triplet=triplet,
-                    session_id=session_id,
-                    user_id=user_id,
-                    run_id=run_id,
-                )
-            )
-        except Exception as exc:
-            logger.warning("AI grounding failed; falling back to baseline: %s", exc)
-    if not grounding_payload:
-        grounding_payload, snomed_codes = _ground_baseline(text, umls_api_key)
-        grounding_terms = []
-        logical_operator = None
-    return grounding_payload, snomed_codes, grounding_terms, logical_operator
+    for term in result.terms:
+        term_dict = {
+            "umls_concept": term.umls_concept,
+            "umls_id": term.umls_id,
+            "snomed_code": term.snomed_code,
+            "relation": term.relation,
+            "value": term.value,
+            "unit": term.unit,
+            "computed_as": term.computed_as,
+            "grounding_confidence": term.confidence,
+            "relation_confidence": term.relation_confidence,
+            "value_confidence": term.value_confidence,
+            "umls_confidence": term.umls_confidence,
+            "snippet": term.snippet,
+        }
+        all_terms.append(term_dict)
+        if term.snomed_code:
+            snomed_codes.append(term.snomed_code)
+
+    term = result.terms[0]
+    primary_dict = {
+        "umls_concept": term.umls_concept,
+        "umls_id": term.umls_id,
+        "snomed_code": term.snomed_code,
+        "relation": term.relation,
+        "value": term.value,
+        "unit": term.unit,
+        "computed_as": term.computed_as,
+        "grounding_confidence": term.confidence,
+        "relation_confidence": term.relation_confidence,
+        "value_confidence": term.value_confidence,
+        "umls_confidence": term.umls_confidence,
+    }
+
+    return primary_dict, snomed_codes, all_terms, result.logical_operator
 
 
 async def _ground_with_ai(
@@ -193,48 +203,32 @@ async def _ground_with_ai(
         user_id=user_id,
         run_id=run_id,
     )
-    if not result.terms:
-        return {}, [], [], None
+    return _coerce_grounding_result(result)
 
-    # Store all terms as dicts for database storage
-    all_terms = []
-    snomed_codes = []
-    for term in result.terms:
-        term_dict = {
-            "umls_concept": term.umls_concept,
-            "umls_id": term.umls_id,
-            "snomed_code": term.snomed_code,
-            "relation": term.relation,
-            "value": term.value,
-            "unit": term.unit,
-            "computed_as": term.computed_as,
-            "grounding_confidence": term.confidence,
-            "relation_confidence": term.relation_confidence,
-            "value_confidence": term.value_confidence,
-            "umls_confidence": term.umls_confidence,
-            "snippet": term.snippet,
-        }
-        all_terms.append(term_dict)
-        if term.snomed_code:
-            snomed_codes.append(term.snomed_code)
 
-    # Use first term as primary for backward compatibility
-    term = result.terms[0]
-    primary_dict = {
-        "umls_concept": term.umls_concept,
-        "umls_id": term.umls_id,
-        "snomed_code": term.snomed_code,
-        "relation": term.relation,
-        "value": term.value,
-        "unit": term.unit,
-        "computed_as": term.computed_as,
-        "grounding_confidence": term.confidence,
-        "relation_confidence": term.relation_confidence,
-        "value_confidence": term.value_confidence,
-        "umls_confidence": term.umls_confidence,
-    }
+async def _ground_with_ai_batch(
+    *,
+    items: list[dict[str, Any]],
+    session_id: str | None = None,
+    user_id: str | None = None,
+    run_id: str | None = None,
+) -> list[GroundingResult | None]:
+    try:
+        from grounding_service.agent import get_grounding_agent
+    except ImportError:  # pragma: no cover
+        return [None for _ in items]
 
-    return primary_dict, snomed_codes, all_terms, result.logical_operator
+    agent = get_grounding_agent()
+    try:
+        return await agent.ground_batch(
+            items,
+            session_id=session_id,
+            user_id=user_id,
+            run_id=run_id,
+        )
+    except Exception as exc:
+        logger.warning("AI batch grounding failed: %s", exc)
+        return [None for _ in items]
 
 
 def _ground_baseline(text: str, api_key: str) -> tuple[dict[str, Any], list[str]]:
@@ -317,25 +311,45 @@ async def ingest_protocol_from_pdf(
     for batch in _chunked(deduped_items, batch_size):
         texts = [cast(str, getattr(item, "text", "")) for item in batch]
         triplets = _extract_triplets_batch(texts)
-
+        batch_payload: list[dict[str, Any]] = []
         for item, triplet in zip(batch, triplets, strict=False):
+            text = cast(str, getattr(item, "text", ""))
+            criterion_type = cast(str, getattr(item, "criterion_type", ""))
+            batch_payload.append(
+                {
+                    "criterion_text": text,
+                    "criterion_type": criterion_type,
+                    "triplet": triplet if isinstance(triplet, dict) else None,
+                }
+            )
+
+        if use_ai_grounding:
+            batch_groundings = await _ground_with_ai_batch(
+                items=batch_payload,
+                session_id=session_id,
+                user_id=user_id,
+                run_id=run_id,
+            )
+        else:
+            batch_groundings = [None for _ in batch_payload]
+
+        for idx, (item, triplet) in enumerate(zip(batch, triplets, strict=False)):
             text = cast(str, getattr(item, "text", ""))
             criterion_type = cast(str, getattr(item, "criterion_type", ""))
             confidence = float(getattr(item, "confidence", 0.0))
 
             triplet, computed_as = _apply_computed_field(triplet)
-            grounding_payload, snomed_codes, grounding_terms, logical_operator = (
-                await _resolve_grounding(
-                    text=text,
-                    criterion_type=criterion_type,
-                    triplet=triplet if isinstance(triplet, dict) else None,
-                    umls_api_key=umls_api_key,
-                    use_ai_grounding=use_ai_grounding,
-                    session_id=session_id,
-                    user_id=user_id,
-                    run_id=run_id,
-                )
+            batch_result = (
+                batch_groundings[idx] if idx < len(batch_groundings) else None
             )
+            if batch_result is not None and batch_result.terms:
+                grounding_payload, snomed_codes, grounding_terms, logical_operator = (
+                    _coerce_grounding_result(batch_result)
+                )
+            else:
+                grounding_payload, snomed_codes = _ground_baseline(text, umls_api_key)
+                grounding_terms = []
+                logical_operator = None
 
             merged = _merge_fields(
                 triplet=triplet,

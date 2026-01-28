@@ -1,152 +1,131 @@
-"""LangGraph ReAct agent for grounding clinical trial criteria."""
+"""SAG (Search-Augmented Generation) pipeline for grounding clinical trial criteria.
+
+This module implements a deterministic 3-step pipeline instead of a ReAct agent:
+1. Extract: LLM extracts clinical terms from text (structured output)
+2. Search: Python code calls UMLS API for each term (no LLM)
+3. Select: LLM selects best codes from search results (structured output)
+
+This approach is faster and more reliable than ReAct for grounding tasks.
+"""
 
 import logging
 import os
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
-
-try:
-    from langchain_core.tools import tool  # type: ignore[import-not-found]
-except ImportError:  # pragma: no cover
-    # Minimal fallback so this module can be imported without LangChain installed.
-    def _tool(func=None, **_kwargs):  # type: ignore[no-redef]
-        if func is None:
-            return lambda f: f
-        return func
-
-    tool = _tool  # type: ignore[assignment]
-
-if TYPE_CHECKING:
-    from langchain_google_genai import ChatGoogleGenerativeAI as ChatGoogleGenerativeAI
-else:
-    try:
-        from langchain_google_genai import (
-            ChatGoogleGenerativeAI as ChatGoogleGenerativeAI,
-        )
-    except ImportError:  # pragma: no cover
-        ChatGoogleGenerativeAI = object  # type: ignore[assignment]
+from typing import Any
 
 from shared.mlflow_utils import set_trace_metadata
 
-from grounding_service.schemas import GroundingResult
+from grounding_service.schemas import (
+    ExtractedTerm,
+    GroundingResult,
+    TermExtractionResult,
+    UmlsCandidate,
+)
 from grounding_service.semantic_cache import get_grounding_cache
 from grounding_service.umls_client import UmlsClient, get_umls_api_key
 
 logger = logging.getLogger(__name__)
 
 
-# LangChain tools wrapping UMLS client
-# Note: These tools use UmlsClient directly. The MCP server (mcp_server.py)
-# provides the same functionality via FastMCP for external MCP protocol clients.
-# Both implementations use the same underlying UmlsClient, ensuring consistency.
-@tool
-def search_concepts_tool(term: str, limit: int = 5) -> str:
-    """Search UMLS for clinical concepts matching a term.
+class GroundingPipeline:
+    """SAG pipeline for grounding clinical trial criteria.
 
-    Args:
-        term: Clinical term or phrase to search for.
-        limit: Maximum number of results to return (default: 5).
+    Uses a deterministic 3-step approach:
+    1. Extract clinical terms (LLM, 1 call)
+    2. Search UMLS (Python, no LLM)
+    3. Select best codes (LLM, 1 call)
 
-    Returns:
-        JSON string with list of concepts containing UMLS CUI and SNOMED code.
-    """
-    import json
-
-    api_key = get_umls_api_key()
-    if not api_key:
-        return json.dumps([])
-
-    try:
-        with UmlsClient(api_key=api_key) as client:
-            candidates = client.search_snomed(term, limit)
-            results = [
-                {
-                    "snomed_code": c.code,
-                    "display": c.display,
-                    "cui": c.cui,
-                    "ontology": c.ontology,
-                }
-                for c in candidates
-            ]
-            return json.dumps(results)
-    except Exception as e:
-        logger.error("Error in search_concepts_tool: %s", e)
-        return json.dumps([])
-
-
-@tool
-def get_semantic_type_tool(cui: str) -> str:
-    """Get semantic type information for a UMLS concept.
-
-    Args:
-        cui: UMLS Concept Unique Identifier.
-
-    Returns:
-        JSON string with semantic types (TUIs) for the concept.
-    """
-    import json
-
-    api_key = get_umls_api_key()
-    if not api_key:
-        return json.dumps({"cui": cui, "semantic_types": []})
-
-    try:
-        with UmlsClient(api_key=api_key) as client:
-            tuis = client.get_semantic_types(cui)
-            return json.dumps({"cui": cui, "semantic_types": tuis})
-    except Exception as e:
-        logger.error("Error in get_semantic_type_tool: %s", e)
-        return json.dumps({"cui": cui, "semantic_types": []})
-
-
-class GroundingAgent:
-    """LangGraph ReAct agent for grounding clinical trial criteria.
-
-    Uses Gemini 2.5 Pro as orchestrator with:
-    - MedGemma tool for medical interpretation
-    - UMLS MCP tools for code lookups
+    This is faster and more reliable than ReAct for grounding tasks.
     """
 
-    def __init__(
-        self,
-        model_path: str | None = None,
-        quantization: str = "4bit",
-    ) -> None:
-        """Initialize the grounding agent.
+    def __init__(self) -> None:
+        """Initialize the grounding pipeline."""
+        self._extractor: Any | None = None
+        self._selector: Any | None = None
 
-        Args:
-            model_path: Path to MedGemma model (unused, kept for compatibility).
-            quantization: Quantization level (unused, kept for compatibility).
-        """
-        self._agent: Any | None = None
+    def _get_extractor(self) -> Any:
+        """Get or create the term extraction model."""
+        if self._extractor is not None:
+            return self._extractor
 
-    async def _get_agent(self) -> Any:
-        """Get or create the Gemini orchestrator agent with structured output."""
-        if self._agent is not None:
-            return self._agent
-
-        from inference import create_react_agent
+        from inference import create_structured_extractor
         from inference.model_factory import create_gemini_model_loader
 
-        from grounding_service.schemas import GroundingResult
-
-        tools = [search_concepts_tool, get_semantic_type_tool]
-
+        prompts_dir = Path(__file__).parent / "prompts"
         gemini_loader = create_gemini_model_loader()
 
-        prompts_dir = Path(__file__).parent / "prompts"
-
-        # Create agent with GroundingResult schema enforced
-        self._agent = create_react_agent(
+        self._extractor = create_structured_extractor(
             model_loader=gemini_loader,
             prompts_dir=prompts_dir,
-            tools=tools,
-            response_schema=GroundingResult,  # Pydantic schema
-            system_template="grounding_system.j2",
-            user_template="grounding_user.j2",
-            recursion_limit=10,  # Max 10 steps for grounding (3 tools)
+            response_schema=TermExtractionResult,
+            system_template="extract_terms_system.j2",
+            user_template="extract_terms_user.j2",
         )
-        return self._agent
+        return self._extractor
+
+    def _get_selector(self) -> Any:
+        """Get or create the grounding selection model."""
+        if self._selector is not None:
+            return self._selector
+
+        from inference import create_structured_extractor
+        from inference.model_factory import create_gemini_model_loader
+
+        prompts_dir = Path(__file__).parent / "prompts"
+        gemini_loader = create_gemini_model_loader()
+
+        self._selector = create_structured_extractor(
+            model_loader=gemini_loader,
+            prompts_dir=prompts_dir,
+            response_schema=GroundingResult,
+            system_template="select_grounding_system.j2",
+            user_template="select_grounding_user.j2",
+        )
+        return self._selector
+
+    def _search_umls(
+        self, terms: list[ExtractedTerm]
+    ) -> dict[str, list[UmlsCandidate]]:
+        """Search UMLS for each extracted term.
+
+        Args:
+            terms: List of extracted terms to look up.
+
+        Returns:
+            Dictionary mapping term strings to UMLS candidates.
+        """
+        api_key = get_umls_api_key()
+        if not api_key:
+            logger.warning("No UMLS API key configured")
+            return {}
+
+        results: dict[str, list[UmlsCandidate]] = {}
+
+        try:
+            with UmlsClient(api_key=api_key) as client:
+                for extracted_term in terms:
+                    term = extracted_term.term
+                    if term in results:
+                        continue  # Skip duplicates
+
+                    try:
+                        candidates = client.search_snomed(term, limit=3)
+                        results[term] = [
+                            UmlsCandidate(
+                                term=term,
+                                snomed_code=c.code,
+                                display=c.display,
+                                cui=c.cui,
+                            )
+                            for c in candidates
+                        ]
+                    except Exception as e:
+                        logger.warning("UMLS search failed for '%s': %s", term, e)
+                        results[term] = []
+        except Exception as e:
+            logger.error("UMLS client error: %s", e)
+
+        return results
 
     async def ground(
         self,
@@ -157,7 +136,7 @@ class GroundingAgent:
         user_id: str | None = None,
         run_id: str | None = None,
     ) -> GroundingResult:
-        """Ground a criterion using Gemini orchestrator with structured output.
+        """Ground a criterion using the 3-step SAG pipeline.
 
         Args:
             criterion_text: The criterion text to ground.
@@ -170,9 +149,9 @@ class GroundingAgent:
         Returns:
             GroundingResult with SNOMED codes and field mappings.
         """
-        # Set trace metadata before agent invocation
         set_trace_metadata(user_id=user_id, session_id=session_id, run_id=run_id)
 
+        # Check cache first
         cache_enabled = (
             os.getenv("ENABLE_GROUNDING_SEMANTIC_CACHE", "").lower() == "true"
         )
@@ -187,27 +166,105 @@ class GroundingAgent:
                 )
                 return cached_result
 
-        agent = await self._get_agent()
-        result = await agent(
+        # Step 1: Extract clinical terms (LLM call 1)
+        logger.debug("Step 1: Extracting terms from: %s", criterion_text[:80])
+        extractor = self._get_extractor()
+        extraction_result: TermExtractionResult = await extractor(
             {
                 "criterion_text": criterion_text,
                 "criterion_type": criterion_type,
                 "triplet": triplet,
             }
         )
+
+        if not extraction_result.terms:
+            logger.debug("No terms extracted, returning empty result")
+            return GroundingResult(
+                terms=[],
+                logical_operator=None,
+                reasoning="No clinical terms found to ground.",
+            )
+
+        # Step 2: Search UMLS (Python, no LLM)
+        term_count = len(extraction_result.terms)
+        logger.debug("Step 2: Searching UMLS for %d terms", term_count)
+        umls_candidates = self._search_umls(extraction_result.terms)
+
+        # Step 3: Select best codes (LLM call 2)
+        logger.debug("Step 3: Selecting best codes")
+        selector = self._get_selector()
+        result: GroundingResult = await selector(
+            {
+                "criterion_text": criterion_text,
+                "criterion_type": criterion_type,
+                "extracted_terms": [t.model_dump() for t in extraction_result.terms],
+                "umls_candidates": {
+                    term: [c.model_dump() for c in candidates]
+                    for term, candidates in umls_candidates.items()
+                },
+            }
+        )
+
+        # Cache result
         if cache_enabled:
             cache = get_grounding_cache()
             cache.set(criterion_text, result)
+
         return result
 
+    async def ground_batch(
+        self,
+        items: list[dict[str, Any]],
+        *,
+        session_id: str | None = None,
+        user_id: str | None = None,
+        run_id: str | None = None,
+    ) -> list[GroundingResult | None]:
+        """Ground multiple criteria using the SAG pipeline.
+
+        Args:
+            items: List of dicts with keys: criterion_text, criterion_type, triplet.
+            session_id: Optional session ID for trace grouping.
+            user_id: Optional user ID for trace grouping.
+            run_id: Optional run ID to group all traces from a single extraction run.
+
+        Returns:
+            List of GroundingResult objects aligned to input order.
+        """
+        if not items:
+            return []
+
+        set_trace_metadata(user_id=user_id, session_id=session_id, run_id=run_id)
+
+        results: list[GroundingResult | None] = []
+        for item in items:
+            try:
+                result = await self.ground(
+                    criterion_text=item.get("criterion_text", ""),
+                    criterion_type=item.get("criterion_type", "inclusion"),
+                    triplet=item.get("triplet"),
+                    session_id=session_id,
+                    user_id=user_id,
+                    run_id=run_id,
+                )
+                results.append(result)
+            except Exception as e:
+                logger.warning("Grounding failed for item: %s", e)
+                results.append(None)
+
+        return results
+
+
+# Backward compatibility alias
+GroundingAgent = GroundingPipeline
 
 # Singleton instance
-_agent_instance: GroundingAgent | None = None
+_pipeline_instance: GroundingPipeline | None = None
 
 
-def get_grounding_agent() -> GroundingAgent:
-    """Get or create singleton grounding agent instance."""
-    global _agent_instance
-    if _agent_instance is None:
-        _agent_instance = GroundingAgent()
-    return _agent_instance
+def get_grounding_agent() -> GroundingPipeline:
+    """Get or create singleton grounding pipeline instance."""
+    global _pipeline_instance
+    if _pipeline_instance is None:
+        _pipeline_instance = GroundingPipeline()
+    return _pipeline_instance

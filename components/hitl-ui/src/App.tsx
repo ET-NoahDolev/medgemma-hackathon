@@ -18,13 +18,11 @@ export default function App() {
       <TaskStoreProvider>
         <BrowserRouter>
           <div className="min-h-screen bg-transparent">
-            <div className="h-[calc(100vh-64px)]">
-              <Routes>
-                <Route path="/" element={<ProtocolListScreen />} />
-                <Route path="/protocols/:protocolId" element={<ProtocolScreen />} />
-                <Route path="*" element={<Navigate to="/" replace />} />
-              </Routes>
-            </div>
+            <Routes>
+              <Route path="/" element={<ProtocolListScreen />} />
+              <Route path="/protocols/:protocolId" element={<ProtocolScreen />} />
+              <Route path="*" element={<Navigate to="/" replace />} />
+            </Routes>
           </div>
           <TaskPanel />
           <Toaster />

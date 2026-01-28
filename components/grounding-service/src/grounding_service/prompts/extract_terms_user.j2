@@ -1,0 +1,20 @@
+Extract clinical terms from this eligibility criterion:
+
+Criterion: {{ criterion_text }}
+Type: {{ criterion_type }}
+
+{% if triplet %}
+Pre-extracted triplet (use as hint):
+- Entity: {{ triplet.entity or "N/A" }}
+- Relation: {{ triplet.relation or "N/A" }}
+- Value: {{ triplet.value or "N/A" }}
+- Unit: {{ triplet.unit or "N/A" }}
+{% endif %}
+
+Instructions:
+1. Identify all clinical terms that need UMLS/SNOMED lookup
+2. For age criteria, use "Date of birth" with is_computed=true and computed_expression="floor((today - birthDate) / 365.25)"
+3. Extract any relations (>, >=, <, <=, =) and values
+4. Set logical_operator if multiple conditions are joined by AND/OR
+
+Return a TermExtractionResult with the terms to look up.

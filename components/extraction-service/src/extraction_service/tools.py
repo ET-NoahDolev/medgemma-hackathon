@@ -206,22 +206,53 @@ def extract_triplets_batch(criteria_texts: list[str]) -> list[dict[str, Any]]:
     """
     if not criteria_texts:
         return []
+
+    # Process in smaller batches to avoid truncation
+    batch_size = 5
+    all_results: list[dict[str, Any]] = []
+
+    for i in range(0, len(criteria_texts), batch_size):
+        batch = criteria_texts[i : i + batch_size]
+        batch_results = _extract_triplets_small_batch(batch)
+        all_results.extend(batch_results)
+
+    return all_results
+
+
+def _extract_triplets_small_batch(criteria_texts: list[str]) -> list[dict[str, Any]]:
+    """Extract triplets for a small batch (<=5 criteria) to avoid truncation."""
+    if not criteria_texts:
+        return []
+
     prompt = (
-        "Extract entity/relation/value triplets for each criterion below.\n\n"
-        "Return ONLY a JSON array matching input order. Each item should be an "
-        "object with keys: entity, relation, value, unit.\n\n"
-        "Criteria:\n"
-        + "\n".join(
-            f"{index + 1}. {text}" for index, text in enumerate(criteria_texts)
-        )
+        "Extract ONE primary clinical concept from each criterion.\n\n"
+        "## Rules\n"
+        "- Entity MUST be SNOMED-mappable (condition, lab test, procedure)\n"
+        "- Relation MUST be: >, <, >=, <=, =, !=, between, present, absent\n"
+        "- DO NOT extract admin terms, document refs, or procedural text\n"
+        "- Return exactly {count} objects (one per criterion)\n\n"
+        "## Examples\n"
+        '"Age >=18" -> {{"entity":"Date of birth","relation":">=","value":"18"}}\n'
+        '"Diagnosed with diabetes" -> {{"entity":"Diabetes","relation":"present"}}\n'
+        '"No chemotherapy" -> {{"entity":"Chemotherapy","relation":"absent"}}\n\n'
+        "Criteria:\n{criteria}\n\nJSON array:"
+    ).format(
+        count=len(criteria_texts),
+        criteria="\n".join(
+            f"{idx + 1}. {text}" for idx, text in enumerate(criteria_texts)
+        ),
     )
+
     result = _invoke_medgemma(prompt)
+
+    # Try to parse JSON, handling partial responses
     try:
-        payload = json.loads(result)
-    except json.JSONDecodeError as exc:
-        raise ValueError("MedGemma returned invalid JSON for batch triplets.") from exc
-    if not isinstance(payload, list):
-        raise ValueError("MedGemma batch triplet payload is not a list.")
+        payload = _parse_json_array(result, expected_count=len(criteria_texts))
+    except ValueError as exc:
+        logger.warning("Batch triplet extraction failed: %s", exc)
+        # Fall back to individual extraction
+        return [_extract_single_triplet_fallback(text) for text in criteria_texts]
+
     normalized: list[dict[str, Any]] = []
     for item in payload:
         if isinstance(item, dict):
@@ -229,6 +260,58 @@ def extract_triplets_batch(criteria_texts: list[str]) -> list[dict[str, Any]]:
         else:
             normalized.append({})
     return normalized
+
+
+def _parse_json_array(text: str, expected_count: int) -> list[dict[str, Any]]:
+    """Parse JSON array from model output, handling truncation."""
+    import re
+
+    text = text.strip()
+
+    # Try direct parse first
+    try:
+        payload = json.loads(text)
+        if isinstance(payload, list):
+            return payload
+    except json.JSONDecodeError:
+        pass
+
+    # Try to find array start and complete partial JSON
+    array_match = re.search(r"\[", text)
+    if not array_match:
+        raise ValueError("No JSON array found in response")
+
+    json_text = text[array_match.start() :]
+
+    # Try to parse as-is
+    try:
+        payload = json.loads(json_text)
+        if isinstance(payload, list):
+            return payload
+    except json.JSONDecodeError:
+        pass
+
+    # Try to complete truncated JSON by closing brackets
+    for suffix in ["]", "}]", "\"}]", "null}]"]:
+        try:
+            payload = json.loads(json_text + suffix)
+            if isinstance(payload, list):
+                logger.debug("Recovered truncated JSON with suffix: %s", suffix)
+                return payload
+        except json.JSONDecodeError:
+            continue
+
+    raise ValueError(f"Could not parse JSON array from: {text[:200]}...")
+
+
+def _extract_single_triplet_fallback(text: str) -> dict[str, Any]:
+    """Extract triplet for a single criterion as fallback."""
+    try:
+        result = extract_triplet.invoke({"text": text})
+        return json.loads(result) if isinstance(result, str) else {}
+    except Exception as exc:
+        logger.debug("Single triplet extraction failed: %s", exc)
+        return {}
 
 
 def _clarify_ambiguity_impl(question: str, text: str) -> str:
