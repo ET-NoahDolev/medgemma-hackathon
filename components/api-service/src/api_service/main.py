@@ -5,19 +5,15 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
-import tempfile
 import uuid
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager, nullcontext
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from enum import Enum
-from pathlib import Path
 from typing import Any, List
 
 import anyio
-from anyio import to_thread
-from data_pipeline.download_protocols import extract_text_from_pdf
 from dotenv import find_dotenv, load_dotenv
 from extraction_service import pipeline as extraction_pipeline  # noqa: F401
 from fastapi import (
@@ -36,7 +32,10 @@ from pydantic import BaseModel
 from shared.mlflow_utils import configure_mlflow_once
 
 from api_service.dependencies import get_storage
-from api_service.ingestion import ingest_protocol_document_text
+from api_service.ingestion import (
+    ingest_protocol_document_text,
+    ingest_protocol_from_pdf,
+)
 from api_service.storage import Criterion as StorageCriterion
 from api_service.storage import Storage, init_db, reset_storage
 
@@ -430,6 +429,7 @@ async def _run_extraction(
     protocol_id: str,
     document_text: str,
     storage: Storage,
+    pdf_bytes: bytes | None = None,
     session_id: str | None = None,
     user_id: str | None = None,
 ) -> None:
@@ -464,15 +464,26 @@ async def _run_extraction(
         except (ImportError, AttributeError):
             pass
         with span_ctx:
-            criteria = await ingest_protocol_document_text(
-                protocol_id=protocol_id,
-                document_text=document_text,
-                storage=storage,
-                umls_api_key=_get_umls_api_key(),
-                session_id=session_id,
-                user_id=user_id,
-                run_id=run_id,
-            )
+            if pdf_bytes is not None:
+                criteria = await ingest_protocol_from_pdf(
+                    protocol_id=protocol_id,
+                    pdf_bytes=pdf_bytes,
+                    storage=storage,
+                    umls_api_key=_get_umls_api_key(),
+                    session_id=session_id,
+                    user_id=user_id,
+                    run_id=run_id,
+                )
+            else:
+                criteria = await ingest_protocol_document_text(
+                    protocol_id=protocol_id,
+                    document_text=document_text,
+                    storage=storage,
+                    umls_api_key=_get_umls_api_key(),
+                    session_id=session_id,
+                    user_id=user_id,
+                    run_id=run_id,
+                )
         count = len(criteria)
         storage.update_protocol_status(
             protocol_id=protocol_id,
@@ -507,6 +518,7 @@ def _run_extraction_sync(
     protocol_id: str,
     document_text: str,
     storage: Storage,
+    pdf_bytes: bytes | None = None,
     session_id: str | None = None,
     user_id: str | None = None,
 ) -> None:
@@ -519,6 +531,7 @@ def _run_extraction_sync(
             protocol_id,
             document_text,
             storage,
+            pdf_bytes,
             session_id,
             user_id,
         )
@@ -526,7 +539,9 @@ def _run_extraction_sync(
 
     # Create and track the task
     task = loop.create_task(
-        _run_extraction(protocol_id, document_text, storage, session_id, user_id)
+        _run_extraction(
+            protocol_id, document_text, storage, pdf_bytes, session_id, user_id
+        )
     )
     _background_tasks.add(task)
     # Remove task from set when it completes
@@ -553,36 +568,26 @@ async def upload_protocol(
         )
 
     bytes_read = 0
-    with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as tmp:
-        tmp_path = Path(tmp.name)
-        while True:
-            chunk = await file.read(1024 * 1024)
-            if not chunk:
-                break
-            bytes_read += len(chunk)
-            if bytes_read > get_config().max_upload_bytes:
-                tmp_path.unlink(missing_ok=True)
-                raise HTTPException(status_code=413, detail="File too large")
-            tmp.write(chunk)
+    chunks: list[bytes] = []
+    while True:
+        chunk = await file.read(1024 * 1024)
+        if not chunk:
+            break
+        bytes_read += len(chunk)
+        if bytes_read > get_config().max_upload_bytes:
+            raise HTTPException(status_code=413, detail="File too large")
+        chunks.append(chunk)
+    pdf_bytes = b"".join(chunks)
 
-    with tmp_path.open("rb") as handle:
-        header = handle.read(4)
-    if header != b"%PDF":
-        tmp_path.unlink(missing_ok=True)
+    if not pdf_bytes.startswith(b"%PDF"):
         raise HTTPException(status_code=400, detail="Invalid PDF file")
 
-    try:
-        document_text = await to_thread.run_sync(extract_text_from_pdf, tmp_path)
-    finally:
-        tmp_path.unlink(missing_ok=True)
-
-    if not document_text:
-        raise HTTPException(
-            status_code=400, detail="No text could be extracted from the PDF"
-        )
-
     title = filename.replace(".pdf", "").replace("_", " ").strip() or "Protocol"
-    protocol = storage.create_protocol(title=title, document_text=document_text)
+    protocol = storage.create_protocol(
+        title=title,
+        document_text="[PDF attached - extraction pending]",
+        pdf_bytes=pdf_bytes,
+    )
 
     if auto_extract:
         storage.update_protocol_status(
@@ -595,6 +600,7 @@ async def upload_protocol(
             protocol.id,
             protocol.document_text,
             storage,
+            pdf_bytes,
             session_context.get("session_id"),
             session_context.get("user_id"),
         )
@@ -628,6 +634,7 @@ def extract_criteria(
         protocol_id,
         protocol.document_text,
         storage,
+        protocol.pdf_bytes,
         session_context.get("session_id"),
         session_context.get("user_id"),
     )

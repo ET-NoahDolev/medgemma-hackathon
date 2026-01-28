@@ -186,6 +186,42 @@ def extract_triplet(text: str) -> str:
     return json.dumps(normalized, separators=(",", ":"))
 
 
+def extract_triplets_batch(criteria_texts: list[str]) -> list[dict[str, Any]]:
+    """Extract entity/relation/value triplets for multiple criteria in one call.
+
+    Args:
+        criteria_texts: Criterion text strings.
+
+    Returns:
+        List of triplet dictionaries in the same order as inputs.
+    """
+    if not criteria_texts:
+        return []
+    prompt = (
+        "Extract entity/relation/value triplets for each criterion below.\n\n"
+        "Return ONLY a JSON array matching input order. Each item should be an "
+        "object with keys: entity, relation, value, unit.\n\n"
+        "Criteria:\n"
+        + "\n".join(
+            f"{index + 1}. {text}" for index, text in enumerate(criteria_texts)
+        )
+    )
+    result = _invoke_medgemma(prompt)
+    try:
+        payload = json.loads(result)
+    except json.JSONDecodeError as exc:
+        raise ValueError("MedGemma returned invalid JSON for batch triplets.") from exc
+    if not isinstance(payload, list):
+        raise ValueError("MedGemma batch triplet payload is not a list.")
+    normalized: list[dict[str, Any]] = []
+    for item in payload:
+        if isinstance(item, dict):
+            normalized.append(_normalize_triplet_payload(item))
+        else:
+            normalized.append({})
+    return normalized
+
+
 def _clarify_ambiguity_impl(question: str, text: str) -> str:
     """Invoke MedGemma to clarify an ambiguous criterion.
 

@@ -8,7 +8,6 @@ dependencies = [
     "aiohttp>=3.9.0",
     "httpx>=0.27.0",
     "tenacity>=8.2.0",
-    "pypdf>=4.0.0",
     "shared",
 ]
 
@@ -28,10 +27,10 @@ dev = [
 [tool.ruff]
 lint.select = ["E", "F", "W", "C", "N", "I", "D"]
 lint.ignore = ["E203", "D203", "D213", "D100", "D413", "D104"]
+lint.pydocstyle.convention = "google"
 target-version = "py312"
 line-length = 88
 exclude = ["venv", ".venv", "docs"]
-lint.pydocstyle.convention = "google"
 
 [tool.ruff.lint.per-file-ignores]
 "tests/**/*.py" = ["D"]

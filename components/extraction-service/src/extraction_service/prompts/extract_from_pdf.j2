@@ -1,0 +1,21 @@
+You are analyzing a clinical trial protocol PDF document.
+
+Extract ALL eligibility criteria (inclusion and exclusion) from this document.
+
+For each criterion found:
+1. Extract the EXACT text snippet as it appears in the document
+2. Classify as "inclusion" or "exclusion"
+3. Provide a confidence score (0.0-1.0)
+
+Return a JSON object with this structure:
+{
+  "criteria": [
+    {"text": "Age >= 18 years", "criterion_type": "inclusion", "confidence": 0.95},
+    {"text": "No prior chemotherapy", "criterion_type": "exclusion", "confidence": 0.90}
+  ]
+}
+
+Important:
+- Include ALL criteria found in the document
+- Preserve exact wording from the document
+- Do not summarize or paraphrase

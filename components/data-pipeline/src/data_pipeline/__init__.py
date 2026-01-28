@@ -3,7 +3,6 @@
 from data_pipeline.download_protocols import (
     ProtocolRecord,
     emit_records,
-    extract_text_from_pdf,
     ingest_local_protocols,
     read_manifest_entries,
 )
@@ -13,7 +12,6 @@ from data_pipeline.loader import bulk_load_protocols, load_single_protocol
 __all__ = [
     "ProtocolRecord",
     "emit_records",
-    "extract_text_from_pdf",
     "ingest_local_protocols",
     "load_single_protocol",
     "bulk_load_protocols",

@@ -430,33 +430,6 @@ def looks_like_protocol_text(text: str) -> bool:
     return True
 
 
-def validate_protocol_pdf_content(data: bytes) -> Optional[bool]:
-    """Inspect PDF content for protocol indicators when available."""
-    try:
-        from pypdf import PdfReader
-    except Exception:
-        logger.debug("pypdf not available; skipping content validation")
-        return None
-
-    try:
-        from io import BytesIO
-
-        reader = PdfReader(BytesIO(data))
-        text_chunks: list[str] = []
-        for page in reader.pages[:2]:
-            extracted = page.extract_text() or ""
-            if extracted:
-                text_chunks.append(extracted)
-        text = " ".join(text_chunks).strip()
-        if len(text) < 200:
-            logger.debug("PDF text extraction too sparse; skipping content validation")
-            return None
-        return looks_like_protocol_text(text)
-    except Exception as exc:
-        logger.debug("Failed to extract PDF text: %s", exc)
-        return None
-
-
 async def record_manifest_async(
     manifest_path: Path,
     source: str,
@@ -526,9 +499,7 @@ def _pdf_error_detail(data: bytes, require_protocol: bool) -> Optional[str]:
     if not data.startswith(b"%PDF"):
         return "Not a valid PDF"
     if require_protocol:
-        is_protocol = validate_protocol_pdf_content(data)
-        if is_protocol is False:
-            return "PDF content missing protocol indicators"
+        logger.debug("Protocol content validation skipped (no PDF text extraction).")
     return None
 
 

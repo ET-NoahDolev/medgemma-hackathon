@@ -11,6 +11,7 @@ dependencies = [
     "accelerate>=0.30.0",
     "torch>=2.0.0",
     "inference",
+    "pymupdf>=1.26.7",
 ]
 
 [build-system]

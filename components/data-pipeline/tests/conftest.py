@@ -12,5 +12,5 @@ def sample_record() -> download_protocols.ProtocolRecord:
         title="Example Trial",
         condition="Melanoma",
         phase="Phase 2",
-        document_text="Inclusion: Age >= 18.",
+        pdf_path="/tmp/example.pdf",
     )
