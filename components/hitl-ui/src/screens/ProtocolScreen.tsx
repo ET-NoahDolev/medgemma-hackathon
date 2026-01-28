@@ -275,7 +275,7 @@ export function ProtocolScreen() {
   }
 
   return (
-    <div className="flex flex-col h-full">
+    <div className="flex flex-col h-full min-h-0">
       {/* Header */}
       <div className="bg-white border-b border-gray-200 p-6">
         <div className="flex items-start justify-between">
@@ -424,7 +424,7 @@ export function ProtocolScreen() {
       </div>
 
       {/* Criteria List */}
-      <ScrollArea className="flex-1 bg-transparent">
+      <ScrollArea className="flex-1 min-h-0 bg-transparent">
         <div className="p-6 max-w-5xl mx-auto">
           {/* Extraction / Loading State */}
           {((isLoading && criteria.length === 0) || (uploaded && criteria.length === 0)) && (
