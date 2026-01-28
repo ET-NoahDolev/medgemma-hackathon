@@ -3,6 +3,14 @@ Ground this clinical trial criterion:
 Criterion: {{ criterion_text }}
 Type: {{ criterion_type }}
 
+{% if triplet %}
+MedGemma triplet (already extracted):
+- Entity: {{ triplet.entity or "N/A" }}
+- Relation: {{ triplet.relation or "N/A" }}
+- Value: {{ triplet.value or "N/A" }}
+- Unit: {{ triplet.unit or "N/A" }}
+{% endif %}
+
 **IMPORTANT: Only ground clinically relevant terms for patient matching:**
 - Medical diagnoses, lab values, medications, procedures, demographics
 - Skip administrative terms (consent, guardian, criterion, protocol)
@@ -10,7 +18,7 @@ Type: {{ criterion_type }}
 For age criteria, map to "Date of birth" with computed_as: "floor((today - birthDate) / 365.25)"
 
 Follow this workflow:
-1. Call interpret_medical_text ONCE to get MedGemma's clinical interpretation
+1. Use the provided MedGemma triplet when available (do NOT call interpret_medical_text)
 2. For each of the top 3 identified concepts, call search_concepts (limit=3) to find UMLS matches and pick the best result
 3. Call get_semantic_type ONLY if needed to determine field categories
 4. Map semantic types to field categories
@@ -27,7 +35,7 @@ Return a structured GroundingResult with:
 ---
 
 ## Important: Minimize tool interactions
-- First, interpret the text once
+- First, rely on the provided triplet (if available)
 - Then search for concepts once (limit to top 3 concepts)
 - Return the GroundingResult as soon as you have the essential data
 - Do NOT call tools again to "refine" or "verify" results

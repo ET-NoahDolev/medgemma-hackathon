@@ -60,7 +60,11 @@ async def test_ground_with_ai_returns_all_terms_and_logical_operator(
 
     # Call _ground_with_ai
     primary_dict, snomed_codes, grounding_terms, logical_operator = (
-        await _ground_with_ai("Age >= 18 years AND weight >= 50 kg", "inclusion")
+        await _ground_with_ai(
+            "Age >= 18 years AND weight >= 50 kg",
+            "inclusion",
+            triplet=None,
+        )
     )
 
     # Verify return signature
@@ -118,7 +122,11 @@ async def test_ground_with_ai_returns_none_when_no_terms(
     import api_service.ingestion as ingestion_module
 
     primary_dict, snomed_codes, grounding_terms, logical_operator = (
-        await ingestion_module._ground_with_ai("Some text", "inclusion")
+        await ingestion_module._ground_with_ai(
+            "Some text",
+            "inclusion",
+            triplet=None,
+        )
     )
 
     # Verify empty results

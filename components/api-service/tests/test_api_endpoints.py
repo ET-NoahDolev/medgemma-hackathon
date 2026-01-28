@@ -2,6 +2,7 @@ import asyncio
 import io
 
 import pytest
+from extraction_service.pdf_extractor import CriterionSnippet, PDFExtractionResult
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
@@ -135,8 +136,6 @@ def test_extract_criteria_with_pdf_upload(
     """Test extraction workflow using PDF upload."""
 
     async def mock_extract_criteria_from_pdf(**kwargs: object) -> object:
-        from extraction_service.pdf_extractor import CriterionSnippet, PDFExtractionResult
-
         return PDFExtractionResult(
             criteria=[
                 CriterionSnippet(
@@ -238,15 +237,14 @@ def test_extract_replaces_existing_criteria(
     extraction_results: list[list[object]] = []
 
     async def mock_extract_criteria_from_pdf(**kwargs: object) -> object:
-        from extraction_service.pdf_extractor import CriterionSnippet, PDFExtractionResult
-
         results = extraction_results.pop(0) if extraction_results else []
         return PDFExtractionResult(criteria=results)
 
     def mock_extract_triplets_batch(texts: list[str]) -> list[dict[str, str | None]]:
-        return [{"entity": "age", "relation": ">=", "value": "18", "unit": "years"}] * len(
-            texts
-        )
+        return [
+            {"entity": "age", "relation": ">=", "value": "18", "unit": "years"}
+            for _ in texts
+        ]
 
     monkeypatch.setattr(
         "api_service.ingestion.extract_criteria_from_pdf",
@@ -256,8 +254,6 @@ def test_extract_replaces_existing_criteria(
         "api_service.ingestion.extract_triplets_batch",
         mock_extract_triplets_batch,
     )
-
-    from extraction_service.pdf_extractor import CriterionSnippet
 
     # First extraction returns one criterion
     extraction_results.append([

@@ -132,6 +132,7 @@ async def _resolve_grounding(
     *,
     text: str,
     criterion_type: str,
+    triplet: dict[str, Any] | None,
     umls_api_key: str,
     use_ai_grounding: bool,
     session_id: str | None,
@@ -148,6 +149,7 @@ async def _resolve_grounding(
                 await _ground_with_ai(
                     text,
                     criterion_type,
+                    triplet=triplet,
                     session_id=session_id,
                     user_id=user_id,
                     run_id=run_id,
@@ -165,6 +167,8 @@ async def _resolve_grounding(
 async def _ground_with_ai(
     text: str,
     criterion_type: str,
+    *,
+    triplet: dict[str, Any] | None,
     session_id: str | None = None,
     user_id: str | None = None,
     run_id: str | None = None,
@@ -181,7 +185,14 @@ async def _ground_with_ai(
 
     agent = get_grounding_agent()
     # Pass session/user/run IDs to grounding agent which will set trace metadata
-    result = await agent.ground(text, criterion_type, session_id, user_id, run_id)
+    result = await agent.ground(
+        text,
+        criterion_type,
+        triplet=triplet,
+        session_id=session_id,
+        user_id=user_id,
+        run_id=run_id,
+    )
     if not result.terms:
         return {}, [], [], None
 
@@ -300,7 +311,7 @@ async def ingest_protocol_from_pdf(
     if not deduped_items:
         return []
 
-    batch_size = _read_int_env("MEDGEMMA_BATCH_SIZE", 10)
+    batch_size = _read_int_env("MEDGEMMA_BATCH_SIZE", 3)
     stored: list[StorageCriterion] = []
 
     for batch in _chunked(deduped_items, batch_size):
@@ -317,6 +328,7 @@ async def ingest_protocol_from_pdf(
                 await _resolve_grounding(
                     text=text,
                     criterion_type=criterion_type,
+                    triplet=triplet if isinstance(triplet, dict) else None,
                     umls_api_key=umls_api_key,
                     use_ai_grounding=use_ai_grounding,
                     session_id=session_id,

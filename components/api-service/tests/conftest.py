@@ -6,7 +6,6 @@ from typing import Any, Iterator, cast
 import pytest
 from fastapi.testclient import TestClient
 
-import api_service.ingestion as ingestion
 import api_service.main as api_main
 from api_service.main import app
 from api_service.storage import get_engine, reset_storage

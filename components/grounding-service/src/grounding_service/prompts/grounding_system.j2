@@ -21,10 +21,10 @@ Only ground terms that are clinically relevant for patient EHR matching:
 
 ## Critical Instructions
 **Minimize tool calls and converge quickly:**
-- Call `interpret_medical_text` ONCE to identify all concepts in the criterion
+- Use the provided MedGemma triplet when available (do NOT call interpret_medical_text)
 - For each of the top 3 concepts, call `search_concepts` with limit=3 and pick the best result
 - Call `get_semantic_type` ONLY if semantic type is required for field mapping
-- DO NOT re-interpret, re-search, or refine results
+- DO NOT re-search or refine results
 - Return GroundingResult immediately once you have sufficient data
 
 **Output Strategy:**
@@ -33,12 +33,11 @@ Only ground terms that are clinically relevant for patient EHR matching:
 - STOP processing and return as soon as you have the core data
 
 ## Tools Available
-- `interpret_medical_text`: Use ONCE per criterion
 - `search_concepts_tool`: Find UMLS matches (effective use of limit parameter)
 - `get_semantic_type_tool`: Get TUI information (use sparingly)
 
 ## Process
-1. Call interpret_medical_text once → get list of concepts
+1. Use the provided MedGemma triplet to identify concepts
 2. For each of the top 3 concepts, call search_concepts (limit=3) → get best UMLS match
 3. If needed, call get_semantic_type for TUI classification
 4. Construct GroundingResult with collected data
@@ -46,5 +45,4 @@ Only ground terms that are clinically relevant for patient EHR matching:
 
 ## Output Format
 Return a structured response that matches the grounding schema.
-Always use MedGemma for medical interpretation - it has specialized medical knowledge.
 Use UMLS tools for code lookups - they have the terminology database.

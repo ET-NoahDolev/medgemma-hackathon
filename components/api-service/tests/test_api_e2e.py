@@ -1,13 +1,13 @@
 import io
 
 import pytest
+from extraction_service.pdf_extractor import CriterionSnippet, PDFExtractionResult
 from fastapi.testclient import TestClient
 
 from tests.constants import (
     EXTRACTED_TEXT,
     SNOMED_CODE,
 )
-
 
 # Minimal valid PDF (empty page)
 _MINIMAL_PDF = (
@@ -27,8 +27,6 @@ def test_end_to_end_workflow(
 ) -> None:
     # Mock the PDF extraction and MedGemma batch extraction
     async def mock_extract_criteria_from_pdf(**kwargs: object) -> object:
-        from extraction_service.pdf_extractor import CriterionSnippet, PDFExtractionResult
-
         return PDFExtractionResult(
             criteria=[
                 CriterionSnippet(

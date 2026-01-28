@@ -829,7 +829,11 @@ async def _try_ai_grounding(
     try:
         agent = get_grounding_agent()
         result = await agent.ground(
-            criterion_text, criterion_type, session_id, user_id
+            criterion_text,
+            criterion_type,
+            triplet=None,
+            session_id=session_id,
+            user_id=user_id,
         )
         if not result.terms:
             raise RuntimeError("AI grounding returned empty result")

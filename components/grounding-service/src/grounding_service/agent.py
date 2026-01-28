@@ -30,7 +30,6 @@ from shared.mlflow_utils import set_trace_metadata
 
 from grounding_service.schemas import GroundingResult
 from grounding_service.semantic_cache import get_grounding_cache
-from grounding_service.tools import interpret_medical_text
 from grounding_service.umls_client import UmlsClient, get_umls_api_key
 
 logger = logging.getLogger(__name__)
@@ -131,7 +130,7 @@ class GroundingAgent:
 
         from grounding_service.schemas import GroundingResult
 
-        tools = [interpret_medical_text, search_concepts_tool, get_semantic_type_tool]
+        tools = [search_concepts_tool, get_semantic_type_tool]
 
         gemini_loader = create_gemini_model_loader()
 
@@ -153,6 +152,7 @@ class GroundingAgent:
         self,
         criterion_text: str,
         criterion_type: str,
+        triplet: dict[str, Any] | None = None,
         session_id: str | None = None,
         user_id: str | None = None,
         run_id: str | None = None,
@@ -162,6 +162,7 @@ class GroundingAgent:
         Args:
             criterion_text: The criterion text to ground.
             criterion_type: Type of criterion ("inclusion" or "exclusion").
+            triplet: Optional MedGemma triplet extraction result.
             session_id: Optional session ID for trace grouping.
             user_id: Optional user ID for trace grouping.
             run_id: Optional run ID to group all traces from a single extraction run.
@@ -191,6 +192,7 @@ class GroundingAgent:
             {
                 "criterion_text": criterion_text,
                 "criterion_type": criterion_type,
+                "triplet": triplet,
             }
         )
         if cache_enabled:
