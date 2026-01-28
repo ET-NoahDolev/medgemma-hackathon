@@ -203,7 +203,13 @@ class VertexContextCache:
             else:
                 raise
 
-        return response.text or ""
+        out = response.text or ""
+        if not out.strip():
+            logger.warning(
+                "Vertex uncached generation returned empty response (len=%d)",
+                len(out),
+            )
+        return out
 
 
 _CACHE: VertexContextCache | None = None
