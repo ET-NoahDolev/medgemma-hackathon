@@ -12,6 +12,8 @@ from typing import Any
 from inference.tools import _coerce_model_output
 from jinja2 import Environment, FileSystemLoader
 
+from extraction_service.schemas import ExtractionResult
+
 try:
     from langchain_core.tools import tool
 except ImportError:  # pragma: no cover
@@ -48,6 +50,8 @@ RELATION_NORMALIZATION = {
     "is not": "!=",
     "is": "=",
 }
+
+
 def _invoke_medgemma(prompt: str) -> str:
     from inference import AgentConfig, create_model_loader
 
@@ -59,6 +63,61 @@ def _invoke_medgemma(prompt: str) -> str:
     except Exception as exc:
         logger.error("MedGemma tool invocation failed: %s", exc, exc_info=True)
         raise
+
+
+def paragraph_contains_criteria(paragraph_text: str) -> bool:
+    """Return True if a paragraph contains eligibility criteria.
+
+    Args:
+        paragraph_text: Paragraph text from a protocol document.
+
+    Returns:
+        True when MedGemma indicates the paragraph contains eligibility criteria.
+    """
+    if not paragraph_text.strip():
+        return False
+    prompt = (
+        "Analyze this clinical trial protocol paragraph.\n"
+        "Does it contain patient eligibility criteria (inclusion or exclusion)?\n"
+        "Answer only YES or NO.\n\n"
+        f"Paragraph: {paragraph_text}"
+    )
+    result = _invoke_medgemma(prompt)
+    return result.strip().upper().startswith("YES")
+
+
+def extract_criteria_medgemma(paragraph_text: str) -> ExtractionResult:
+    """Extract criteria in a single MedGemma pass.
+
+    Args:
+        paragraph_text: Paragraph text from a protocol document.
+
+    Returns:
+        ExtractionResult with criteria and optional triplet fields.
+    """
+    if not paragraph_text.strip():
+        return ExtractionResult(criteria=[])
+    prompt = (
+        "Extract all eligibility criteria from this clinical trial paragraph.\n\n"
+        "For each criterion:\n"
+        "1. Extract the exact text snippet\n"
+        "2. Classify as \"inclusion\" or \"exclusion\"\n"
+        "3. Provide a confidence score between 0.0 and 1.0\n"
+        "4. If possible, extract entity, relation, value, and unit\n\n"
+        "Return ONLY a JSON object matching this shape:\n"
+        "{\"criteria\":[{\"text\":\"...\",\"criterion_type\":\"inclusion\","
+        "\"confidence\":0.85,\"entity\":\"age\",\"relation\":\">=\","
+        "\"value\":\"18\",\"unit\":\"years\"}]}\n\n"
+        f"Paragraph: {paragraph_text}"
+    )
+    result = _invoke_medgemma(prompt)
+    try:
+        payload = json.loads(result)
+    except json.JSONDecodeError as exc:
+        raise ValueError("MedGemma returned invalid JSON for extraction.") from exc
+    if not isinstance(payload, dict):
+        raise ValueError("MedGemma extraction payload is not an object.")
+    return ExtractionResult(**payload)
 
 
 def _normalize_relation(relation: str | None) -> str | None:

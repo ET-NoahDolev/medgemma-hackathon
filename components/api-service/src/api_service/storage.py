@@ -23,6 +23,10 @@ class ExtractedCriterion(TypingProtocol):
     text: str
     criterion_type: str
     confidence: float
+    entity: str | None
+    relation: str | None
+    value: str | None
+    unit: str | None
 
 
 class Protocol(SQLModel, table=True):

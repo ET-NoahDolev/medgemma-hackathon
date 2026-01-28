@@ -74,13 +74,14 @@ async def test_ground_returns_structured_result():
 @pytest.mark.asyncio
 async def test_ground_fallback_on_invoke_error():
     """Test that ground() raises errors when agent invoke fails."""
-    # The agent is called directly with await, so it needs to be an AsyncMock
-    mock_agent = AsyncMock(side_effect=ValueError("Invalid JSON"))
+    async def failing_invoke(*_args: object, **_kwargs: object) -> None:
+        raise ValueError("Invalid JSON")
 
     with patch("grounding_service.agent.ChatGoogleGenerativeAI"):
         with patch("inference.create_react_agent") as mock_create:
-            mock_create.return_value = mock_agent
+            mock_create.return_value = failing_invoke
             agent = GroundingAgent()
+            agent._agent = None  # force _get_agent to run under the patch
             # Error should be raised, not caught
             with pytest.raises(ValueError, match="Invalid JSON"):
                 await agent.ground("Age >= 18", "inclusion")

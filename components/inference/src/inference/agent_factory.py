@@ -47,11 +47,33 @@ def _try_parse_last_message(
         return None
     if not isinstance(last_ai_message.content, str):
         return None
-    try:
-        parsed = json.loads(last_ai_message.content)
-        return response_schema(**parsed)
-    except (json.JSONDecodeError, ValidationError, TypeError):
+    parsed = _try_parse_json_text(last_ai_message.content)
+    if parsed is None:
         return None
+    try:
+        return response_schema(**parsed)
+    except (ValidationError, TypeError):
+        return None
+
+
+def _try_parse_json_text(text: str) -> dict[str, Any] | None:
+    trimmed = text.strip()
+    if not trimmed:
+        return None
+    candidates = [trimmed]
+    if "{" in trimmed and "}" in trimmed:
+        start = trimmed.find("{")
+        end = trimmed.rfind("}")
+        if 0 <= start < end:
+            candidates.append(trimmed[start : end + 1])
+    for candidate in candidates:
+        try:
+            parsed = json.loads(candidate)
+        except json.JSONDecodeError:
+            continue
+        if isinstance(parsed, dict):
+            return parsed
+    return None
 
 
 def _log_agent_metrics(tool_call_steps: int, recursion_limit: int) -> None:

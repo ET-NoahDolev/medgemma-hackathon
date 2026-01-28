@@ -288,6 +288,7 @@ async def test_create_structured_extractor_smoke(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     """Test create_structured_extractor with mocked model."""
+    monkeypatch.delenv("ENABLE_VERTEX_CACHE", raising=False)
     (tmp_path / "sys.j2").write_text("system {{ x }}")
     (tmp_path / "user.j2").write_text("user {{ y }}")
 
